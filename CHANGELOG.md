@@ -7,3 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Initial core product docs (8 pages): overview, quickstart, hardware connection, initialization, real-time polling, period metering, API reference, troubleshooting.
+
