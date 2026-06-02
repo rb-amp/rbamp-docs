@@ -15,6 +15,15 @@ Hosted version: <https://www.rbamp.com/docs/modules-basic-standard-overview>
 - [API Reference](api-reference.md)
 - [Troubleshooting](troubleshooting.md)
 
+## Client libraries
+
+Drop-in libraries that speak the rbAmp I²C protocol:
+
+- [Arduino](https://github.com/rb-amp/rbamp-arduino) — AVR / ESP32 / ESP8266 / STM32duino
+- [ESP-IDF component](https://github.com/rb-amp/rbamp-esp-idf) — native C, IDF ≥ 5.2
+- [Python](https://github.com/rb-amp/rbamp-python) — CPython (smbus2) + MicroPython
+- [ESPHome external component](https://github.com/rb-amp/rbamp-esphome) — YAML / Home Assistant
+
 ## License
 
 See [LICENSE](LICENSE).
