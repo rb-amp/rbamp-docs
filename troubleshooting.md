@@ -329,4 +329,4 @@ Symptoms that warrant service:
 
 ---
 
-[← API Reference](api-reference.md) | [Contents](../README.md)
+[← API Reference](api-reference.md) | [Contents](README.md)

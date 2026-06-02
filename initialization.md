@@ -422,4 +422,4 @@ Alternative: reading `0x8E` (I0_rms) returns a real current value on both UI* an
 
 ---
 
-[← Hardware Connection](hardware-connection.md) | [Contents](../README.md) | [Real-time Polling →](realtime-polling.md)
+[← Hardware Connection](hardware-connection.md) | [Contents](README.md) | [Real-time Polling →](realtime-polling.md)

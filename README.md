@@ -6,14 +6,14 @@ Hosted version: <https://www.rbamp.com/docs/modules-basic-standard-overview>
 
 ## Contents
 
-- [Overview](docs/overview.md)
-- [Quick Start](docs/quickstart.md)
-- [Hardware Connection](docs/hardware-connection.md)
-- [Initialization](docs/initialization.md)
-- [Real-time Polling](docs/realtime-polling.md)
-- [Period Metering](docs/period-metering.md)
-- [API Reference](docs/api-reference.md)
-- [Troubleshooting](docs/troubleshooting.md)
+- [Overview](overview.md)
+- [Quick Start](quickstart.md)
+- [Hardware Connection](hardware-connection.md)
+- [Initialization](initialization.md)
+- [Real-time Polling](realtime-polling.md)
+- [Period Metering](period-metering.md)
+- [API Reference](api-reference.md)
+- [Troubleshooting](troubleshooting.md)
 
 ## License
 

@@ -418,4 +418,4 @@ I-only variants are intended for:
 
 ---
 
-[← Initialization](initialization.md) | [Contents](../README.md) | [Period Metering →](period-metering.md)
+[← Initialization](initialization.md) | [Contents](README.md) | [Period Metering →](period-metering.md)

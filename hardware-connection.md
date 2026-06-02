@@ -212,4 +212,4 @@ For future SKUs (rbAmp-U2I2 US split-phase, rbAmp-U3I3 three-phase) the LV-side 
 
 ---
 
-[← Quick Start](quickstart.md) | [Contents](../README.md) | [Initialization →](initialization.md)
+[← Quick Start](quickstart.md) | [Contents](README.md) | [Initialization →](initialization.md)

@@ -466,4 +466,4 @@ This **does not** affect Wh accuracy (Wh uses the master clock), but it surfaces
 
 ---
 
-[← Real-time Polling](realtime-polling.md) | [Contents](../README.md) | [API Reference →](api-reference.md)
+[← Real-time Polling](realtime-polling.md) | [Contents](README.md) | [API Reference →](api-reference.md)

@@ -69,4 +69,4 @@ For deeper troubleshooting see [FAQ — Troubleshooting](/faq/troubleshooting).
 
 ---
 
-[← Overview](overview.md) | [Contents](../README.md) | [Hardware Connection →](hardware-connection.md)
+[← Overview](overview.md) | [Contents](README.md) | [Hardware Connection →](hardware-connection.md)

@@ -623,4 +623,4 @@ For a master driver that brings up a fresh installation:
 
 ---
 
-[← Period Metering](period-metering.md) | [Contents](../README.md) | [Troubleshooting →](troubleshooting.md)
+[← Period Metering](period-metering.md) | [Contents](README.md) | [Troubleshooting →](troubleshooting.md)
