@@ -4,7 +4,7 @@ For tariff energy accounting (Wh per 1 min / 15 min / 1 hour / day / month / yea
 
 This is the **production-grade** way to extract energy data. The alternative — integrating RT `P_real` on the master side every 200 ms — yields the same result on BASIC, but keeps the master continuously active.
 
-## Why period latch is needed
+## Why energy uses a latched snapshot, not chip-side Wh
 
 ### A single time base, owned by the master
 
