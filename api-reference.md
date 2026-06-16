@@ -1,626 +1,1137 @@
-# API Reference
-Formal reference for the rbAmp I2C register interface. This chapter is the authoritative specification: every register, every command, every error code, with size, access, units, default value, tier availability, and operational dependencies.
+# rbAmp Wire-Protocol Reference (v1.3)
 
-For prose-style explanations of what these registers mean and when to use them, see the preceding chapters. This chapter is the **machine-readable contract**.
-
-## Table of contents
-
-- [1. Bus protocol](#1-bus-protocol)
-- [2. Tier availability](#2-tier-availability)
-- [3. Conventions](#3-conventions)
-- [4. Register map](#4-register-map)
-  - [4.1 Control & status (0x00–0x07)](#41-control--status-0x000x07)
-  - [4.2 Diagnostic LUT view (0x08–0x0F)](#42-diagnostic-lut-view-0x080x0f)
-  - [4.3 Mains info (0x20–0x23)](#43-mains-info-0x200x23)
-  - [4.4 I2C configuration (0x30)](#44-i2c-configuration-0x30)
-  - [4.5 Current-sensor legacy block (0x54–0x7D)](#45-current-sensor-legacy-block-0x540x7d)
-  - [4.6 Charge accumulator (0x7E–0x85, legacy)](#46-charge-accumulator-0x7e0x85-legacy)
-  - [4.7 Real-time measurement results (0x86–0xCF)](#47-real-time-measurement-results-0x860xcf)
-  - [4.8 Reactive power (0xD0–0xDB)](#48-reactive-power-0xd00xdb)
-  - [4.9 Period snapshot (0xDC–0xEF)](#49-period-snapshot-0xdc0xef)
-  - [4.10 Bidirectional period accumulator (STANDARD / PRO)](#410-bidirectional-period-accumulator-standard--pro)
-  - [4.11 Noise floor (0xE4–0xEB)](#411-noise-floor-0xe40xeb)
-  - [4.12 Gain calibration (0xF0–0xFF)](#412-gain-calibration-0xf00xff)
-- [5. Commands](#5-commands)
-- [6. Error codes](#6-error-codes)
-- [7. Operation sequences](#7-operation-sequences)
-- [8. Dependency summary](#8-dependency-summary)
+> **Audience**: 3rd-party and advanced integrators writing their own I²C drivers for the **rbAmp** module without using client libraries (Arduino / ESP-IDF / Python / ESPHome).
+>
+> **Scope**: canonical wire protocol of the rbAmp module at version v1.3 — register map, protocol sequences, behavioral guarantees. This is the complete wire-contract-level reference documentation.
+>
+> **NOT in scope**: integration with any specific library / OS / framework — read the library documentation for that.
+>
+> **Document status**: DRAFT, 2026-06-16. Source of truth: `registers_v2.yaml` v1.3 + canonical wire-contract + bench-validated firmware behavior.
 
 ---
 
-## 1. Bus protocol
+## 1 · Introduction
+
+**rbAmp** is a compact hardware module for precision measurements of AC mains parameters over an I²C interface. The module behaves as a standard I²C slave with a fixed register map (page-0, 0x00..0xFF). This document describes the **wire protocol** at the level of registers, commands, and sequences.
+
+### 1.1 SKU lineup
+
+| SKU | Current channels (N_I) | U channel | Power calculation |
+|---|---|---|---|
+| **UI1** | 1 | yes | P, PF, Q |
+| **UI2** | 2 | yes | P, PF, Q per channel |
+| UI3 | 3 | yes | **roadmap** — not shipping on the current MCU package |
+| **I1** | 1 | no | I only (no P/PF/Q) |
+| **I2** | 2 | no | I only per channel |
+| **I3** | 3 | no | I only per channel |
+
+I-variants (`I1`/`I2`/`I3`) have **no voltage hardware** — `U_RMS`, `U_PEAK`, and `P` registers return `0.0`. Frequency (`AC_FREQ`) is available on all variants (ZC-sourced).
+
+**Calibration is factory.** The consumer master does **NOT** configure noise floor (NF), gain, phase compensation, or any other factory parameters — these are all factory calibration burned into the module (see §4.0 reserved ranges). The consumer writes only **SENSOR_CLASS + CT_MODEL** (see §6.2) — the module applies everything else automatically from the preset table.
+
+### 1.2 Versioning
+
+| Field | Value |
+|---|---|
+| `protocol_version` | `1.3` |
+| `schema_version` | `2` |
+| `VERSION` register (`0x03`) | `0x04` for v1.3 |
+| Page-0 contract | **frozen** at v1.3 release |
+
+---
+
+## 2 · Bus protocol basics
+
+### 2.0 Power & supply
 
 | Parameter | Value |
 |---|---|
-| Bus | I2C (Standard / Fast) |
-| Slave role | Slave only (master in the system is external) |
-| Default 7-bit address | `0x50` |
-| Reprovisionable address range | `0x08..0x77` |
-| Standard speed | 100 kHz |
-| Fast speed | 400 kHz (validated) |
-| Pointer auto-increment | **NOT supported** — every byte requires its own transaction with an explicit register address |
-| Multi-byte endianness | **Little-endian** (LE) |
-| Float format | IEEE-754 single precision (4 bytes, LE) |
-| Multi-byte atomicity | The firmware updates whole register groups under critical-section locks; the master never sees torn snapshots when reading sequential bytes inside one group. |
-| General Call (`0x00`) | Accepted for a limited command set — see [5. Commands](#5-commands) |
+| `VCC` nominal | **+5 V** |
+| `VCC` range | 4.5..5.5 V |
+| Typical current draw | ~15 mA |
+| Peak current draw (latch + flash write) | ~25 mA |
+| Boot inrush | ≤ 50 mA @ 5 ms |
+| Sequencing | VCC may be applied concurrently with I²C; pull-ups (3.3 V) are permitted before VCC is applied |
+| Isolation | the mains side is galvanically isolated inside the module |
 
-### Reading a 4-byte float (master pseudo-code)
+> Four wires are mandatory on the LV side: `VCC`, `GND`, `SDA`, `SCL`. `DRDY` (open-drain) is optional. See §2.3 for pull-up and multi-module guidance.
 
-```c
-uint8_t buf[4];
-for (int i = 0; i < 4; i++) {
-    buf[i] = i2c_read_byte(addr, reg + i);    // explicit register address each time
-}
-float value;
-memcpy(&value, buf, 4);
-```
+### 2.1 I²C parameters
 
-### Reading a multi-byte integer
+- **Default address**: `0x50` (7-bit).
+- **Allowed address range**: `0x08..0x77` (standard I²C reserved boundaries).
+- **Logic levels**: 3.3 V (5 V-tolerant on pull-ups to 3.3 V).
+- **On-board pull-ups**: 4.7 kΩ on SDA/SCL to 3.3 V (module).
+- **Clock stretching**: the module does **NOT** use SCL clock-stretching as a routine flow-control mechanism. Between transactions the master must observe an **inter-transaction gap ≥ 100 µs** (`tBUF`). Back-to-back transactions without a gap (back-to-back START without `tBUF`) are permitted but discouraged — some host stacks (ESP-IDF i2c_master) exhibit an elevated NACK rate. See §5 acceptance / EMI section separately.
 
-```c
-uint8_t buf[4];
-for (int i = 0; i < 4; i++) buf[i] = i2c_read_byte(addr, reg + i);
-uint32_t value = (uint32_t)buf[0] | (uint32_t)buf[1] << 8
-               | (uint32_t)buf[2] << 16 | (uint32_t)buf[3] << 24;
-```
+### 2.2 Bus speed
 
----
-
-## 2. Tier availability
-
-rbAmp ships in three product tiers — each tier is a complete combination of hardware revision and firmware:
-
-| Tier | Hardware | Firmware capability |
+| Speed | Applicability | Note |
 |---|---|---|
-| **BASIC** | Entry-level analog front-end | Unidirectional consumption metering only |
-| **STANDARD** | Extended analog stack | Bidirectional metering (consumption + export) |
-| **PRO** | PRO-grade analog + tighter accuracy | Bidirectional metering + extended diagnostics |
+| **50 kHz** | recommended | The ESP-IDF host-side driver shows ~20 % NACK rate at 100 kHz; 50 kHz + 3× retry gives < 0.8 % error rate. |
+| **100 kHz** | workable with retry | application-level 3× retry is mandatory. |
+| **400 kHz** | **not validated** | do not advertise as supported. |
 
-### Register availability matrix
+### 2.3 Multi-module bus
 
-| Register range | BASIC | STANDARD | PRO |
-|---|:---:|:---:|:---:|
-| `0x00..0x07` Control & status | ✓ | ✓ | ✓ |
-| `0x08..0x0F` Diagnostic LUT view | ✓ | ✓ | ✓ |
-| `0x20..0x23` Mains info | ✓ | ✓ | ✓ |
-| `0x30` I2C configuration | ✓ | ✓ | ✓ |
-| `0x54..0x7D` Legacy current sensor | ✓ | ✓ | ✓ |
-| `0x7E..0x85` Charge accumulator (legacy) | ✓ | ✓ | ✓ |
-| `0x86..0xCF` Real-time results | ✓ | ✓ | ✓ |
-| `0xD0..0xDB` Reactive power | ✓ | ✓ | ✓ |
-| `0xDC..0xEF` Period snapshot (consumption side) | ✓ | ✓ | ✓ |
-| Period snapshot (export side, `PERIOD_AVG_P_NEG`) | — | ✓ | ✓ |
-| `0xE4..0xEB` Noise floor | ✓ | ✓ | ✓ |
-| `0xF0..0xFF` Gain calibration | ✓ | ✓ | ✓ |
-| Extended diagnostics block (PRO-only) | — | — | ✓ |
+Several rbAmp modules can share one bus:
 
-> The exact register addresses for the bidirectional `PERIOD_AVG_P_NEG[0..2]` and the PRO-only extended diagnostics block are documented in the SKU datasheet of the STANDARD / PRO product. They are stable within each tier but tier-specific in placement.
+- **Up to ~16 modules** (limited by total bus capacitance ≤ 400 pF at 100 kHz).
+- **Pull-ups**: the on-board 4.7 kΩ pull-ups on every module in parallel overload the sink. **Cut the on-board pull-ups** on every module except one (or use a PCA9515/9615 I²C buffer).
+- **Length**: up to 0.3 m plain → 100 kHz; 0.3–1 m twisted pair (SDA+GND and SCL+GND in **separate** pairs) → 100 kHz; > 1 m — I²C buffer; > 3 m — differential bus (PCA9615 / LTC4332).
 
-### Bidirectional registers — runtime detection
+### 2.4 Bus polling budget
 
-Master code that targets all tiers should:
+At 50 kHz a single register-read transaction takes ≈ 200–400 µs. The full RT block for one channel (U + I + P + PF, 4 floats = 16 bytes burst) takes ≈ 5–8 ms per channel.
 
-1. Probe a known STANDARD/PRO-only register with a 1-byte read.
-2. If it returns `NACK`, the module is BASIC tier — disable export-metering features.
-3. If it returns a value, the module supports bidirectional metering — enable both consumption and export accumulators.
+| Configuration | Bus per cycle | Max polling rate |
+|---|---|---|
+| 1× UI1, RT block | ~5 ms | 100+ Hz (but the module updates at 5 Hz) |
+| 5× UI1, RT block | ~25 ms | 5 Hz |
+| 16× I3, RT + period | ~400 ms | **cannot keep up** with the module |
+
+**Rule of thumb**: at 50 kHz the comfortable limits are **8–10× I3** or **15–16× UI1** at 5 Hz polling.
 
 ---
 
-## 3. Conventions
+## 3 · Variant model
 
-### Access notation
-- **R** — read-only (writes return `ERR_PARAM`)
-- **W** — write-only (reads return implementation detail; do not rely on the value)
-- **RW** — read-write
+### 3.1 `HW_VARIANT` (reg `0x55`, u8, read-only)
 
-### Size and type
-- **u8** — unsigned 8-bit
-- **u16 LE** — unsigned 16-bit, low byte at lower address
-- **u32 LE** — unsigned 32-bit, low byte at lower address
-- **i8** — signed 8-bit (two's complement)
-- **f32 LE** — IEEE-754 single-precision float, low byte at lower address
+Authoritative SKU byte:
 
-### Persistence
-- **RAM** — value is lost on power cycle
-- **Flash** — value is persisted in on-chip flash, restored at boot
-- **Flash (via SAVE_GAINS)** — value lives in RAM until the master issues `CMD_SAVE_GAINS`, which writes the entire parameter block to flash
+| Value | SKU | N_I | Voltage HW |
+|---|---|---|---|
+| `0x01` | UI1 | 1 | yes |
+| `0x02` | UI2 | 2 | yes |
+| `0x03` | UI3 | 3 | yes (roadmap, not buildable) |
+| `0x04` | I1 | 1 | no |
+| `0x05` | I2 | 2 | no |
+| `0x06` | I3 | 3 | no |
 
-### Dependencies
-Marked in the "Depends on" column for each register where applicable:
-- **DATA_VALID** — master must wait `(0xCE & 0x01) == 1` after boot before reading
-- **PERIOD_VALID** — master must read `(0x07 & 0x01) == 1` after `CMD_LATCH_PERIOD` before trusting the snapshot
-- **CMD_LATCH_PERIOD** — register is updated only after a latch command
-- **CMD_SAVE_GAINS** — write to register is non-persistent until SAVE_GAINS is issued
+Any other value → the device is not identified as rbAmp.
 
----
+### 3.2 `CAPABILITY` (regs `0x57/0x58`, u16 LE, read-only)
 
-## 4. Register map
+12-bit feature-detection map. This is the canonical way to detect supported features — **without** numeric version comparison.
 
-> **Reading the tables.** Each row has two lines in the **Register** column. The first line shows the address range and the canonical register name. The second line is a compact metadata strip with these fields (separated by `·`):
->
-> - **Access** — `READ`, `WRITE`, or `READ/WRITE`.
-> - **Type** — the storage type (which also implies size): `u8` = 1 byte, `u16 LE` = 2 bytes little-endian, `u32 LE` = 4 bytes LE, `i8` = 1 byte signed, `f32 LE` = 4-byte IEEE-754 float LE. See [3. Conventions](#3-conventions).
-> - **Tier** — which product tiers / variants expose the register: `All` = every SKU and tier; `UI*` = voltage-equipped variants only (UI1, UI2, UI3); `UI2 / UI3` = variant-specific; `STANDARD / PRO` = bidirectional tiers only.
-> - **Unit** — physical unit when applicable (`V`, `A`, `W`, `VAR`, `Hz`, `ms`, `ADC counts`, etc.).
-> - **Sign** — `±` if the value is signed (`P`, `PF`, `Q`); `≥ 0` if always non-negative.
-> - **Default** — the factory-default value for `READ/WRITE` registers, where one applies.
+| bit | Flag | Meaning |
+|---|---|---|
+| 0 | EXT_ADDRESSING | extended 16-bit addressing (0xFF prefix) |
+| 1 | GC_LATCH | General-Call latch is supported |
+| 2 | GC_GROUP_FILTER | `GROUP_ID` filter is active |
+| 3 | DIGEST | digest block (0x70..0x85) is exposed |
+| 4 | EVENTS | `EVENT_FLAGS` is supported |
+| 5 | UID_ARBITRATION | UID-based address arbitration |
+| 6 | SEAL | UID seal verification (anti-clone) |
+| 7 | TWO_PHASE_ADDR | two-phase commit address change |
+| 8 | **ZC_PHASE_OFFSET = voltage-HW** | the module has a U channel |
+| 9 | SAVE_USER_CONFIG | `CMD_SAVE_USER_CONFIG` is available |
+| 10 | CLEAR_ERROR | `CMD_CLEAR_ERROR` is available |
+| 11 | IAP | in-application programming (F4 tiers only) |
 
+#### 3.2.1 Canonical CAPABILITY values
 
-### 4.1 Control & status (0x00–0x07)
-
-| Register | Description | Depends on |
-|---|---|:---:|
-| **`0x00`** `STATUS`<br><small>READ · u8 · Tier: All</small> | `bit0` = ready, `bit1` = error (mirrors `ERROR != 0`) | — |
-| **`0x01`** `COMMAND`<br><small>WRITE · u8 · Tier: All</small> | Write a command code — see [5. Commands](#5-commands). Reads return implementation detail. | — |
-| **`0x02`** `ERROR`<br><small>READ · u8 · Tier: All</small> | Last error code; `0x00` = OK, see [6. Error codes](#6-error-codes). Cleared only on reset. | — |
-| **`0x03`** `VERSION`<br><small>READ · u8 · Tier: All</small> | Firmware version (`0x01` = v1.0) | DATA_VALID not required, but value of 0 is suspect |
-| **`0x05`** `CT_MODEL`<br><small>READ/WRITE · u8 · Tier: All (modules with plug-in CT)</small> | CT sensor model code, see table below | Flash (via SAVE_GAINS) |
-| **`0x06`** `V03_PHASE_SAMPLES`<br><small>READ/WRITE · u8 · Tier: All (UI*)</small> | Phase compensation: ADC samples to advance U relative to I in the cross-product. Range `0..30`, default `0`. Compensates voltage-transformer phase lag (~3.6° per sample at 5 kHz / 50 Hz). | Flash (via SAVE_GAINS) |
-| **`0x07`** `PERIOD_VALID`<br><small>READ · u8 · Tier: All</small> | Set by `CMD_LATCH_PERIOD`. `bit0` = 1 if the snapshot at `0xDC..0xEF` and `0xC2..0xC9` contains fresh data; 0 = stale (premature latch or race). **Master must check this before using the snapshot.** | CMD_LATCH_PERIOD |
-
-#### CT model codes (`REG_CT_MODEL`, `0x05`)
-
-| Code | Sensor | Rated current | Sensitivity |
-|:---:|---|:---:|---|
-| `0x00` | not set (factory default on plug-in-CT SKUs) | — | — |
-| `0x01` | SCT-013-005 | 5 A | 200 mV/A |
-| `0x02` | SCT-013-010 | 10 A | 100 mV/A |
-| `0x03` | SCT-013-030 | 30 A | 33 mV/A |
-| `0x04` | SCT-013-050 | 50 A | 20 mV/A |
-| `0x05` | SCT-013-100 | 100 A | 10 mV/A |
-| `0x06` | CT-005A (generic) | 5 A | 10 mV/A |
-
-Writing the code updates RAM immediately; persistence requires `CMD_SAVE_GAINS` (`0x26`).
-
----
-
-### 4.2 Diagnostic LUT view (0x08–0x0F)
-
-These registers expose ADC linearization-LUT status for diagnostic purposes. Typical user code does not read them; production-quality firmware always sets them correctly at boot.
-
-| Register | Description | Depends on |
-|---|---|:---:|
-| **`0x08`** `LUT_VALID_MASK`<br><small>READ · u8 · Tier: All</small> | bit `n` = 1 if LUT slot `n` (channel) has a valid stored LUT; 0 = linear approximation in use | DATA_VALID |
-| **`0x09`** `LUT_QUERY_SLOT`<br><small>READ/WRITE · u8 · Tier: All</small> | Write `0..3` to select a slot; the slot's metadata appears at `0x0A..0x0F` | DATA_VALID |
-| **`0x0A`** `LUT_VIEW_TIER`<br><small>READ · u8 · Tier: All</small> | Tier of the selected slot's LUT: `0` = BASIC, `1` = STANDARD/PRO | `0x09` written |
-| **`0x0B`** `LUT_VIEW_POINTS_LOG2`<br><small>READ · u8 · Tier: All</small> | Log₂ of the LUT point count: `8` (256 points) or `9` (512 points) | `0x09` written |
-| **`0x0C..0x0D`** `LUT_VIEW_INL_MAX`<br><small>READ · u16 LE · Tier: All</small> | Measured `INL_max` (LSB of full scale) for the selected slot | `0x09` written |
-| **`0x0E..0x0F`** `LUT_VIEW_DNL_MAX`<br><small>READ · u16 LE · Tier: All</small> | Measured `DNL_max` (LSB of full scale) for the selected slot | `0x09` written |
-
----
-
-### 4.3 Mains info (0x20–0x23)
-
-| Register | Description | Depends on |
-|---|---|:---:|
-| **`0x20`** `AC_FREQ`<br><small>READ · u8 · Tier: All (UI*) · Unit: Hz</small> | Mains frequency (50 or 60). `0` if no zero-cross detected (e.g. on I-only variants, or U sensor not yet seeing the line). | DATA_VALID |
-| **`0x21..0x22`** `AC_PERIOD`<br><small>READ · u16 LE · Tier: All (UI*) · Unit: µs</small> | Half-period in microseconds (10 ms at 50 Hz, 8.33 ms at 60 Hz). Diagnostic. | DATA_VALID |
-| **`0x23`** `CALIBRATION`<br><small>READ · u8 · Tier: All · Unit: flag</small> | `0` = calibration in progress, `1` = done. Boot-time diagnostic. | — |
-
----
-
-### 4.4 I2C configuration (0x30)
-
-| Register | Description | Depends on |
-|---|---|:---:|
-| **`0x30`** `I2C_ADDRESS`<br><small>READ/WRITE · u8 · Tier: All</small> | 7-bit slave address, range `0x08..0x77`. Writes outside the range are rejected with `ERR_PARAM`. | Flash (via SAVE_GAINS) + RESET |
-
-To change the bus address:
-
-1. Write the new address to `0x30`.
-2. Issue `CMD_SAVE_GAINS` (`0x26`) to persist.
-3. Wait ≥ 700 ms for the flash write.
-4. Issue `CMD_RESET` (`0x01`) or power-cycle.
-5. Communicate with the module on the new address.
-
----
-
-### 4.5 Current-sensor legacy block (0x54–0x7D)
-
-These registers implement the legacy current-sensor model (v0.2). Modern integrations use the V03 block starting at `0x86`. The legacy block is kept for backward compatibility — typical user code can ignore it.
-
-| Register | Description |
+| Variant group | CAPABILITY value (u16 LE) |
 |---|---|
-| **`0x54`** `CS_CONFIG`<br><small>READ/WRITE · u8 · Tier: All · Default: 0x01</small> | `bit0` = channel-0 enable (backward compat) |
-| **`0x55..0x56`** `CS_INTERVAL`<br><small>READ/WRITE · u16 LE · Tier: All · Default: 200</small> | No-op (kept for compat) |
-| **`0x57`** `CS0_SENSOR_TYPE`<br><small>READ/WRITE · u8 · Tier: All · Default: 66</small> | Sensitivity mV/A (66 = ACS712-30A); used by legacy ADC pipeline |
-| **`0x58`** `ACC_SEL`<br><small>READ/WRITE · u8 · Tier: All · Default: 0</small> | Selects which of 8 accumulators is reflected in the `0x60..0x77` window |
-| **`0x59`** `COMMIT`<br><small>WRITE · u8 · Tier: All</small> | Write `N` (0..7) to commit accumulator `N` and clear the PA2 DRDY flag |
-| **`0x5A`** `CS0_MODE`<br><small>READ/WRITE · u8 · Tier: All · Default: 0</small> | Sensor mode: `0` = current (ACS712-style), `1` = voltage (ZMPT107-style) |
-| **`0x5B`** `CS0_NOISE_FLOOR`<br><small>READ/WRITE · u8 · Tier: All · Default: 19</small> | ADC noise floor (counts) for quadrature subtraction |
-| **`0x5C..0x5F`** `CS_PERIOD_BUFS`<br><small>READ/WRITE · u32 LE · Tier: All · Default: 10</small> | No-op (kept for compat). 1 hour = 180 000 bufs. |
-| **`0x60`** `CS0_STATUS`<br><small>READ · u8 · Tier: All</small> | `bit0` = data ready, `bit1` = RT mode, `bit7:5` = accumulator index |
-| **`0x61..0x62`** `CS0_RMS`<br><small>READ · u16 LE · Tier: All</small> | RMS current (mA) |
-| **`0x63..0x64`** `CS0_PEAK`<br><small>READ · u16 LE · Tier: All</small> | Peak current (mA) |
-| **`0x65`** `CS0_DIR`<br><small>READ · i8 · Tier: All</small> | DC bias direction: `+1` = positive, `0` = zero, `-1` = negative |
-| **`0x66`** `CS0_PERIOD_IDX`<br><small>READ · u8 · Tier: All</small> | Monotonic period index (0..255, wraps) |
-| **`0x67..0x6A`** `CS0_DURATION`<br><small>READ · u32 LE · Tier: All</small> | Window duration (ms) |
-| **`0x6B..0x6E`** `CS0_SAMPLES`<br><small>READ · u32 LE · Tier: All</small> | Sample count in window |
-| **`0x6F..0x70`** `CS0_MIN`<br><small>READ · u16 LE · Tier: All</small> | Minimum ADC value in window |
-| **`0x71..0x72`** `CS0_MAX`<br><small>READ · u16 LE · Tier: All</small> | Maximum ADC value in window |
-| **`0x73..0x74`** `CS0_DC`<br><small>READ · i16 LE · Tier: All</small> | DC offset (signed, ADC units) |
-| **`0x75..0x76`** `CS0_CREST`<br><small>READ · u16 LE · Tier: All</small> | Crest factor × 100 (141 = pure sine) |
-| **`0x77`** `CS0_RESERVED`<br><small>READ · u8 · Tier: All</small> | Reserved (future THD) |
-| **`0x78`** `VS_STATUS`<br><small>READ · u8 · Tier: All</small> | `bit7` = NO_HW (voltage sensor not present), `bit0` = data ready |
-| **`0x79..0x7A`** `VS_RMS`<br><small>READ · u16 LE · Tier: All</small> | Voltage RMS (0.1 V units) — legacy U16 path; modern code uses the float at `0x86` |
-| **`0x7B..0x7C`** `VS_PEAK`<br><small>READ · u16 LE · Tier: All</small> | Voltage peak (0.1 V units) |
-| **`0x7D`** `VS_RATIO`<br><small>READ/WRITE · u8 · Tier: All · Default: 230</small> | Voltage transformer ratio (1..255) |
+| Current-only (`I1`/`I2`/`I3`) | `0x069E` |
+| U-variants (`UI1`/`UI2`) | `0x079E` |
 
----
+`0x079E` = `0x069E | 0x0100` (bit 8 voltage-HW added).
 
-### 4.6 Charge accumulator (0x7E–0x85, legacy)
+Decomposition of `0x069E` (binary `0000 0110 1001 1110`):
+bit 1 GC_LATCH, bit 2 GC_GROUP_FILTER, bit 3 DIGEST, bit 4 EVENTS, bit 7 TWO_PHASE_ADDR, bit 9 SAVE_USER_CONFIG, bit 10 CLEAR_ERROR.
 
-Volatile (RAM only) Coulomb counter for current-only modules. Cleared on power cycle and by `CMD_CHARGE_RESET` (`0x05`).
+#### 3.2.2 Byte layout of CAPABILITY u16 LE
 
-| Register | Description |
+`CAPABILITY` is 2 bytes at addresses `0x57` (low byte) and `0x58` (high byte), little-endian:
+
+```text
+register layout (byte-addressed):
+
+  0x57   0x58
+  ┌──────┬──────┐
+  │ LO   │ HI   │
+  └──────┴──────┘
+   bits   bits
+   0-7    8-15
+
+  full u16 = (read_u8(0x58) << 8) | read_u8(0x57)
+```
+
+Bit mapping:
+- byte `0x57` (LO) contains bits 0..7: EXT_ADDRESSING, GC_LATCH, GC_GROUP_FILTER, DIGEST, EVENTS, UID_ARBITRATION, SEAL, TWO_PHASE_ADDR.
+- byte `0x58` (HI) contains bits 8..15: ZC_PHASE_OFFSET (= voltage-HW), SAVE_USER_CONFIG, CLEAR_ERROR, IAP, bits 12-15 reserved.
+
+#### 3.2.3 Canonical `has_voltage` recipe
+
+```python
+cap_hi = read_u8(0x58)             # high byte holds bits 8..15
+has_voltage = bool(cap_hi & 0x01)  # bit 8 of the u16 = bit 0 of byte 0x58
+```
+
+### 3.3 Variant profile table — invariant
+
+| SKU | HW_VARIANT (0x55) | N_I | voltage-HW | CAPABILITY (0x57/0x58) |
+|---|---|---|---|---|
+| **UI1** | 1 | 1 | yes | `0x079E` |
+| **UI2** | 2 | 2 | yes | `0x079E` |
+| UI3 | 3 | 3 | yes | `0x079E` (roadmap) |
+| **I1** | 4 | 1 | no | `0x069E` |
+| **I2** | 5 | 2 | no | `0x069E` |
+| **I3** | 6 | 3 | no | `0x069E` |
+
+**HW_VARIANT ⟷ CAPABILITY coherence**: `HW_VARIANT` 1..3 (UI*) → bit 8 set; `HW_VARIANT` 4..6 (I*) → bit 8 clear. A mismatch indicates a hardware or firmware anomaly (broken device or misflash).
+
+### 3.4 `SENSOR_CLASS` ≠ variant discriminator
+
+⚠ **`SENSOR_CLASS (0x25)` is NOT a variant discriminator.** It is a **user-config provisioned register** (CT sensor class selector: `Unset`/`Sct013`/`WiredCT`/`BuiltinCT`) and does not reflect the hardware variant. For variant detection use **only** `HW_VARIANT (0x55)` + `CAPABILITY (0x57/0x58)`.
+
+### 3.5 `PRODUCT_ID` (`0x54`, u8, read-only)
+
+Product family discriminator:
+
+| Value | Family |
 |---|---|
-| **`0x7E..0x81`** `CHARGE_Q`<br><small>READ · u32 LE · Tier: All (I-only) · Unit: 0.1 mA·h</small> | Accumulated charge. Q = Σ(I_rms_mA) / 1800 (1 period = 200 ms = 1/18000 h) |
-| **`0x82..0x85`** `CHARGE_N`<br><small>READ · u32 LE · Tier: All (I-only) · Unit: periods</small> | Period count (1 period = 200 ms). Useful for averaging: `avg_mA = Q × 18000 / N`. |
+| `0x01` | rbAmp sensor (this document) |
+| `0x02` | rbDimmer (separate register map; not covered by this document) |
 
-Volume sample: at 10 A continuous, Q increments by 10 000 (0.1 mA·h) every 200 ms — i.e. 5 (mA·h) per second. The `u32` maximum (`4 294 967 295` × 0.1 mA·h ≈ 429 496 Ah) covers > 10 years of continuous 5 A operation.
+The master **MUST** read `PRODUCT_ID` before interpreting any family-specific register.
 
-> The charge accumulator is not the same as the period-snapshot energy primitive. It is a current-time integral (Ampere-hours), not an energy integral (Watt-hours). Use it on I-only modules where the master has no voltage sensor; for energy use the period snapshot at `0xDC..0xEF`.
+### 3.6 Canonical detection algorithm
 
----
-
-### 4.7 Real-time measurement results (0x86–0xCF)
-
-All values are float32 little-endian unless noted. Refreshed approximately every 200 ms by the firmware after each RT window. The whole block is updated atomically inside the publishing ISR; reading any subset after `DATA_VALID = 1` returns coherent values.
-
-#### Voltage
-
-| Register | Description | Depends on |
-|---|---|:---:|
-| **`0x86..0x89`** `U_RMS`<br><small>READ · f32 LE · Tier: All (UI*) · Unit: V · Sign: ≥ 0</small> | RMS voltage over the last RT window | DATA_VALID |
-| **`0x8A..0x8D`** `U_PEAK`<br><small>READ · f32 LE · Tier: All (UI*) · Unit: V · Sign: ≥ 0</small> | Peak excursion from mean during the window | DATA_VALID |
-
-#### Currents
-
-| Register | Description | Depends on |
-|---|---|:---:|
-| **`0x8E..0x91`** `I0_RMS`<br><small>READ · f32 LE · Tier: All · Unit: A · Sign: ≥ 0</small> | RMS current, channel 0 | DATA_VALID |
-| **`0x92..0x95`** `I1_RMS`<br><small>READ · f32 LE · Tier: UI2 / UI3 / I2 / I3 · Unit: A · Sign: ≥ 0</small> | RMS current, channel 1 (0 on UI1 / I1) | DATA_VALID |
-| **`0x96..0x99`** `I2_RMS`<br><small>READ · f32 LE · Tier: UI3 / I3 · Unit: A · Sign: ≥ 0</small> | RMS current, channel 2 | DATA_VALID |
-| **`0x9A..0x9D`** `I0_PEAK`<br><small>READ · f32 LE · Tier: All · Unit: A · Sign: ≥ 0</small> | Peak current, channel 0 | DATA_VALID |
-| **`0x9E..0xA1`** `I1_PEAK`<br><small>READ · f32 LE · Tier: UI2 / UI3 / I2 / I3 · Unit: A · Sign: ≥ 0</small> | Peak current, channel 1 | DATA_VALID |
-| **`0xA2..0xA5`** `I2_PEAK`<br><small>READ · f32 LE · Tier: UI3 / I3 · Unit: A · Sign: ≥ 0</small> | Peak current, channel 2 | DATA_VALID |
-
-On variants with fewer channels than the SKU's maximum, unsupported channel registers return `0.0f` rather than `NACK`.
-
-#### Power (active)
-
-| Register | Description | Depends on |
-|---|---|:---:|
-| **`0xA6..0xA9`** `P0_REAL`<br><small>READ · f32 LE · Tier: UI* · Unit: W · Sign: ±</small> | Active power, channel 0. `P > 0` = consumption, `P < 0` = export. `0` on I-only variants. | DATA_VALID |
-| **`0xAA..0xAD`** `P1_REAL`<br><small>READ · f32 LE · Tier: UI2 / UI3 · Unit: W · Sign: ±</small> | Active power, channel 1. `0` on UI1 and I-only. | DATA_VALID |
-| **`0xAE..0xB1`** `P2_REAL`<br><small>READ · f32 LE · Tier: UI3 · Unit: W · Sign: ±</small> | Active power, channel 2. `0` on UI1 / UI2 and I-only. | DATA_VALID |
-
-#### Power factor
-
-| Register | Description | Depends on |
-|---|---|:---:|
-| **`0xB2..0xB5`** `PF0`<br><small>READ · f32 LE · Tier: UI* · Unit: – · Sign: ±</small> | Power factor for channel 0, range `−1 … +1`. Sign matches `P0_REAL`. | DATA_VALID |
-| **`0xB6..0xB9`** `PF1`<br><small>READ · f32 LE · Tier: UI2 / UI3 · Unit: – · Sign: ±</small> | Power factor, channel 1 | DATA_VALID |
-| **`0xBA..0xBD`** `PF2`<br><small>READ · f32 LE · Tier: UI3 · Unit: – · Sign: ±</small> | Power factor, channel 2 | DATA_VALID |
-
-#### Period diagnostic / per-channel period averages
-
-| Register | Description | Depends on |
-|---|---|:---:|
-| **`0xBE..0xC1`** `PERIOD_COMMIT_COUNT`<br><small>READ · u32 LE · Tier: All · Unit: count · Sign: ≥ 0</small> | Diagnostic: number of RT commits accumulated in the current period (latched by `CMD_LATCH_PERIOD`) | CMD_LATCH_PERIOD |
-| **`0xC2..0xC5`** `PERIOD_AVG_P_W[1]`<br><small>READ · f32 LE · Tier: UI2 / UI3 · Unit: W · Sign: ± (BASIC: ≥ 0)</small> | Time-averaged active power, channel 1, over the latched period | CMD_LATCH_PERIOD, PERIOD_VALID |
-| **`0xC6..0xC9`** `PERIOD_AVG_P_W[2]`<br><small>READ · f32 LE · Tier: UI3 · Unit: W · Sign: ± (BASIC: ≥ 0)</small> | Time-averaged active power, channel 2 | CMD_LATCH_PERIOD, PERIOD_VALID |
-| **`0xCA..0xCD`** `RT_PERIOD_MS`<br><small>READ · u32 LE · Tier: All · Unit: ms · Sign: ≥ 0</small> | Actual wall-clock duration of the last RT window (~200 ms). Diagnostic only. | DATA_VALID |
-| **`0xCE`** `DATA_VALID`<br><small>READ · u8 · Tier: All · Unit: flag</small> | `bit0` = 1 once the first valid RT window has been computed since boot. Master must wait for this bit after power-on. | — |
-| **`0xCF`** `reserved`<br><small>READ · u8 · Tier: All</small> | Reserved; reads 0 | — |
-
-> On BASIC product tier, `PERIOD_AVG_P_W[ch]` is clamped to ≥ 0 — the per-window accumulator drops negative samples. On STANDARD / PRO it represents the consumption side of the bidirectional accumulator.
-
----
-
-### 4.8 Reactive power (0xD0–0xDB)
-
-| Register | Description | Depends on |
-|---|---|:---:|
-| **`0xD0..0xD3`** `Q0_REAC`<br><small>READ · f32 LE · Tier: UI* · Unit: VAR · Sign: ±</small> | Reactive power, channel 0. `+` = inductive, `−` = capacitive (IEEE 1459 convention). `0` on I-only. | DATA_VALID |
-| **`0xD4..0xD7`** `Q1_REAC`<br><small>READ · f32 LE · Tier: UI2 / UI3 · Unit: VAR · Sign: ±</small> | Reactive power, channel 1 | DATA_VALID |
-| **`0xD8..0xDB`** `Q2_REAC`<br><small>READ · f32 LE · Tier: UI3 · Unit: VAR · Sign: ±</small> | Reactive power, channel 2 | DATA_VALID |
-
----
-
-### 4.9 Period snapshot (0xDC–0xEF)
-
-The master-side energy primitive. Updated only by `CMD_LATCH_PERIOD` (`0x27`). Each latch atomically copies the live accumulator into this snapshot and resets the live accumulator to zero — the snapshot reflects the period that just ended.
-
-| Register | Description | Depends on |
-|---|---|:---:|
-| **`0xDC..0xDF`** `PERIOD_AVG_P_W[0]`<br><small>READ · f32 LE · Tier: UI* · Unit: W · Sign: ± (BASIC: ≥ 0)</small> | Time-averaged active power, channel 0, over the latched period. **Production energy primitive.** Master computes `E_Wh = avg_p × dt_s / 3600`. | CMD_LATCH_PERIOD, PERIOD_VALID |
-| **`0xE0..0xE3`** `PERIOD_MAX_P_W`<br><small>READ · f32 LE · Tier: UI* · Unit: W · Sign: ±</small> | Peak `P_real` observed in any RT window inside the latched period (channel 0). For peak-demand tariffs. | CMD_LATCH_PERIOD, PERIOD_VALID |
-| **`0xE4..0xEB`** `(noise floor, see [4.11](#411-noise-floor-0xe40xeb))`<br><small></small> |  |  |
-| **`0xEC..0xEF`** `PERIOD_LATCH_MS`<br><small>READ · u32 LE · Tier: All · Unit: ms · Sign: ≥ 0</small> | Chip's view of dt between successive `CMD_LATCH_PERIOD` commands. Diagnostic only — do not use for Wh computation; the master clock is authoritative. | CMD_LATCH_PERIOD, PERIOD_VALID |
-
-> The address range `0xE4..0xEB` interleaves with the noise-floor registers — see [4.11](#411-noise-floor-0xe40xeb).
-
-#### Master-side energy formula
-
-```
-E_Wh[ch] = PERIOD_AVG_P_W[ch] × master_dt_s / 3600
-```
-
-where `master_dt_s` is the wall-clock elapsed between two successive `CMD_LATCH_PERIOD` commands, measured by the master.
-
----
-
-### 4.10 Bidirectional period accumulator (STANDARD / PRO)
-
-> **STANDARD / PRO tiers only.** Not present on BASIC modules — these registers `NACK` on BASIC.
-
-| Register | Description | Depends on |
-|---|---|:---:|
-| **`PERIOD_AVG_P_NEG_W[0]`**<br><small>Tier: STANDARD / PRO · Unit: W · Sign: ≥ 0</small> | Time-averaged **export** power, channel 0, over the latched period (magnitude of negative `P_real`). Master computes `E_export_Wh = avg_p_neg × dt_s / 3600`. | CMD_LATCH_PERIOD, PERIOD_VALID |
-| **`PERIOD_AVG_P_NEG_W[1]`**<br><small>Tier: STANDARD / PRO (UI2 / UI3) · Unit: W · Sign: ≥ 0</small> | Export-side average, channel 1 | CMD_LATCH_PERIOD, PERIOD_VALID |
-| **`PERIOD_AVG_P_NEG_W[2]`**<br><small>Tier: STANDARD / PRO (UI3) · Unit: W · Sign: ≥ 0</small> | Export-side average, channel 2 | CMD_LATCH_PERIOD, PERIOD_VALID |
-
-The numeric register addresses for `PERIOD_AVG_P_NEG_W[0..2]` are SKU-specific and documented in the STANDARD / PRO product datasheet. They are stable within each tier.
-
-Master code that wants tier-portable bidirectional support should:
-
-1. Probe a candidate `PERIOD_AVG_P_NEG_W` address with a 1-byte read.
-2. On `NACK`, fall back to RT-based bidirectional integration on the master side (see chapter 10, example 5).
-3. On success, use the SKU-documented address set.
-
----
-
-### 4.11 Noise floor (0xE4–0xEB)
-
-Quadrature noise subtraction: `rms_corrected = √(rms_raw² − NF²)`. The defaults are calibrated at the factory; user overrides are rarely needed.
-
-| Register | Description | Depends on |
-|---|---|:---:|
-| **`0xE4..0xE5`** `U_NF`<br><small>READ/WRITE · u16 LE · Tier: UI* · Unit: ADC counts · Default: 25</small> | Voltage RMS noise floor | Flash (via SAVE_GAINS) |
-| **`0xE6..0xE7`** `I0_NF`<br><small>READ/WRITE · u16 LE · Tier: All · Unit: ADC counts · Default: 12</small> | Current channel 0 noise floor | Flash (via SAVE_GAINS) |
-| **`0xE8..0xE9`** `I1_NF`<br><small>READ/WRITE · u16 LE · Tier: UI2 / UI3 / I2 / I3 · Unit: ADC counts · Default: 12</small> | Current channel 1 noise floor | Flash (via SAVE_GAINS) |
-| **`0xEA..0xEB`** `I2_NF`<br><small>READ/WRITE · u16 LE · Tier: UI3 / I3 · Unit: ADC counts · Default: 12</small> | Current channel 2 noise floor | Flash (via SAVE_GAINS) |
-
----
-
-### 4.12 Gain calibration (0xF0–0xFF)
-
-Applied as a final multiplier in `Sensor_V03_Commit()` after the RMS/power computation. Writing all 4 bytes of a gain takes effect immediately in RAM; persistence requires `CMD_SAVE_GAINS`.
-
-| Register | Description | Depends on |
-|---|---|:---:|
-| **`0xF0..0xF3`** `U_GAIN`<br><small>READ/WRITE · f32 LE · Tier: UI* · Default: 1.0</small> | Voltage channel gain multiplier | Flash (via SAVE_GAINS) |
-| **`0xF4..0xF7`** `I0_GAIN`<br><small>READ/WRITE · f32 LE · Tier: All · Default: 1.0</small> | Current channel 0 gain multiplier | Flash (via SAVE_GAINS) |
-| **`0xF8..0xFB`** `I1_GAIN`<br><small>READ/WRITE · f32 LE · Tier: UI2 / UI3 / I2 / I3 · Default: 1.0</small> | Current channel 1 gain multiplier | Flash (via SAVE_GAINS) |
-| **`0xFC..0xFF`** `I2_GAIN`<br><small>READ/WRITE · f32 LE · Tier: UI3 / I3 · Default: 1.0</small> | Current channel 2 gain multiplier | Flash (via SAVE_GAINS) |
-
-Safe range: `0.5..2.0`. Values outside this range almost certainly indicate a setup error and should not be written.
-
----
-
-## 5. Commands
-
-Write a command code to `REG_COMMAND` (`0x01`). The firmware processes the command within a few milliseconds (see per-command latency below) and stores any resulting error in `REG_ERROR`.
-
-| Command | Effect | Wait | GC |
-|---|---|:---:|:---:|
-| **`0x00`** `CMD_NOP`<br><small>Tier: All</small> | No operation | — | yes |
-| **`0x01`** `CMD_RESET`<br><small>Tier: All</small> | Software reset; the module reboots and reappears at the same I2C address ~300 ms later | 300 ms | **yes** |
-| **`0x02`** `CMD_RECALIBRATE`<br><small>Tier: All (UI*)</small> | Re-measure mains half-period from zero-cross detector | 50 ms | — |
-| **`0x03`** `CMD_SWITCH_UART`<br><small>Tier: All</small> | Toggle UART debug output (development builds only — no effect on production firmware) | — | — |
-| **`0x05`** `CMD_CHARGE_RESET`<br><small>Tier: All</small> | Reset the charge accumulator (`Q` and `N` at `0x7E..0x85`) to zero | — | — |
-| **`0x26`** `CMD_SAVE_GAINS`<br><small>Tier: All</small> | Persist the parameter block (I2C address, CT model, noise floors, gains, V03 phase samples) to flash | 700 ms | — |
-| **`0x27`** `CMD_LATCH_PERIOD`<br><small>Tier: All</small> | Atomic snapshot + reset of the period accumulator. `0xDC..0xEF` and `0xC2..0xC9` are updated; `PERIOD_VALID` is set to 1 if the latched period contained ≥ 1 RT window. | 50 ms | **yes** |
-| **`0xAA`** `CMD_FACTORY_RESET`<br><small>Tier: All</small> | Reset all flash parameters to factory defaults and reboot | 1 s | — |
-
-Other codes return `ERR_PARAM` in `REG_ERROR`.
-
-### General Call (broadcast)
-
-Sending a command to I2C address `0x00` (general call) reaches all slaves simultaneously. rbAmp accepts a subset of commands on general call — currently `CMD_LATCH_PERIOD` and `CMD_RESET`. Address-specific commands (e.g. `CMD_SAVE_GAINS`) are ignored on general call.
-
-Wire-level example:
-
-```
-START | 0x00 W | 0x01 | 0x27 | STOP    -> all modules latch their snapshot
+```python
+if not i2c_addr_acks(addr):
+    return NO_DEVICE
+product = read_u8(addr, 0x54)
+if product != 0x01:
+    return NOT_RBAMP_SENSOR
+hw = read_u8(addr, 0x55)
+if 1 <= hw <= 6:
+    cap_hi = read_u8(addr, 0x58)
+    has_voltage = bool(cap_hi & 0x01)
+    return {sku: SKU[hw], N_I: N_I_TABLE[hw], has_voltage: has_voltage}
+return UNKNOWN_DEVICE
 ```
 
 ---
 
-## 6. Error codes
+## 4 · Register map (production v1.3)
 
-Returned from `REG_ERROR` (`0x02`). Read-only; cleared only by a reset (`CMD_RESET` or power-cycle).
+![Register memory-map visual of the 0x00..0xFF page-0 space, colour-coded by block: RT (0x86..0xBD) / period / config / reserved-factory. Machine-contract at a glance.](images/api-register-map.png)
 
-| Code | Meaning | Action |
+**Filter applied**: `build: production` (cal-build registers excluded). Factory-calibration registers (NF, GAIN, PHASE) are **not documented** — they belong to the factory bench, not the consumer surface.
+
+### 4.0 Reserved ranges (internal)
+
+The following ranges are reserved for internal/factory use and are **not described** in this document. Reads return either data that is not relevant to consumer logic or `0x00` for non-existent addresses (see §5.2). Writes to these addresses are either silently dropped or answered with `ERR_PARAM`:
+
+- `0x04` — internal mode indicator (factory strap, not consumer-settable).
+- `0x06`, `0x26` — internal calibration parameters (factory bench).
+- `0x08..0x0F` — LUT debug view (factory diagnostic).
+- `0x1B..0x1F` — reserved page-0 (`0x18..0x1A` are production diag, see §4.2).
+- `0x36..0x45` — reserved page-0.
+- `0x4F`, `0x50` — reserved (identity-block pre-reserve).
+- `0xE4..0xEB`, `0xF0..0xFF` — factory calibration (NF, GAIN); develop-gated writes.
+
+> **Note on `0xD0..0xE3`**: in the **production** build this range is occupied by the `V03 Q` block (see §4.12). In the separate **cal firmware** (not shipped to the consumer) the same range is overlaid with the calibration block (build:cal). The consumer master sees only the production overlay — the Q block.
+
+3rd-party integrators must ignore these ranges.
+
+### 4.1 Control block (0x00..0x07)
+
+| Addr | Name | Size | Type | Access | Persistence | Notes |
+|---|---|---|---|---|---|---|
+| `0x00` | `STATUS` | 1 | u8 | r | ram | bit0=READY, bit1=ERROR (mirror of `REG_ERROR != 0`), bit2=EVENTS_PENDING (mirror of `EVENT_FLAGS != 0`) |
+| `0x01` | `COMMAND` | 1 | u8 | w | ram | Write a `CMD_*` opcode (see §5.2) |
+| `0x02` | `ERROR` | 1 | u8 | r | ram | last-write outcome; `0x00 = OK`; `0xFA..0xFF` error classes. Clear via `CMD_CLEAR_ERROR`. See §5.3 |
+| `0x03` | `VERSION` | 1 | u8 | r | rom | Protocol version. `0x04 = v1.3` |
+| `0x05` | `CT_MODEL` | 1 | u8 | rw | user_config | SCT-013 SKU code (v1.3 pure staging — see §6.2) |
+| `0x07` | `V03_PERIOD_VALID` | 1 | u8 | r | ram | Set by `CMD_LATCH_PERIOD`: 1 = fresh, 0 = empty/stale. **NOT cleared-on-read**. See §6.3.3 (witness) + §7.5 (failed-latch preservation) |
+
+### 4.2 ADC diagnostics (0x10..0x1C)
+
+| Addr | Name | Size | Type | Access | Persistence | Notes |
+|---|---|---|---|---|---|---|
+| `0x10` | `ADC_MEAN_U` | 2 | u16 LE | r | ram | Raw ADC mean U channel (~2048 centered) |
+| `0x12` | `ADC_MEAN_I0` | 2 | u16 LE | r | ram | Raw ADC mean I0 |
+| `0x14` | `ADC_MEAN_I1` | 2 | u16 LE | r | ram | Raw ADC mean I1 (UI2/I2/I3/UI3) |
+| `0x16` | `ADC_MEAN_I2` | 2 | u16 LE | r | ram | Raw ADC mean I2 (UI3/I3) |
+| `0x18` | `CAPTURE_STATUS` | 1 | u8 | r | ram | Raw-sample capture: bit0=ready |
+| `0x19` | `CAPTURE_PAGE` | 1 | u8 | rw | ram | Page 0..7 → 32 raw I0 samples into `CAPTURE_WINDOW` |
+| `0x1A` | `CAPTURE_WINDOW` | 64 | bytes | r | ram | 32×u16 LE pre-LUT I0 codes. Burst-read 64 bytes. |
+
+### 4.3 System (0x20..0x25)
+
+| Addr | Name | Size | Type | Access | Persistence | Notes |
+|---|---|---|---|---|---|---|
+| `0x20` | `AC_FREQ` | 1 | u8 | r | ram | ZC-sourced. 50 or 60 Hz integer. ZC is active **on all variants** (including I*) |
+| `0x21` | `AC_PERIOD` | 2 | u16 LE | r | ram | Mains half-period, µs |
+| `0x23` | `CALIBRATION` | 1 | u8 | r | ram | Legacy calibration status byte |
+| `0x24` | `TOPOLOGY` | 1 | u8 | r | rom | `1 = SINGLE`, `2 = SPLIT_PHASE`, `3 = THREE_PHASE` (= N_I) |
+| `0x25` | `SENSOR_CLASS` | 1 | u8 | rw | user_config | `0 = UNSET`, `1 = SCT_013`, `2 = WIRED_CT` (resv), `3 = BUILTIN_CT` (resv). A class change resets `CT_MODEL = 0`. **Not a variant discriminator** (see §3.4) |
+
+### 4.4 Fleet config (0x27..0x2F)
+
+| Addr | Name | Size | Type | Access | Persistence | Notes |
+|---|---|---|---|---|---|---|
+| `0x27` | `FLEET_CONFIG` | 1 | u8 | rw | user_config | bit0 = `GC_ENABLE` (General-Call latch reception; effective after reset). bits 1-7 reserved |
+| `0x28` | `GROUP_ID` | 1 | u8 | rw | user_config | GC latch group filter. `0` = respond to all-call. The GC frame group byte must match or be `0x00` |
+| `0x29` | `DIGEST_CONFIG` | 1 | u8 | rw | ram | Digest window composition bitmask (see §4.9). Defaults to `0x00` (digest disabled) after reset; rewrite on every initialization |
+| `0x2A` | `EVENT_FLAGS` | 1 | u8 | **w1c** | ram | Sticky event bits (see §5.3 error model). Defaults to `0x00` after reset (but bit5 `RESET_OCCURRED` is set at boot) |
+| `0x2B` | `EVENT_MASK` | 1 | u8 | rw | ram | Which `EVENT_FLAGS` bits drive DRDY solid-LOW |
+| `0x2C` | `THRESH_I_HI` | 2 | u16 LE | rw | ram | Current threshold → `EVENT_FLAGS.THRESH_I`. Units: 0.01 A. `0xFFFF` = disabled |
+| `0x2E` | `THRESH_P_HI` | 2 | u16 LE | rw | ram | Power threshold → `EVENT_FLAGS.THRESH_P`. Units: W. `0xFFFF` = disabled |
+
+### 4.5 Address (0x30..0x31)
+
+| Addr | Name | Size | Type | Access | Persistence | Notes |
+|---|---|---|---|---|---|---|
+| `0x30` | `I2C_ADDRESS` | 1 | u8 | rw | user_config | **Two-phase commit**: write candidate `0x08..0x77` → RAM staging; arm `ADDR_COMMIT_MAGIC`; then `CMD_COMMIT_ADDR`; applies after reset. At boot the **active** address is read back (v1.3 Fix 4) |
+| `0x31` | `ADDR_COMMIT_MAGIC` | 1 | u8 | w | ram | Write `0xA5` to arm `CMD_COMMIT_ADDR`. Consumed (cleared) on the commit attempt. Reads return `0x00` |
+
+See §6.1 for the sequence.
+
+### 4.6 Health / diagnostics (0x46..0x4F)
+
+| Addr | Name | Size | Type | Access | Persistence | Notes |
+|---|---|---|---|---|---|---|
+| `0x46` | `UPTIME_S` | 4 | u32 LE | r | ram | Seconds since boot |
+| `0x4A` | `RESET_CAUSE` | 1 | u8 | r | ram | Reset reason flags (bit0=PIN, bit1=POR/BOR, bit2=SW, bit3=IWDG, bit4=WWDG, bit5=LPWR) |
+| `0x4B` | `I2C_ERR_COUNT` | 2 | u16 LE | r | ram | Bus errors (BERR+OVR) since boot, saturating |
+| `0x4D` | `I2C_REINIT_COUNT` | 1 | u8 | r | ram | I²C peripheral BUSY-recovery reinit count, saturating |
+| `0x4E` | `ZC_OFFSET` | 2 | u16 LE | r | ram | µs from the last GC-latch STOP edge to the next **voltage** zero-cross — used for U/I phase compensation in power computation. Firmware-gated to `0xFFFF` on I-only variants (no voltage front-end → no voltage ZC). This is **not** the mains-frequency ZC source — `AC_FREQ (0x20)` is derived from a dedicated mains-ZC pin and is available on all variants. |
+
+### 4.7 CT model verify mirrors (0x51..0x53)
+
+Read-only mirrors of the **applied** CT model preset per channel. The write wire protocol is unchanged (see §6.2) — this is purely a read-back for verification.
+
+| Addr | Name | Size | Type | Access | Persistence | Notes |
+|---|---|---|---|---|---|---|
+| `0x51` | `CT_MODEL_CH0` | 1 | u8 | r | user_config | Applied CT model preset on ch0 (verify mirror) |
+| `0x52` | `CT_MODEL_CH1` | 1 | u8 | r | user_config | Applied CT model preset on ch1 |
+| `0x53` | `CT_MODEL_CH2` | 1 | u8 | r | user_config | Applied CT model preset on ch2 |
+
+### 4.8 Identity (0x54..0x6F)
+
+| Addr | Name | Size | Type | Access | Persistence | Notes |
+|---|---|---|---|---|---|---|
+| `0x54` | `PRODUCT_ID` | 1 | u8 | r | rom | Family: `0x01 = rbAmp sensor`. The master reads this **before** any family-specific register |
+| `0x55` | `HW_VARIANT` | 1 | u8 | r | rom | See §3.1 |
+| `0x56` | `FW_TIER` | 1 | u8 | r | rom | bits 0-1: 0=BASIC, 1=STANDARD, 2=PRO; bit 2=bidirectional; bit 3=LUT-calibrated |
+| `0x57` | `CAPABILITY` | 2 | u16 LE | r | rom | See §3.2 |
+| `0x59` | `GC_TICK` | 2 | u16 LE | r | ram | Master tick from the last accepted GC frame; `0xFFFF` = never received |
+| `0x5C` | `UID` | 12 | bytes | r | rom | 96-bit chip UID. One burst-read. |
+| `0x68` | `LABEL` | 8 | bytes | rw | user_config | User location label (ASCII, zero-padded). Empty = unset. **Write byte-at-a-time** (see §5.1) |
+
+### 4.9 Digest window (0x70..0x85)
+
+`DIGEST` is a compact poll window, served by a single burst-read. Its composition is selected by `DIGEST_CONFIG (0x29)`:
+
+| `DIGEST_CONFIG` bit | Content | Format |
 |---|---|---|
-| **`0x00`** `ERR_OK` | Normal operation | — |
-| **`0xFA`** `ERR_LUT_BAD` | ADC linearization LUT failed CRC at boot; running on linear approximation. Inspect `LUT_VALID_MASK` (`0x08`) for per-channel detail. Not fatal — measurements still work, with slightly degraded INL. | Have the supplier recalibrate / reprovision. |
-| **`0xFB`** `ERR_FLASH_PARAMS_BAD` | Flash parameter block (page 511) failed CRC at boot; running on factory defaults. Defaults have been re-saved, so the next boot will be clean. | Rewrite custom parameters (I2C address, CT model) and issue `CMD_SAVE_GAINS`. |
-| **`0xFC`** `ERR_NOT_READY` | The sensor pipeline has not yet committed its first RT window after boot (warm-up < 250 ms) | Wait 300 ms and recheck. |
-| **`0xFD`** `ERR_SENSOR_OVERFLOW` | RMS computation hit the overflow guard — input clipping at the ADC rails for the entire window | Reduce current, or fit a CT with a larger range. |
-| **`0xFE`** `ERR_PARAM` | Invalid command code, out-of-range register write, or general-call write of an address-specific command | Check the command code and the value range. |
-| **`0xFF`** `ERR_UNHANDLED` | HardFault or unhandled condition — should never appear in normal operation | Power-cycle. If it recurs, contact the supplier. |
+| bit 0 | `I_RMS[N]` | u16 per channel, 0.01 A |
+| bit 1 | `U_RMS` | u16, 0.1 V (voltage-HW only) |
+| bit 2 | `P_REAL[N]` | i16 per channel, 1 W (has_power only) |
+| bit 3 | `PF[N]` | u8 per channel, 0..100 (has_power only) |
 
-Reserved encoding: any value with `bit 7 = 1` indicates an error. Codes `0x01..0xF9` are reserved for future use.
+| Addr | Name | Size | Type | Access | Persistence | Notes |
+|---|---|---|---|---|---|---|
+| `0x70` | `DIGEST` | 22 | bytes | r | ram | Layout: `[STATUS_MIRROR u8][SEQ u8]` + mask-enabled fields. The maximum payload (UI3 full mask) is 19 B + 2 B header = 21 B used; 1 B tail unused (reads `0x00`). SEQ increments per RT commit, wrapping 255→0. **Atomic via read-freeze** (see §5.4). |
 
----
+**Layout is dynamic per `DIGEST_CONFIG`** — each enabled bit appends its fields in a fixed order: `I_RMS[N]` → `U_RMS` → `P[N]` → `PF[N]`. Disabled bits leave **no** padding — fields slide forward. The master must parse with the same mask it wrote into `DIGEST_CONFIG`. A burst-read of 22 bytes is safe (the tail is `0x00` whenever the total payload is < 22 bytes). The single-byte tail is always `0x00` (reserved).
 
-## 7. Operation sequences
+### 4.10 V03 real-time block (0x86..0xBD)
 
-### 7.1 Boot smoke test
+**All float32 LE** (IEEE 754 single precision, standard little-endian byte order). The byte-for-byte layout is frozen at v1.2. Every register is `r` access, `ram` persistence, group `v03_rt`. **Atomic via read-freeze** (see §5.4): a 56-byte burst-read (`0x86..0xBD`) is guaranteed contiguous (no torn snapshot).
 
-```
-1. Apply power.
-2. Wait 300 ms.
-3. Read REG_VERSION (0x03)  — expect non-zero firmware version byte.
-4. Read REG_DATA_VALID (0xCE), bit0  — wait until == 1.
-5. Read REG_ERROR (0x02)   — expect 0x00 (or a known non-fatal code).
-6. Read RT registers as needed.
-```
+| Addr | Name | Size | Type | Access | Persistence | Units | Notes |
+|---|---|---|---|---|---|---|---|
+| `0x86` | `V03_U_RMS` | 4 | float32 LE | r | ram | V | `0.0` on I-variants |
+| `0x8A` | `V03_U_PEAK` | 4 | float32 LE | r | ram | V | |
+| `0x8E` | `V03_I0_RMS` | 4 | float32 LE | r | ram | A | |
+| `0x92` | `V03_I1_RMS` | 4 | float32 LE | r | ram | A | `0.0` if the variant lacks ch1 |
+| `0x96` | `V03_I2_RMS` | 4 | float32 LE | r | ram | A | `0.0` if the variant lacks ch2 |
+| `0x9A` | `V03_I0_PEAK` | 4 | float32 LE | r | ram | A | |
+| `0x9E` | `V03_I1_PEAK` | 4 | float32 LE | r | ram | A | |
+| `0xA2` | `V03_I2_PEAK` | 4 | float32 LE | r | ram | A | |
+| `0xA6` | `V03_P0_REAL` | 4 | float32 LE | r | ram | W | `0.0` on I-variants (no power calc) |
+| `0xAA` | `V03_P1_REAL` | 4 | float32 LE | r | ram | W | |
+| `0xAE` | `V03_P2_REAL` | 4 | float32 LE | r | ram | W | |
+| `0xB2` | `V03_PF0` | 4 | float32 LE | r | ram | – | range −1..+1 |
+| `0xB6` | `V03_PF1` | 4 | float32 LE | r | ram | – | |
+| `0xBA` | `V03_PF2` | 4 | float32 LE | r | ram | – | |
 
-### 7.2 Reading a real-time snapshot
+### 4.11 V03 period block (0xBE..0xCF)
 
-```
-1. (Optional) Wait for DRDY falling edge for tight synchronisation.
-2. Read U_RMS    (4 bytes from 0x86)
-3. Read I0_RMS   (4 bytes from 0x8E)
-4. Read P0_REAL  (4 bytes from 0xA6)
-5. Read PF0      (4 bytes from 0xB2)
-6. (Optional) Read AC_FREQ (1 byte at 0x20)
-```
+A period snapshot latched on `CMD_LATCH_PERIOD`. **Ragged layout** (historical legacy from v1.2, frozen at v1.3): `avg_p` for ch1/ch2 lives here, while `avg_p` for ch0 sits in §4.12 at address `0xDC` (the legacy energy primitive was not relocated, to avoid an API break for existing integrators). Logically these three values belong to the same group.
 
-### 7.3 Period metering — continuous polling
+| Addr | Name | Size | Type | Access | Persistence | Units | Notes |
+|---|---|---|---|---|---|---|---|
+| `0xBE` | `V03_PERIOD_COMMIT_CNT` | 4 | u32 LE | r | ram | – | RT commits in the current period (diagnostic) |
+| `0xC2` | `V03_PERIOD_AVG_P_CH1` | 4 | float32 LE | r | ram | W | Latched avg P ch1 (UI2 only; UI3 — roadmap) |
+| `0xC6` | `V03_PERIOD_AVG_P_CH2` | 4 | float32 LE | r | ram | W | Latched avg P ch2 (UI3 only — roadmap) |
+| `0xCA` | `V03_PERIOD_MS` | 4 | u32 LE | r | ram | ms | Current period duration |
+| `0xCE` | `V03_STATUS` | 1 | u8 | r | ram | – | bit 0 = valid (RT commit outcome). **NOT cleared-on-read**. The master polls `STATUS (0x00)` for ready-wait. *Alias `DATA_VALID` is sometimes used for this register in tutorial chapters — same address, same semantics.* |
 
-```
-Master setup:
-1. Write CMD_LATCH_PERIOD (0x27) to REG_COMMAND (0x01)  -- primer; discard result
-2. Record t_prev = master_clock()
+### 4.12 V03 Q + period ch0 (0xD0..0xE3, production build)
 
-For each measurement period:
-3. Wait the desired interval (e.g. 60 s)
-4. Write CMD_LATCH_PERIOD
-5. Record t_now = master_clock()
-6. Wait 50 ms (let firmware finalise the snapshot)
-7. Read REG_V03_PERIOD_VALID (0x07), bit0
-       == 0  -> see retry pattern below
-       == 1  -> continue
-8. Read PERIOD_AVG_P_W[0] (4 bytes from 0xDC)
-9. Compute E_Wh = avg_p × (t_now - t_prev) / 3600
-10. t_prev = t_now
-```
+| Addr | Name | Size | Type | Access | Persistence | Units | Notes |
+|---|---|---|---|---|---|---|---|
+| `0xD0` | `V03_Q0_REAC` | 4 | float32 LE | r | ram | VAr | Reactive power ch0 (IEEE 1459 quadrature) |
+| `0xD4` | `V03_Q1_REAC` | 4 | float32 LE | r | ram | VAr | |
+| `0xD8` | `V03_Q2_REAC` | 4 | float32 LE | r | ram | VAr | |
+| `0xDC` | `V03_PERIOD_AVG_P` | 4 | float32 LE | r | ram | W | **PRODUCTION energy primitive**: latched avg P ch0, ≥ 0 (BASIC unidirectional clamp). Logically grouped with `V03_PERIOD_AVG_P_CH1/CH2` (§4.11); the legacy layout is preserved for compatibility |
+| `0xE0` | `V03_PERIOD_MAX_P` | 4 | float32 LE | r | ram | W | Latched max P ch0 this period |
 
-Retry pattern when `PERIOD_VALID == 0`:
+### 4.13 Diagnostic chip-side dt (0xEC)
 
-```
-Wait 250 ms        -- let at least one RT window complete
-Write CMD_LATCH_PERIOD
-Wait 50 ms
-Read PERIOD_VALID
-if still 0:
-    log warning, reset t_prev = master_clock(), skip this period
-```
-
-### 7.4 Multi-module synchronous latch
-
-```
-1. General Call latch: START | 0x00 W | 0x01 | 0x27 | STOP
-2. Record t_now
-3. Wait 50 ms
-4. For each module addr in your list:
-     read PERIOD_VALID (0x07) on addr
-     if valid:
-         read PERIOD_AVG_P_W[0] (0xDC) on addr
-         E_Wh[addr] = avg_p × (t_now - t_prev[addr]) / 3600
-         t_prev[addr] = t_now
-```
-
-### 7.5 Change CT model (plug-in CT modules)
-
-```
-1. Write new model code to REG_CT_MODEL (0x05)
-   e.g. rb_write_u8(addr, 0x05, 0x03)   -- SCT-013-030
-2. Write CMD_SAVE_GAINS (0x26) to REG_COMMAND (0x01)
-3. Wait 700 ms
-4. (Optional) Read REG_CT_MODEL to verify
-```
-
-### 7.6 Change I2C address
-
-```
-1. Connect only the target module to the bus (current address: old_addr)
-2. Write new_addr to REG_I2C_ADDRESS (0x30) on old_addr
-3. Wait 10 ms
-4. Write CMD_SAVE_GAINS (0x26) on old_addr
-5. Wait 700 ms
-6. Write CMD_RESET (0x01) on old_addr
-7. Wait 300 ms
-8. The module now responds on new_addr; verify with a read of REG_VERSION (0x03)
-9. Physically mark the module with its new address
-```
-
-### 7.7 Gain calibration
-
-```
-1. Connect a known reference load (e.g. 1000 W resistive heater)
-2. Read live P0_REAL several times (0xA6); average over ~5 s -> p_measured
-3. Read current I0_GAIN as float (0xF4..0xF7) -> gain_now
-4. Compute gain_new = gain_now × (P_reference / p_measured)
-5. Sanity check: 0.5 ≤ gain_new ≤ 2.0   (otherwise abort)
-6. Write gain_new as 4 bytes (LE) to 0xF4..0xF7
-7. Write CMD_SAVE_GAINS (0x26)
-8. Wait 700 ms
-9. Verify by reading P0_REAL again — should match P_reference within calibration tolerance
-```
-
-### 7.8 Factory reset
-
-```
-1. Write CMD_FACTORY_RESET (0xAA) to REG_COMMAND (0x01)
-2. Wait 1 s for the module to wipe flash and reboot
-3. Wait an additional 300 ms for boot
-4. Read REG_VERSION (0x03) to confirm the module is back online
-5. Reconfigure as needed (address, CT model, gains)
-```
+| Addr | Name | Size | Type | Access | Persistence | Units | Notes |
+|---|---|---|---|---|---|---|---|
+| `0xEC` | `V03_PERIOD_LATCH_MS` | 4 | u32 LE | r | ram | ms | Chip-side dt between the two most recent latches. **DIAGNOSTIC-ONLY** — undercounts by 25–30% under load (SysTick starvation, by design). **DO NOT use for billing** — the master keeps its own wall-clock. See §7.4 |
 
 ---
 
-## 8. Dependency summary
+## 5 · Wire protocol
 
-A register's value is meaningful only when its dependencies are satisfied.
+![READ auto-increment (burst-read OK, incl. 56-byte atomic RT block) vs WRITE byte-at-a-time (every byte needs its address) — the protocol asymmetry, side by side.](images/api-rw-asymmetry.png)
 
-| Register / range | Required precondition | Effect if unmet |
+### 5.1 READ / WRITE asymmetry
+
+**Canonical by-design behavior**:
+
+| Direction | Auto-increment | Pattern |
 |---|---|---|
-| `0x86..0xCD` Real-time results | `DATA_VALID` bit 0 == 1 | Reads return zeros / stale data |
-| `0xC2..0xC9` Per-channel period averages | `CMD_LATCH_PERIOD` issued + `PERIOD_VALID` == 1 | Reads return stale or undefined data |
-| `0xDC..0xDF` `PERIOD_AVG_P_W[0]` | `CMD_LATCH_PERIOD` issued + `PERIOD_VALID` == 1 | Reads return stale or undefined data |
-| `0xE0..0xE3` `PERIOD_MAX_P_W` | `CMD_LATCH_PERIOD` issued + `PERIOD_VALID` == 1 | Reads return stale or undefined data |
-| `0xEC..0xEF` `PERIOD_LATCH_MS` | `CMD_LATCH_PERIOD` issued | Reads return 0 until first latch |
-| `0x05` `CT_MODEL` (write) | `CMD_SAVE_GAINS` to persist | Setting is RAM-only; lost on power cycle |
-| `0x30` `I2C_ADDRESS` (write) | `CMD_SAVE_GAINS` + `CMD_RESET` to apply | Module keeps old address until persisted and reset |
-| `0xE4..0xEB` Noise floor (write) | `CMD_SAVE_GAINS` to persist | RAM-only, lost on power cycle |
-| `0xF0..0xFF` Gains (write) | `CMD_SAVE_GAINS` to persist | RAM-only, lost on power cycle |
-| `CMD_LATCH_PERIOD` | One RT window (~200 ms) must have completed since the previous latch | `PERIOD_VALID` returns 0; snapshot is stale |
-| `PERIOD_AVG_P_NEG_W[*]` | STANDARD / PRO product tier | Register NACKs on BASIC tier |
+| **READ** (burst-read N bytes) | ✅ **YES** | `read(addr, N)` returns N consecutive bytes starting at `addr`. |
+| **WRITE** (multi-byte regs) | ❌ **NO** | A multi-byte register is written **byte-at-a-time** — one separate single-byte transaction per address. A burst write drops bytes 1..N-1 and only accepts the first. |
 
-### Initialization order
+#### Affected writable multi-byte registers (write byte-at-a-time)
 
-For a master driver that brings up a fresh installation:
+- `LABEL` (0x68-0x6F, 8 bytes)
+- `THRESH_I_HI` (0x2C, 2 bytes u16 LE)
+- `THRESH_P_HI` (0x2E, 2 bytes u16 LE)
 
+**Endianness for multi-byte WRITE**: the byte at the lower address is the low byte (LE). For example, to write `THRESH_I_HI = 0x1234` (4660 decimal):
+
+```text
+# CORRECT: low byte first (LE)
+write(addr=0x2C, value=0x34)   # LO byte
+write(addr=0x2D, value=0x12)   # HI byte
 ```
-1. I2C bus init  (set frequency, configure SDA/SCL)
-2. Wait 250 ms for module power-on
-3. Probe address (default 0x50); if not present, scan range 0x08..0x77
-4. Read REG_VERSION (0x03)
-5. Poll REG_DATA_VALID (0xCE) bit 0 until 1 (timeout 2 s)
-6. Read REG_ERROR (0x02); log if non-zero
-7. (One-time setup, if applicable):
-   - Set CT model:  write 0x05 + CMD_SAVE_GAINS
-   - Set I2C addr:  write 0x30 + CMD_SAVE_GAINS + CMD_RESET
-8. (Optional) Detect variant:
-   - Probe 0xC2 (UI2/UI3 marker)
-   - Read U_RMS (0x86): non-zero => UI*, ≈0 => I-only
-9. (Optional) Detect tier:
-   - Probe a STANDARD/PRO-only address; NACK => BASIC
-10. Issue primer CMD_LATCH_PERIOD; discard the result
-11. Start the main read loop
+
+#### WRONG / CORRECT example (pseudocode)
+
+```text
+# WRONG — only 'M' (first byte) is accepted, the rest are dropped
+write(addr=0x50, reg=0x68, data=b"MyMeter1")   # 8-byte burst
+
+# CORRECT — byte-at-a-time loop
+label = b"MyMeter1"
+for i, byte in enumerate(label):
+    write(addr=0x50, reg=0x68 + i, data=byte)
+```
+
+#### Exception — GC broadcast frame
+
+The GC broadcast frame (`0x00` general-call address + 5-byte payload) is a **separate wire-protocol path**, not a register write. The read/write asymmetry from §5.1 **does not apply** to GC. See §6.3.
+
+### 5.2 Unmapped registers behavior
+
+**Any read from an unmapped address** returns `0x00`. The firmware **never** NACKs on register reads. This is by design (wedge fix).
+
+**Implication for detection**: detection of a missing device must go through the **I²C address-frame ACK**, **not** through register probes.
+
+### 5.3 Error model
+
+**v1.3 canonical**:
+
+- **`REG_ERROR (0x02)`** is the **last-write outcome**, **NOT sticky**. On every register write the firmware sets `reg_error = ERR_OK`; any subsequent unrelated write **clears** the prior error.
+- **`EVENT_FLAGS (0x2A) bit 3`** is the durable signal (sticky W1C), asserted on any rejected write or command.
+
+#### Error codes
+
+| Code | Name | Severity |
+|---|---|---|
+| `0x00` | OK | – |
+| `0xF9` | `CLONE` | error (anti-clone sentinel, **not clearable**) |
+| `0xFA` | `LUT_BAD` | error |
+| `0xFB` | `FLASH_PARAMS_BAD` | error (see §6.5 fresh-flash) |
+| `0xFC` | `NOT_READY` | error |
+| `0xFD` | `SENSOR_OVERFLOW` | error |
+| `0xFE` | `PARAM` | error (rejected write — invalid arg / unknown opcode / out-of-range enum) |
+| `0xFF` | `UNHANDLED` | error |
+
+#### `EVENT_FLAGS (0x2A)` layout (sticky W1C)
+
+| bit | Name | Notes |
+|---|---|---|
+| 0 | `PERIOD_READY` | latch snapshot available |
+| 1 | `THRESH_I` | I_rms crossed `THRESH_I_HI` |
+| 2 | `THRESH_P` | P sum crossed `THRESH_P_HI` |
+| 3 | **`ERROR`** | `REG_ERROR != 0` (durable error signal) |
+| 4 | `CONFIG_CHANGED` | class/model/address/label modified |
+| 5 | `RESET_OCCURRED` | module rebooted (set at boot until W1C). The master must re-initialize RAM config. |
+
+#### Canonical error patterns
+
+**Pattern 1 — one-off post-operation capture** (outcome of exactly that operation):
+
+```text
+write target_reg(...)
+err = read_u8(0x02)   # IMMEDIATELY after the operation, before the next write
+```
+
+**Pattern 2 — durable monitoring** (canonical for a long-running master):
+
+```text
+event_flags = read_u8(0x2A)
+if event_flags & (1 << 3):    # ERROR bit
+    last_err = read_u8(0x02)
+    # handle
+    write_u8(0x2A, 1 << 3)    # W1C clear bit 3
+    # or CMD_CLEAR_ERROR
+```
+
+#### ⚠ bit 3 async caveat
+
+A `write rejection` asserts `EVENT_FLAGS.bit3` **asynchronously**, ~200 ms after the operation, **not** immediately. **Do not poll bit 3 right after a write** — either wait ≥ 200 ms, or use **Pattern 1** (immediate REG_ERROR capture) for the outcome of a specific operation, and reserve bit 3 polling for long-running monitoring.
+
+#### Anti-clone sentinel
+
+`DEV_ERR_CLONE (0xF9)` is **not** cleared by `CMD_CLEAR_ERROR` or by W1C bit 3. Only a reboot plus a factory reset can clear it (intentional anti-clone protection).
+
+### 5.4 Atomicity / read-freeze semantics
+
+#### 5.4.1 Read-freeze present (atomic — NOT torn)
+
+These blocks are protected by firmware-side read-freeze. A burst-read is atomic with respect to the RT commit:
+
+- **V03 RMS / P / PF block** (0x86..0xBD) — the full float block.
+- **Digest block** (0x70..0x85).
+
+Burst-reads of these ranges are **safe** — there is no split sample between two consecutive commits.
+
+#### 5.4.2 No read-freeze — `read-twice-agree` recommended
+
+These registers are updated asynchronously without within-read freeze. Single-byte reads are tolerant, but the value can change between transactions:
+
+- **`GC_TICK (0x59)`** — GC tick counter.
+- **`I2C_ADDRESS (0x30)`** — RAM staging mirror.
+- **`CT_MODEL_CH0/1/2 (0x51..0x53)`** — verify mirrors.
+
+**Pattern for reliable reads**:
+
+```text
+val1 = read_u8(addr)
+val2 = read_u8(addr)
+if val1 == val2:
+    return val1   # stable
+else:
+    retry          # value changed between reads
+```
+
+#### 5.4.3 NF-clamp semantics
+
+`I_RMS = 0x00000000` means **"signal below noise floor"** (the firmware computes `rms_corr² = max(0, raw² − nf²)`), **NOT** "no data" / "error". It is a **valid measurement** for no-load / very-low-load scenarios.
+
+The master code **must not** interpret `I_RMS = 0.0` as an error or missing data.
+
+---
+
+## 6 · Protocol sequences
+
+### 6.0 Cold-boot timeline
+
+After POR (power-on reset) or hard reset the module passes through the following phases:
+
+| Time from POR | State |
+|---|---|
+| 0 ms | POR — all registers in reset state, SCL/SDA tri-stated |
+| ~10 ms | Bus-responsive (the module ACKs its address) |
+| ~50 ms | First RT commit (the RT block at 0x86+ holds valid data; `STATUS.bit0 = 1`) |
+| ~60-80 ms | First valid `V03_STATUS.bit0` (RT pipeline has cycled through one full mains period) |
+| ~200 ms | First `CMD_LATCH_PERIOD` may return `V03_PERIOD_VALID = 1` (latch requires ≥ 1 mains period of accumulation) |
+| ~250 ms | All measurements stable (typical) |
+
+> Holistic cold boot **to the first valid measurement** ≈ **250 ms** (typical). After a soft `CMD_RESET` the timeline is identical (the full reset state machine runs).
+
+**Master initialization sequence**:
+
+```text
+1. wait ~50 ms after VCC stable
+2. probe slave address (read PRODUCT_ID = 0x54); retry up to 300 ms on NACK
+3. read identity (HW_VARIANT 0x55, CAPABILITY 0x57/0x58); validate
+4. check REG_ERROR (0x02):
+   - 0x00 — normal boot
+   - 0xFB — fresh flash, provisioning required (§6.5)
+   - other — see §6.7 error-state recovery
+5. configure (SENSOR_CLASS, CT_MODEL, FLEET_CONFIG, etc.)
+6. poll STATUS (0x00) until bit0 = 1 (READY) — usually immediate after step 5
+```
+
+### 6.1 Address change — two-phase commit (production-OK)
+
+**Wire protocol** (v1.3 canonical):
+
+```text
+1. write candidate_addr (1 byte) → REG_I2C_ADDRESS (0x30)   # RAM staging, not persisted
+2. write 0xA5 → REG_ADDR_COMMIT_MAGIC (0x31)                # arm commit
+3. issue CMD_COMMIT_ADDR (opcode 0x30 in REG_COMMAND)        # persists into flash
+4. wait ~700 ms (flash write completion; see §6.6 settle)
+5. issue CMD_RESET (opcode 0x01)                             # module resets
+6. wait ~300 ms boot-to-responsive
+7. verify: bus-probe the new address (ACK = success)
+```
+
+> **Note**: `CMD_COMMIT_ADDR` does NOT auto-reset the module — an explicit `CMD_RESET` is required at step 5. If the master skips the explicit reset, the new address remains stored in flash, but the old address stays active until the next external reset (power cycle, hard reset pin, IWDG).
+
+**Guarantees**:
+
+- Address change **works in production mode** (not develop-only).
+- `REG_I2C_ADDRESS (0x30)` at boot reads the **active address** (v1.3 canonical). Until reboot after staging it echoes the candidate.
+- The address is **excluded** from the `CMD_SAVE_GAINS` / `CMD_SAVE_USER_CONFIG` namespace — it is persisted only through `CMD_COMMIT_ADDR`.
+
+**Boot-window timing** for verification:
+- Minimum 300 ms boot-to-responsive.
+- Retry window on the new address: ~1 s total (if a NACK persists after 1-2 retries, an additional boot delay may be needed).
+- Once the new address ACKs, optionally verify by reading `0x30` (which now reflects the new active address) for confirmation.
+
+**Failure modes**:
+
+- `ADDR_COMMIT_MAGIC` not armed → `CMD_COMMIT_ADDR` → `REG_ERROR = ERR_PARAM (0xFE)`.
+- Candidate out of range (< 0x08 or > 0x77) → `ERR_PARAM`.
+- 5 s timeout without commit → magic clears; the `prepare` step must be repeated.
+
+### 6.2 CT model binding — pure staging + per-channel CMD
+
+**v1.3 pure-staging canonical**: writing `REG_CT_MODEL (0x05)` **no longer auto-applies** the preset to ch0. Binding happens **only** through `CMD_SET_CT_MODEL_CHn`.
+
+**Canonical per-channel wire protocol** (order-independent in v1.3):
+
+```text
+1. write REG_SENSOR_CLASS (0x25) = sct013    # if not already set
+2. write REG_CT_MODEL (0x05) = model_code     # stages, applies nothing
+3. issue CMD_SET_CT_MODEL_CHn (opcode 0x28/0x29/0x2A for ch0/1/2)
+   # VALIDATES (class, model) + binds to channel n
+4. wait 5 ms settle
+5. (optional) issue CMD_SAVE_USER_CONFIG (opcode 0x32) for persistence
+```
+
+**Order-independent**: in v1.3 channels may be configured in **any order** — ch0 first, last, whatever is convenient. The "bind ch0 last" workaround from v1.2 is **no longer required**.
+
+**Read-back verification**: after binding, read `CT_MODEL_CH0/1/2 (0x51..0x53)` — those reflect the applied state per channel.
+
+**Failure modes** (validation of (class, model) happens at the `CMD_SET_CT_MODEL_CHn` bind step, not at the pure-staging write to 0x05):
+- `SENSOR_CLASS = 0` (UNSET) when `CMD_SET_CT_MODEL_CHn` is issued → `REG_ERROR = ERR_PARAM`.
+- `CT_MODEL` outside 1..7 (SCT-013-005/-010/-030/-050/-100/-020/-060) at `CMD_SET` → `ERR_PARAM`.
+
+### 6.3 GC broadcast latch — opt-in fleet sync
+
+**Opt-in per module** via `REG_FLEET_CONFIG.bit0` (`GC_ENABLE`). **Default OFF**. The change is effective **after reset** (soft `CMD_RESET` or hard reset).
+
+#### 6.3.1 Enable sequence (once per module)
+
+```text
+1. write REG_FLEET_CONFIG (0x27) = 0x01    # bit0 = GC_ENABLE
+2. issue CMD_SAVE_USER_CONFIG (opcode 0x32, ungated)
+3. issue CMD_RESET (opcode 0x01)
+4. wait ~300 ms boot
+5. verify: read REG_FLEET_CONFIG → bit 0 should be 1
+```
+
+#### 6.3.2 GC frame format
+
+```text
+I²C general-call address 0x00 | A5 27 <group> <tick_lo> <tick_hi>   (5-byte payload)
+```
+
+- `A5` — frame magic.
+- `27` — opcode `CMD_LATCH_PERIOD`.
+- `<group>` — `0x00` = all-call; otherwise must match the device's `REG_GROUP_ID (0x28)`.
+- `<tick_lo/hi>` — 16-bit master-side tick counter (for fleet-wide window numbering and per-module missed-frame detection via `GC_TICK (0x59)`).
+
+**Latch-only**: GC frames **do not carry** destructive opcodes (`SAVE_*`, `COMMIT_ADDR`, `FACTORY_RESET`, etc.) by design.
+
+#### 6.3.3 Failure mode detection — 2-level
+
+**Level 1 — GC-address NACK** (immediate, at bus level):
+- If GC is disabled across the **entire fleet** → the master receives a hard error (NACK on address `0x00`, or the driver-side equivalent).
+- This is a **hard error, NOT a silent drop** — the master can detect and react.
+- Trip: NACK on GC = "GC is not enabled on any device in the fleet."
+
+**Level 2 — per-module witness** (after settle):
+- If no NACK occurs (at least one module is listening), the master reads `REG_V03_PERIOD_VALID (0x07)` from every expected slave.
+- `1` = the latch succeeded on that module.
+- `0` = GC is disabled on that specific module, or the current period is empty.
+
+**Fall back to per-device latch** if the witness reports `0`:
+
+```text
+foreach module where witness == 0:
+    write_cmd(module, CMD_LATCH_PERIOD)
+sleep(50 ms)
+foreach module: read period snapshot with skip_latch=true
+```
+
+### 6.4 Period sync — two strategies
+
+#### Strategy 1 — sequential latch + shared settle (any firmware)
+
+```text
+for module in modules:
+    write_cmd(module, CMD_LATCH_PERIOD)
+sleep(50 ms)
+for module in modules:
+    read_period_snapshot(module)   # skip_latch=true
+```
+
+Skew between modules: ~1 ms per module at 50 kHz. Over 16 modules relative to a 60-second period that is 0.027 %. **Negligible** for billing.
+
+**Settle window after `CMD_LATCH_PERIOD`**:
+- Minimum **50 ms** before reading `V03_PERIOD_VALID (0x07)` or the period snapshot — this covers worst-case latch latency (1 mains period @ 50 Hz = 20 ms + RT commit + I²C peripheral settling).
+- Optionally the master can **poll `STATUS.bit0 (READY)`** instead of a fixed sleep: `READY=1` means the RT block is in a consistent state, so the period snapshot can be safely burst-read.
+- On a brand-new module (< 200 ms after boot) a latch may return `V03_PERIOD_VALID = 0` because less than 1 mains period has accumulated — see §6.0 cold-boot timeline.
+
+#### Strategy 2 — General-Call broadcast latch (enable required)
+
+Skew = 0 (atomic at bus level). See §6.3.
+
+**When to use what**:
+- < 8 modules: Strategy 1 (simpler, no enable required).
+- ≥ 8 modules or billing-grade synchrony: Strategy 2.
+
+### 6.5 Provisioning — fresh-flash + SAVE
+
+**Freshly flashed module behavior**:
+
+- On the first boot after firmware flash: `REG_ERROR = 0xFB (FLASH_PARAMS_BAD)` + `EVENT_FLAGS.bit3` set.
+- The params page is uninitialized → factory defaults are loaded.
+
+This is **NORMAL** for a virgin module and **not fatal**. Do not abort provisioning on first-boot `0xFB`.
+
+**Recovery**:
+
+```text
+1. configure SENSOR_CLASS + CT_MODEL (per §6.2)
+2. (optional) configure FLEET_CONFIG + GROUP_ID + LABEL
+3. issue CMD_SAVE_USER_CONFIG (opcode 0x32, ungated)
+4. wait ~700 ms (flash write)
+5. verify: REG_ERROR = 0x00, EVENT_FLAGS.bit3 cleared
+```
+
+### 6.7 Error-state recovery — decision tree
+
+If at boot or runtime `STATUS.bit1 (ERROR)` = 1 or the durable signal `EVENT_FLAGS.bit3 (ERROR)` is set, the master reads `REG_ERROR (0x02)` and decides based on the code:
+
+```text
+read REG_ERROR (0x02):
+
+  0x00  → no error (false signal — clear stale EVENT bit3 via W1C)
+         action: write 1<<3 → EVENT_FLAGS (W1C clear)
+
+  0xF9  → CLONE (anti-clone sentinel)
+         action: device unusable; measurement pipeline halted. Only
+                 STATUS/ERROR are readable. NOT clearable through software.
+                 Resolution — factory recovery (out of scope for this doc).
+
+  0xFA  → LUT_BAD (calibration LUT corrupted)
+         action: device unusable for measurement. Factory recovery required.
+
+  0xFB  → FLASH_PARAMS_BAD (params page uninitialized — virgin module)
+         action: NORMAL for a freshly flashed module. Provision per §6.5
+                 (configure SENSOR_CLASS/CT_MODEL/...; issue CMD_SAVE_USER_CONFIG).
+                 Cleared after a successful SAVE.
+
+  0xFC  → NOT_READY (transient; module still booting)
+         action: wait 50 ms, retry. If persistent > 300 ms — power cycle.
+
+  0xFD  → SENSOR_OVERFLOW (transient; signal saturated)
+         action: physical overload detected. The chosen CT clamp has
+                 insufficient range for the measured current, or a real overload.
+                 Issue CMD_CLEAR_ERROR (0x31) after the cause is removed.
+
+  0xFE  → PARAM (last operation rejected — invalid argument / unknown opcode)
+         action: master-side bug — review the last write. Issue CMD_CLEAR_ERROR
+                 after fixing the master logic.
+
+  0xFF  → UNHANDLED (firmware-side anomaly)
+         action: open an issue with the vendor; CMD_CLEAR_ERROR attempts to clear.
+                 If persistent after CMD_RESET — the device is suspect.
+```
+
+**General recovery flow for transient errors (0xFC/0xFD/0xFE)**:
+
+```text
+1. capture context (what was the last write? master state?)
+2. issue CMD_CLEAR_ERROR (opcode 0x31)
+3. wait 5 ms
+4. re-read STATUS / REG_ERROR — verify cleared
+```
+
+**For persistent errors** — issue `CMD_RESET` and walk through the cold-boot timeline (§6.0). If the error persists after reset and is not 0xFB (fresh-flash) — contact vendor support.
+
+### 6.6 Commands reference
+
+#### Core opcodes (write to `REG_COMMAND (0x01)`)
+
+| Opcode | Name | Settle | Gated | Notes |
+|---|---|---|---|---|
+| `0x01` | `RESET` | ~300 ms | – | Soft reset (HAL_NVIC_SystemReset) |
+| `0x27` | `LATCH_PERIOD` | 50 ms | – | Latch RT counters into the period snapshot |
+| `0x28` | `SET_CT_MODEL_CH0` | 5 ms | – | Bind staged `REG_CT_MODEL` to ch0 |
+| `0x29` | `SET_CT_MODEL_CH1` | 5 ms | – | Bind staged `REG_CT_MODEL` to ch1 |
+| `0x2A` | `SET_CT_MODEL_CH2` | 5 ms | – | Bind staged `REG_CT_MODEL` to ch2 |
+| `0x30` | `COMMIT_ADDR` | 700 ms | – | Persist `I2C_ADDRESS` (see §6.1) |
+| `0x31` | `CLEAR_ERROR` | 0 | – | Clear `REG_ERROR` (transient classes only; `CLONE` is not clearable) |
+| `0x32` | `SAVE_USER_CONFIG` | 700 ms | – | Persist the user_config group (production-OK) |
+
+> Opcodes outside the public range (factory / develop) are **not documented** in this reference. A consumer master does not send them in normal operation; an unsupported opcode → `REG_ERROR = ERR_PARAM (0xFE)`.
+
+---
+
+## 7 · Semantics
+
+### 7.0 Flash endurance + reset behavior
+
+**Flash endurance**: ~**10 000 cycles per page** (typical, vendor spec). Every `CMD_SAVE_USER_CONFIG` or `CMD_COMMIT_ADDR` is **one erase+write cycle** on the params page.
+
+> ⚠ **Do not loop SAVE/COMMIT in a runtime loop.** At 1 SAVE/s a module burns out in about 3 hours. Provisioning is done **once** at install time; no runtime setting updates are required (a consumer master rarely changes them).
+
+**Retention**: typically 10+ years at typical operating temperature.
+
+**Reset behavior comparison**:
+
+| Reset type | Preserved | Cleared |
+|---|---|---|
+| `CMD_RESET (0x01)` | flash (config, address, label, gains, NF) | RAM (UPTIME, ZC_OFFSET, EVENT_FLAGS — except `RESET_OCCURRED` bit 5 set at boot; THRESH_*; DIGEST_CONFIG) |
+| Power cycle / hard reset pin | flash | same as CMD_RESET plus any external RAM held on the host side |
+| `CMD_FACTORY_RESET (0xAA)` (develop only) | nothing | **everything** — wipes flash + RAM (full factory reset) |
+
+**`RESET_OCCURRED` bit pattern** (canonical):
+- After a reset, on boot: `EVENT_FLAGS.bit5 = 1`.
+- The master sees bit 5 → knows the module rebooted → must re-initialize the RAM-only fields (DIGEST_CONFIG, THRESH_*, EVENT_MASK).
+- The master clears bit 5 via W1C: `write 1<<5 → EVENT_FLAGS`.
+
+### 7.1 Persistence model
+
+| Command | Production | Persists |
+|---|---|---|
+| `CMD_SAVE_USER_CONFIG` (0x32) | ✅ **OK** | `i2c_address` (via two-phase), `ct_model`, `sensor_class`, `fleet_config`, `group_id`, `label` |
+| `CMD_COMMIT_ADDR` (0x30) | ✅ **OK** (magic-armed) | `i2c_address` |
+| `CMD_RESET` (0x01) | ✅ OK | — (soft reset) |
+| `CMD_LATCH_PERIOD` (0x27) | ✅ OK | — (latches the period snapshot) |
+| `CMD_CLEAR_ERROR` (0x31) | ✅ OK | — (clears `REG_ERROR`) |
+| `CMD_SAVE_GAINS` (0x26) | ❌ **BLOCKED** in production (silent reject; `REG_ERROR = 0xFE`; reboot reverts) | factory calibration |
+| `CMD_FACTORY_RESET` (0xAA) | ❌ **BLOCKED** in production | — |
+
+### 7.2 Read-back ≠ persistence
+
+⚠ **The production guard accepts the write into RAM** (a subsequent read returns the written value), **but the flash save may be rejected**. After reboot the value **reverts** to its pre-write state.
+
+**The only valid way to confirm persistence** is `CMD_RESET` + boot-wait + re-read:
+
+```text
+1. write target_reg(...)
+2. issue CMD_RESET (0x01)
+3. wait ~300 ms boot
+4. re-read target_reg
+5. assert read == written     # only now is persistence confirmed
+```
+
+**Address is an exception** (v1.3 canonical): `REG_I2C_ADDRESS (0x30)` at boot reads the **active** address. After staging it echoes the candidate; after reboot it shows the actual persisted value.
+
+### 7.3 Single voltage reference caveat
+
+The module uses **one** U channel to compute `P` on **all** I channels. If a CT clamp hangs on a wire of **another** phase (multi-phase distribution panel) — the `P` readings for that channel will be **wrong** (arbitrary U/I phase offset). `I_RMS` remains correct.
+
+Multi-phase measurement (L1/L2/L3 simultaneously) is a **separate SKU** with its own specification.
+
+### 7.4 Master energy integration — wall-clock canon
+
+⚠ **`V03_PERIOD_LATCH_MS (0xEC)` is a diagnostic-only chip-side software timer (SysTick-based). It undercounts by 25–30%** under normal ISR load (SysTick starvation, by design). **DO NOT use for billing.**
+
+**Canonical master energy integration**:
+
+```text
+# CORRECT — master wall-clock
+t_now = master_clock()
+dt_s = (t_now - t_prev_latch) / time_unit
+energy_wh[ch] += avg_p[ch] * dt_s / 3600
+t_prev_latch = t_now
+
+# WRONG — chip software timer undercounts by 25-30%
+dt_chip_s = read_u32(0xEC) / 1000.0
+energy_wh[ch] += avg_p[ch] * dt_chip_s / 3600    # systematically under-reported
+```
+
+### 7.5 Failed-latch period preservation
+
+The firmware **PRESERVES** the period accumulator on an empty latch. When `g_period_count == 0` (a latch with no readable period):
+- `REG_V03_PERIOD_VALID = 0` (signal stale).
+- `period_start_ms` is preserved → the next successful latch covers the **full master-intended interval**.
+
+**Implication**: the master does **not** lose data on a stale latch. Pattern for master integration:
+
+```text
+issue latch
+if PERIOD_VALID == 1:
+    integrate(avg_p, master_dt)
+    reset_master_clock
+# else: skip integration (FW will automatically recover on the next success)
+```
+
+### 7.6 Clock-drift tolerance
+
+**Canon**: chip-timebase drift up to **30 %** under load is **normal** (SysTick starvation, by design on this MCU/ISR profile). Hardware-measured under production ISR load.
+
+**Acceptance**: the chip is OK at drift ≤ 30 %.
+
+⚠ **The legacy 3 % threshold is WRONG.** That threshold would mass-reject healthy chips.
+
+### 7.7 EMI / switch-transient resilience
+
+Reads **during active relay switching (5 A EMI)** fail ~67 % of the time (HW-measured). Steady-state reads are reliable. The bus self-recovers, **no wedge occurs**, no modules are lost.
+
+**Master pattern — application-level retry** (mandatory when switching inductive loads):
+
+```text
+for attempt in range(5):
+    result = read_register(...)
+    if result is OK:
+        return result
+    sleep(20 ms)
+raise IOError("read failed after retries")
+```
+
+**Master-side bus_reset alone is not enough** when an EMI glitch overlaps the driver's retry window.
+
+---
+
+### 7.8 Known limitations summary
+
+Consolidated list of known characteristics the master must account for:
+
+| Topic | Behavior | See |
+|---|---|---|
+| Chip-side timer drift | Up to 30 % undercount under ISR load (SysTick starvation) | §7.4, §7.6 |
+| EMI relay switching | ~67 % read fail rate during commutation; bus self-recovers | §7.7 |
+| `EVENT.bit3` async latency | ~200 ms delay from write rejection to bit 3 assert | §5.3 |
+| `V03_PERIOD_LATCH_MS (0xEC)` | Diagnostic-only; undercounts by 25–30%; master uses its own wall-clock | §4.13, §7.4 |
+| `REG_ERROR (0x02)` semantics | Last-write outcome (not sticky); EVENT bit 3 = durable signal | §5.3 |
+| `I_RMS = 0.0` | Below noise floor (valid measurement), NOT "no data" | §5.4.3 |
+| `U_RMS`/`U_PEAK`/`P` on I-variants | Read as `0.0` (valid only if CAPABILITY bit 8 = 1) | §4.10, §7.3 |
+| Multi-byte WRITE | Not auto-increment; byte-at-a-time loop required | §5.1 |
+| Address-change verification | Via bus scan on the new address; `0x30` is also truthful after reboot | §6.1 |
+| Fresh-flash boot | `REG_ERROR = 0xFB` is normal; SAVE clears it | §6.5 |
+| GC default | OFF (opt-in per module); NACK on GC = "not enabled" | §6.3 |
+| Flash endurance | ~10 000 cycles/page; don't loop SAVE | §7.0 |
+
+## 8 · Wire-trace examples
+
+### 8.1 Detection — read PRODUCT_ID + HW_VARIANT + CAPABILITY
+
+```text
+# I²C operations on default slave addr 0x50
+S 0xA0 W 0x54 Sr 0xA1 R [PRODUCT_ID]  P     # read 0x54
+S 0xA0 W 0x55 Sr 0xA1 R [HW_VARIANT]  P     # read 0x55
+S 0xA0 W 0x57 Sr 0xA1 R [CAP_lo][CAP_hi] P  # burst-read 0x57..0x58 (auto-increment)
+```
+
+Where `S`=start, `Sr`=repeated start, `P`=stop, `W`=write bit, `R`=read bit, `0xA0`=slave addr 0x50 << 1.
+
+### 8.2 Burst-read RT block (UI variant, all channels)
+
+```text
+# Read all of V03 RMS + P + PF (0x86..0xBD) — 56 bytes, atomic via read-freeze
+S 0xA0 W 0x86 Sr 0xA1 R [56 bytes] P
+```
+
+### 8.3 Multi-byte WRITE — `LABEL` byte-at-a-time
+
+```text
+# WRONG: burst-write — only 'M' is accepted
+S 0xA0 W 0x68 'M' 'y' 'M' 'e' 't' 'e' 'r' '1' P
+
+# CORRECT: byte-at-a-time loop
+S 0xA0 W 0x68 'M' P
+S 0xA0 W 0x69 'y' P
+S 0xA0 W 0x6A 'M' P
+S 0xA0 W 0x6B 'e' P
+S 0xA0 W 0x6C 't' P
+S 0xA0 W 0x6D 'e' P
+S 0xA0 W 0x6E 'r' P
+S 0xA0 W 0x6F '1' P
+```
+
+### 8.4 GC broadcast latch + witness fallback
+
+```text
+# Send GC frame: A5 27 <group=0 all-call> <tick=42>
+S 0x00 W 0xA5 0x27 0x00 0x2A 0x00 P
+
+# Wait 50 ms settle
+
+# Witness check for every expected module
+foreach module in [0x50, 0x51, 0x52]:
+    S (module<<1)|W 0x07 Sr (module<<1)|R [VALID] P
+    if VALID != 1:
+        # Fall back to per-device latch
+        S (module<<1)|W 0x01 0x27 P    # CMD_LATCH_PERIOD
+```
+
+### 8.5 Address change 5-step
+
+```text
+# 1. Stage candidate addr (0x51) → REG_I2C_ADDRESS
+S 0xA0 W 0x30 0x51 P
+
+# 2. Arm magic → ADDR_COMMIT_MAGIC
+S 0xA0 W 0x31 0xA5 P
+
+# 3. Issue CMD_COMMIT_ADDR (opcode 0x30) → REG_COMMAND
+S 0xA0 W 0x01 0x30 P
+
+# 4. Wait 700 ms flash write
+
+# 5. Issue CMD_RESET (opcode 0x01) → REG_COMMAND
+S 0xA0 W 0x01 0x01 P
+
+# Wait ~300 ms boot
+
+# Verify: probe the new addr
+S 0xA2 W 0x55 Sr 0xA3 R [HW_VARIANT] P   # 0xA2 = 0x51 << 1
+```
+
+### 8.6 Fresh-flash provisioning
+
+```text
+# 1. Check fresh-flash state
+S 0xA0 W 0x02 Sr 0xA1 R [0xFB] P   # ERR_FLASH_PARAMS_BAD — normal
+
+# 2. Configure sensor_class
+S 0xA0 W 0x25 0x01 P    # SCT_013
+
+# 3. Stage CT model + bind ch0
+S 0xA0 W 0x05 0x03 P    # SCT-013-030
+S 0xA0 W 0x01 0x28 P    # CMD_SET_CT_MODEL_CH0
+# Wait 5 ms
+
+# 4. Save user_config
+S 0xA0 W 0x01 0x32 P    # CMD_SAVE_USER_CONFIG
+# Wait 700 ms
+
+# 5. Verify: REG_ERROR should be 0x00 (read IMMEDIATELY before the next write)
+S 0xA0 W 0x02 Sr 0xA1 R [0x00] P
+```
+
+### 8.7 DIGEST round-trip — configure + read
+
+```text
+# 1. Configure digest mask: I_RMS + U_RMS + P_REAL (bits 0+1+2 = 0x07)
+S 0xA0 W 0x29 0x07 P
+
+# 2. Wait one RT-commit cycle (~200 ms; or poll STATUS.bit0)
+
+# 3. Burst-read the digest window (22 bytes)
+S 0xA0 W 0x70 Sr 0xA1 R [22 bytes] P
+
+# Parse the layout per DIGEST_CONFIG = 0x07 on UI1 (N_I = 1):
+#   byte[0]   = STATUS_MIRROR
+#   byte[1]   = SEQ
+#   byte[2..3]  = I_RMS[0] u16 (0.01 A units)
+#   byte[4..5]  = U_RMS u16 (0.1 V units)
+#   byte[6..7]  = P[0] i16 (1 W units)
+#   byte[8..21] = unused (0x00)
+```
+
+### 8.8 Threshold event flow — write threshold → trigger → W1C clear
+
+```text
+# 1. Write current threshold = 30 A (0x0BB8 in 0.01 A units → 2 bytes LE)
+S 0xA0 W 0x2C 0xB8 P    # LO byte
+S 0xA0 W 0x2D 0x0B P    # HI byte
+
+# 2. Unmask THRESH_I event (bit 1) → DRDY solid-LOW on trip
+S 0xA0 W 0x2B 0x02 P    # EVENT_MASK = bit 1 only
+
+# 3. (runtime) The master polls EVENT_FLAGS
+S 0xA0 W 0x2A Sr 0xA1 R [event_flags] P
+# event_flags == 0x02 → threshold tripped
+
+# 4. (optional) Read context — REG_ERROR, RT block, etc.
+
+# 5. Clear EVENT_FLAGS.bit1 via W1C
+S 0xA0 W 0x2A 0x02 P
+```
+
+### 8.9 Raw-capture diagnostic burst (`CAPTURE_*`)
+
+```text
+# 1. Arm raw-capture
+S 0xA0 W 0x01 0x38 P     # CMD_CAPTURE_RAW (opcode 0x38)
+# Wait ~80 ms (3 DMA-TC cycles)
+
+# 2. Check ready
+S 0xA0 W 0x18 Sr 0xA1 R [status & 0x01] P   # bit 0 = ready
+
+# 3. Select page 0 (32 raw I0 samples → CAPTURE_WINDOW)
+S 0xA0 W 0x19 0x00 P
+
+# 4. Burst-read CAPTURE_WINDOW (64 bytes = 32×u16 LE samples)
+S 0xA0 W 0x1A Sr 0xA1 R [64 bytes] P
+
+# Repeat steps 3-4 for pages 1..7 (256 samples total ≈ 1.3 mains periods)
+```
+
+### 8.10 CT model verify-mirror read-back (post-binding sanity)
+
+```text
+# After the §6.2 sequence — verify the applied state per channel via 0x51..0x53 (burst):
+S 0xA0 W 0x51 Sr 0xA1 R [model_ch0][model_ch1][model_ch2] P
+
+# Expected on UI2 mixed-CT (e.g. ch0=SCT-013-005, ch1=SCT-013-030):
+#   byte[0] = 0x01   # SCT-013-005 applied on ch0
+#   byte[1] = 0x03   # SCT-013-030 applied on ch1
+#   byte[2] = 0x00   # unused (UI2 N_I=2)
 ```
 
 ---
 
+## 9 · Acceptance / tolerance
 
-## See also
-
-- [Overview](overview.md) — what rbAmp does and tier semantics
-- [Hardware Connection](hardware-connection.md) — pinout, wiring, CT installation
-- [Initialization](initialization.md) — bring-up examples in C and Arduino
-- [Real-time Polling](realtime-polling.md) — RT register usage with code
-- [Period Metering](period-metering.md) — latch semantics, energy formula
-- [Arduino Examples](https://www.rbamp.com/docs/modules-basic-standard-arduino-examples) — reference sketches that exercise this API
-- [Arduino Library — Overview](https://www.rbamp.com/docs/modules-basic-standard-library-arduino-overview) — high-level wrapper if you prefer a `RbAmp` class to raw registers
-- [Troubleshooting](troubleshooting.md) — error code remediation
-
+| Parameter | Threshold | Source |
+|---|---|---|
+| Chip clock-drift vs master wall-clock | ≤ 30 % | bench-validated |
+| EMI relay-switching read failure rate | up to ~67 % during commutation | bench-validated |
+| Bus NACK rate (Linux/ESP I²C @ 100 kHz without retry) | up to ~20 % | host-side characteristic |
+| Bus NACK rate @ 50 kHz + 3× retry | < 0.8 % | bench-validated |
+| Fresh-flash boot `REG_ERROR` value | `0xFB` (FLASH_PARAMS_BAD) | NORMAL on a virgin module |
+| Cold start to first valid measurement | ~250 ms | typical |
 
 ---
 
-[← Period Metering](period-metering.md) | [Contents](README.md) | [Troubleshooting →](troubleshooting.md)
+## 10 · Changelog
+
+### 1.3.0 (2026-06-15) — Initial public release.
+
+Reference firmware: `protocol_version = 1.3`, `schema_version = 2`. Page-0 contract frozen.
+
+### Major v1.3 changes vs prior internal versions
+
+- **CT_MODEL pure-staging**: `REG_CT_MODEL (0x05)` no longer auto-applies to ch0 on write. Binding happens **only** via `CMD_SET_CT_MODEL_CHn` (order-independent).
+- **Address two-phase commit** (production-OK): `I2C_ADDRESS` is persisted via `ADDR_COMMIT_MAGIC` + `CMD_COMMIT_ADDR`. `REG_I2C_ADDRESS` reads the **active** address on boot.
+- **REG_ERROR = last-write outcome** (not sticky). `EVENT_FLAGS.bit3` is the durable signal (sticky W1C; ~200 ms async after write rejection).
+- **Unknown opcodes / out-of-range enums** → `ERR_PARAM (0xFE)` + `EVENT.bit3` (previously a silent no-op).
+- **Fresh-flash provisioning**: `ERR_FLASH_PARAMS_BAD (0xFB)` on a virgin module → cleared via `CMD_SAVE_USER_CONFIG`.
+- **GC broadcast latch — opt-in per module** via `FLEET_CONFIG.bit0` (default OFF; effective after reset). NACK-on-disabled = hard error, not silent.
+- **Variant family**: UI3 (HW_VARIANT=3) marked **roadmap** (not buildable on the current MCU package).
+- **Read/write asymmetry by design**: READ auto-increment ✅; WRITE byte-at-a-time required ❌ (HW-confirmed).
+- **CAPABILITY register** (0x57/0x58 u16 LE): 12-bit feature map. Canonical values `0x069E` (current-only) / `0x079E` (U-variants).
+- **Atomicity**: V03 RMS block + Digest have read-freeze (atomic burst-read); GC_TICK / I2C_ADDRESS / CT_MODEL_CHn mirrors are read-twice-agree.
+- **NF-clamp** semantics: `I_RMS = 0.0` means "below noise floor", a valid measurement.
+- **AC_FREQ ZC-sourced** on all variants (including I-only).
+- **Master energy integration** must use its own wall-clock, not `V03_PERIOD_LATCH_MS (0xEC)` (chip software timer — diagnostic-only, undercounts by 25–30%).
+
+---
+
+> **End of document**. Source-of-truth: `registers_v2.yaml` v1.3 + canonical wire-contract + bench-validated firmware behavior. Draft 2026-06-16.

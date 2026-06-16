@@ -15,6 +15,17 @@ Hosted version: <https://www.rbamp.com/docs/modules-basic-standard-overview>
 - [API Reference](api-reference.md)
 - [Troubleshooting](troubleshooting.md)
 
+## Raw-register examples
+
+Worked examples that drive the rbAmp I²C protocol directly (no client library), per platform:
+
+- [Arduino](arduino-examples.md)
+- [MicroPython & CircuitPython](micropython-examples.md)
+- [ESP-IDF](esp-idf-examples.md)
+- [STM32 HAL](stm32-hal-examples.md)
+- [Raspberry Pi Pico SDK](pico-sdk-examples.md)
+- [Python on Linux SBC](python-sbc-examples.md)
+
 ## Client libraries
 
 Drop-in libraries that speak the rbAmp I²C protocol:

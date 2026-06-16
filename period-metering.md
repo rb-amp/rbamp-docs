@@ -1,6 +1,6 @@
-# Period Metering and Tariff Accounting
+# 04 · Period Metering and Tariff Accounting
 
-For tariff energy accounting (Wh per 1 min / 15 min / 1 hour / day / month / year) rbAmp provides an **atomic period latch** mechanism: a single I²C command freezes the time-averaged power over a period, and the master multiplies it by its own wall-clock dt to get Wh.
+For tariff energy accounting (Wh per 1 min / 15 min / 1 hour / day / month / year) rbAmp provides an **atomic period latch** mechanism: a single I2C command freezes the time-averaged power over a period, and the master multiplies it by its own wall-clock dt to get Wh.
 
 This is the **production-grade** way to extract energy data. The alternative — integrating RT `P_real` on the master side every 200 ms — yields the same result on BASIC, but keeps the master continuously active.
 
@@ -27,24 +27,26 @@ Where:
 
 ## Atomic period latch — concept
 
+![Atomic latch concept: one CMD_LATCH_PERIOD write simultaneously closes the current period and opens the next; the snapshot is frozen for the master to read. THE core concept of the page.](images/period-atomic-latch.png)
+
 ### What the command does
 
 Writing `0x27` to `REG_COMMAND = 0x01` triggers an **atomic** sequence inside the firmware (executed under `__disable_irq()`):
 
 ```
-1. snapshot ← live      (copy the live accumulator into the I²C-visible snapshot)
+1. snapshot ← live      (copy the live accumulator into the I2C-visible snapshot)
 2. live     ← 0         (reset the accumulator; start the next period)
 3. period_start_ms = now
 ```
 
-These three steps are indivisible — neither the I²C ISR nor the ADC ISR can interleave between them. This guarantees:
+These three steps are indivisible — neither the I2C ISR nor the ADC ISR can interleave between them. This guarantees:
 
 - **Atomicity**: every per-window P sample belongs to **exactly one** snapshot — either the previous one or the next one — never duplicated, never lost.
 - **No gap**: the new period begins at the same instant the previous one ended — there is no blind interval.
 
 ### Where the snapshot lives
 
-After a latch, reads from `0xDC..0xEF` and `0xC2..0xC9` return the just-closed period. The live accumulator already starts counting the next period, but those registers update only on the next latch.
+After a latch, the period-snapshot registers (`0xBE..0xCD`, plus `0xDC..0xDF` for ch0 `avg_p`, plus `0xE0..0xE3` for `MAX_P`, plus `0xEC..0xEF` for the diagnostic `PERIOD_LATCH_MS`) return the just-closed period. Note that this range is not contiguous — `0xD0..0xDB` holds the Q block (live RT, not period snapshot) and `0xE4..0xEB` is reserved/factory. See chapter 11 §4.11–4.13 for the exact layout. The live accumulator already starts counting the next period; those snapshot registers update only on the next latch.
 
 ### One write — closes and opens
 
@@ -104,11 +106,11 @@ The first latch after boot captures whatever the accumulator collected from powe
 ### STANDARD / PRO additions for bidirectional accounting
 
 | Address | Name | Type | Description |
-|---|---|---|---|
-| SKU-specific | `PERIOD_AVG_P_NEG_W[0]` | float32 LE | Mean **export** power for channel I0 over the period (W, ≥ 0 in magnitude) — STANDARD/PRO only |
-| SKU-specific | `PERIOD_AVG_P_NEG_W[1..2]` | float32 LE | Same for channels I1, I2 — STANDARD/PRO only |
+|---:|---|---|---|
+| `PERIOD_AVG_P_NEG_W[0]` | float32 LE | Mean **export** power for channel I0 over the period (W, ≥ 0 in magnitude) — STANDARD/PRO only |
+| `PERIOD_AVG_P_NEG_W[1..2]` | float32 LE | Same for channels I1, I2 — STANDARD/PRO only |
 
-> The numeric addresses of `PERIOD_AVG_P_NEG_W[0..2]` are documented in the SKU datasheet of the STANDARD/PRO product — they live above `0xCF` in tier-specific extension registers, not in the base block. On BASIC modules these registers do not exist (NACK on read). Master code that targets all tiers should treat NACK as "no bidirectional support" and fall back to RT-based accounting.
+> The numeric addresses of `PERIOD_AVG_P_NEG_W[0..2]` are documented in the SKU datasheet of the STANDARD/PRO product (no canonical placeholder is used in this chapter — the addresses are tier-specific). On BASIC modules these registers do not exist; reads from an unmapped address return `0x00` (firmware never NACKs on reads — see chapter 11 §5.2). Master code that targets all tiers should detect "no bidirectional support" by reading `STATUS` / `PRODUCT_ID` / `FW_TIER` and fall back to RT-based accounting (see [10_arduino_examples.md → Example 5](arduino-examples.md)).
 
 ## Master-side algorithm
 
@@ -177,7 +179,7 @@ void loop() {
 
 ## Bidirectional accounting (STANDARD / PRO)
 
-> This section applies to **STANDARD and PRO product tiers** only. On a BASIC module, `PERIOD_AVG_P_NEG_W` registers do not exist (NACK), and `PERIOD_AVG_P_W` is always ≥ 0 (negative samples are dropped from the accumulator).
+> This section applies to **STANDARD and PRO product tiers** only. On a BASIC module the `PERIOD_AVG_P_NEG_W` registers are not allocated (reads return `0x00`), and `PERIOD_AVG_P_W` is always ≥ 0 (negative samples are dropped from the accumulator).
 
 ### What bidirectional accounting means
 
@@ -203,11 +205,9 @@ The sum of both gives the total energy that passed through the meter in absolute
 
 ### Algorithm for STANDARD / PRO
 
-> ⚠️ **The constant below is a sentinel — do NOT copy verbatim.** The real address of `PERIOD_AVG_P_NEG_W[0]` is SKU-specific and lives above `0xCF`. Note that `0xD0` in the base register map is `Q0_reac` (reactive power) — reading from `0xD0` will silently return reactive power instead of export power, producing wrong billing data. Always pull the correct address from the STANDARD/PRO SKU datasheet before flashing this code.
-
 ```cpp
 // Bidirectional accounting, 60-second period
-#define REG_PERIOD_AVG_P_NEG 0xFF   // SENTINEL — replace with SKU-datasheet address before use
+#define REG_PERIOD_AVG_P_NEG 0xFE   // placeholder sentinel — replace with the actual address from your SKU datasheet. DO NOT use 0xD0 — that address is allocated to the Q (reactive power) register block on production firmware.
 
 void loop() {
   static uint32_t t_prev = millis();
@@ -241,7 +241,7 @@ void loop() {
 
 If you own a BASIC-tier module and need bidirectional accounting, you have two options:
 
-1. **Master-side integration** — read RT `P_real` (`0xA6`) every ~200 ms and integrate positive and negative samples separately on the master side. Accuracy is slightly lower (due to sampling discretisation), but works on any firmware.
+1. **Master-side integration** — read RT `P_real` (`0xA6`) every ~200 ms and integrate positive and negative samples separately on the master side. See Example 5 in [10_arduino_examples.md](arduino-examples.md). Accuracy is slightly lower (due to sampling discretisation), but works on any firmware.
 2. **Upgrade the hardware** to a STANDARD or PRO product tier. Contact your supplier — bidirectional support is a hardware + firmware combination, not a firmware-only flag.
 
 ## I-only variants — period metering returns zero
@@ -261,19 +261,14 @@ For I-only variants the on-chip period metering **does not deliver an energy rea
 
 ### Periodic (cron-style)
 
-The master reads every N seconds on a timer. Arduino has no built-in `setInterval`; use a `millis()`-based pattern or a scheduler library (`Ticker` on ESP8266/ESP32, `TaskScheduler`):
+The master reads every N seconds on a timer:
 
 ```cpp
-// Once per hour, using millis() — wrap-safe via unsigned subtraction.
-static uint32_t t_last_period = 0;
-void loop() {
-  uint32_t now = millis();
-  if (now - t_last_period >= 3600UL * 1000UL) {
-    t_last_period = now;
-    rb_write_u8(0x50, 0x01, 0x27);
-    // ... read snapshot, accumulate Wh
-  }
-}
+// Once per hour
+setInterval(60 * 60 * 1000, [](){
+  rb_write_u8(0x50, 0x01, 0x27);
+  // ... read snapshot, accumulate Wh
+});
 ```
 
 Suitable for classical billing (1-min, 15-min, 1-hour).
@@ -351,34 +346,49 @@ void loop() {
 
 **Downside**: latch instants differ by a few milliseconds. For a 60-second period this yields < 0.1 % error — negligible.
 
-### Approach 2 — broadcast latch via general call (precise)
+### Approach 2 — broadcast latch via general call (precise, opt-in)
 
-The I²C **general-call address `0x00`** is a packet that all slaves receive simultaneously. rbAmp listens for general-call frames and recognises `CMD_LATCH_PERIOD = 0x27`. All modules latch their snapshot **at the same instant**:
+![Broadcast latch: one GC frame latches all modules at the same tick → aligned periods across the bus (vs sequential per-module skew).](images/period-broadcast-latch.png)
+
+The I²C **general-call address `0x00`** is a packet that all slaves receive simultaneously. rbAmp accepts a canonical 5-byte frame on the general-call address that triggers `CMD_LATCH_PERIOD` on every module that has GC reception **enabled**. GC is **opt-in per module** via `FLEET_CONFIG.bit0` (default OFF) — see [02_initialization.md](initialization.md) for the enable sequence and frame format.
 
 ```cpp
-void broadcast_latch() {
-  Wire.beginTransmission(0x00);     // general call
-  Wire.write(0x01);                  // REG_COMMAND
-  Wire.write(0x27);                  // CMD_LATCH_PERIOD
-  Wire.endTransmission();
+// Canonical 5-byte GC frame: A5 27 group tick_lo tick_hi.
+// Returns true on ACK, false on bus-level NACK (no module has GC enabled).
+bool broadcast_latch(uint16_t tick16, uint8_t group = 0) {
+  Wire.beginTransmission(0x00);                // general call
+  Wire.write(0xA5);                            // frame magic
+  Wire.write(0x27);                            // CMD_LATCH_PERIOD opcode
+  Wire.write(group);                           // group_id (0 = all-call)
+  Wire.write((uint8_t)(tick16 & 0xFF));        // tick_lo
+  Wire.write((uint8_t)((tick16 >> 8) & 0xFF)); // tick_hi
+  return Wire.endTransmission() == 0;
 }
 ```
 
-After the broadcast latch the master reads each module's snapshot by its individual address:
+The master keeps a 16-bit `tick` counter that increments on every broadcast. Each module mirrors the last accepted tick at `GC_TICK (0x59)`, so the master can detect a missed broadcast on a specific module.
+
+After the broadcast latch the master reads each module's snapshot by its individual address. **Always check the return value** — on NACK the GC frame did not land (no module has GC enabled), and the master must fall back to per-module sequential latch:
 
 ```cpp
 const uint8_t modules[] = {0x50, 0x51, 0x52};
 uint32_t t_prev;
+uint16_t gc_tick = 0;
 
 void setup() {
   Wire.begin();
-  broadcast_latch();
+  if (!broadcast_latch(gc_tick++)) {
+    // Fall back: per-module sequential latch.
+    for (uint8_t m : modules) rb_write_u8(m, 0x01, 0x27);
+  }
   t_prev = millis();
 }
 
 void loop() {
   delay(60000);
-  broadcast_latch();
+  if (!broadcast_latch(gc_tick++)) {
+    for (uint8_t m : modules) rb_write_u8(m, 0x01, 0x27);
+  }
   uint32_t t_now = millis();
   delay(50);
 
@@ -395,11 +405,11 @@ void loop() {
 }
 ```
 
-**Advantage**: precise synchronisation — snapshots are taken at the same instant across all modules, within a few microseconds.
+**Advantage**: precise synchronisation — snapshots are taken at the same instant across all GC-enabled modules, within a few microseconds.
 
 **Use case**: critical for instantaneous balancing (for example `house_consume − solar_export` at one moment in time).
 
-> Broadcast latch is available from firmware release 1.0 onward. `CMD_RESET` is also supported via general call. Other address-specific commands are ignored on general call.
+> **Broadcast latch is opt-in** per module via `FLEET_CONFIG.bit0` (default OFF on a fresh module). When OFF, the slave NACKs the general-call frame and the master falls back to per-module sequential latch automatically. See [02_initialization.md](initialization.md) — *General Call (broadcast at address 0x00)* — for the enable sequence and frame format.
 
 ## Choosing the period length
 
@@ -423,7 +433,7 @@ Register `0xE0` reports the **maximum power** observed in any RT window inside t
 
 ## Atomicity is guaranteed
 
-`CMD_LATCH_PERIOD` runs with interrupts disabled during the snapshot copy (a few microseconds). The master can never read a half-updated snapshot — even if the master reads bytes immediately after the write, the firmware finishes updating the block before the next I²C transaction completes (at least 10+ µs elapse between write and read).
+`CMD_LATCH_PERIOD` runs with interrupts disabled during the snapshot copy (a few microseconds). The master can never read a half-updated snapshot — even if the master reads bytes immediately after the write, the firmware finishes updating the block before the next I2C transaction completes (at least 10+ µs elapse between write and read).
 
 The same atomicity ties **the accumulator reset to the snapshot copy** — every P sample is in exactly one snapshot (either the previous period or the next one), never both, never neither.
 
@@ -432,38 +442,26 @@ The same atomicity ties **the accumulator reset to the snapshot copy** — every
 - ❌ **Do not compute `U_rms × I_rms × dt`** — that is apparent energy (VAh), not Wh. Apparent power includes reactive content and overcharges any inductive load. Use `PERIOD_AVG_P_W`.
 - ❌ **Do not infer direction from `I_rms`** — RMS is always ≥ 0. Direction lives in the sign of `P_real`.
 - ❌ **Do not use `PERIOD_LATCH_MS` for Wh** — that register is diagnostic and may drift with the chip clock. `master_dt` is authoritative.
-- ❌ **Do not latch too often (< 250 ms apart)** — at least one RT window must complete between latches, otherwise the snapshot is empty (`PERIOD_VALID = 0`).
+- ❌ **Do not latch faster than the RT-commit cycle.** The chip needs at least one mains period (~20 ms at 50 Hz) of accumulation plus settling — minimum **50 ms** between `CMD_LATCH_PERIOD` issues. Latching faster yields an empty snapshot (`PERIOD_VALID = 0`). 200 ms is a safe practical floor for steady-state polling; see chapter 11 §6.0 / §6.4.
 
 ## Clock-drift diagnostics
 
-`PERIOD_LATCH_MS` reports dt as seen by the chip clock. The master can cross-check:
+`PERIOD_LATCH_MS` is a **diagnostic-only** register — it reports dt as accumulated by the chip's SysTick, which is starved when interrupts and DMA are heavy. The cross-check should use a wide envelope:
 
 ```cpp
-// Read u32 LE manually — rbAmp has NO pointer auto-increment, so each
-// byte requires its own transaction with an explicit register address.
-uint32_t rb_read_u32_le(uint8_t addr, uint8_t reg) {
-  uint32_t v = 0;
-  for (int i = 0; i < 4; i++) {
-    v |= ((uint32_t)rb_read_u8(addr, reg + i)) << (8 * i);
-  }
-  return v;
-}
-
-uint32_t chip_dt   = rb_read_u32_le(0x50, 0xEC);
-uint32_t master_dt = t_now - t_prev;            // uint32 subtraction is wrap-safe — do not cast to int32
+uint32_t chip_dt = rb_read_u32(0x50, 0xEC);
+uint32_t master_dt = t_now - t_prev;
 float ratio = (float)chip_dt / (float)master_dt;
-if (ratio < 0.95f || ratio > 1.05f) {
-  Serial.printf("WARN: chip clock drift, ratio=%.3f\n", ratio);
+if (ratio < 0.70f || ratio > 1.05f) {
+  Serial.printf("WARN: chip drift outside ±30%% envelope, ratio=%.3f\n", ratio);
 }
 ```
 
-This **does not** affect Wh accuracy (Wh uses the master clock), but it surfaces chip-clock or thermal-drift issues for fleet QA.
+**Acceptance: up to 30 % undercount under load is normal** (ratio as low as ~0.70). This is by design — see [05_troubleshooting.md](troubleshooting.md) §13. Do not use a tight 3 %–5 % threshold; it will mass-reject healthy modules.
+
+This drift **does not** affect Wh accuracy (Wh uses the master clock); `PERIOD_LATCH_MS` is for surfacing severe chip-side anomalies only.
 
 ## Next
 
-- [Troubleshooting](troubleshooting.md) — what to do when values look wrong
-
-
----
-
-[← Real-time Polling](realtime-polling.md) | [Contents](README.md) | [API Reference →](api-reference.md)
+- [05_troubleshooting.md](troubleshooting.md) — what to do when values look wrong
+- [10_arduino_examples.md](arduino-examples.md) — Example 5 (master-side bidirectional on BASIC firmware)

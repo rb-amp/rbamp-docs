@@ -1,4 +1,4 @@
-# Real-Time Polling
+# 03 · Real-Time Polling
 
 Real-time polling — reading instantaneous values of U, I, P, PF, flow direction, and related metrics at regular intervals (typically every 200 ms). It is used for:
 
@@ -8,9 +8,11 @@ Real-time polling — reading instantaneous values of U, I, P, PF, flow directio
 - Mains-quality monitoring (frequency, PF)
 - **Determining current direction — consumption or export** (from the sign of P_real)
 
-For **tariff energy accumulation** (Wh over a period) use the period-latch mechanism described in [Period metering](period-metering.md).
+For **tariff energy accumulation** (Wh over a period) use the period-latch mechanism described in [04_period_metering.md](period-metering.md).
 
 ## The 200 ms window
+
+![200 ms RT computation window timeline: window boundaries, when registers refresh, DRDY pulse alignment, read-freeze atomic burst region.](images/rt-window-timing.png)
 
 ### What it is
 
@@ -24,7 +26,7 @@ The module continuously samples its ADCs at 5 kHz and produces a result set ever
 - Reactive power Q (computed on a phase-shifted sample stream; the sign distinguishes inductive (+) from capacitive (−))
 - Power factor PF = P / S, with S = U_rms × I_rms. The sign of PF matches that of P — an additional indicator of flow direction.
 
-After computing a window, the firmware **atomically** publishes the entire result set (50+ bytes) into the I²C register block `0x86..0xCD`.
+After computing a window, the firmware **atomically** publishes the entire result set (50+ bytes) into the I2C register block `0x86..0xCD`.
 
 ### Window length is fixed
 
@@ -32,7 +34,7 @@ The window is **hard-coded to 200 ms**, independent of mains frequency. The firm
 
 At 50 Hz mains this covers exactly 10 cycles; at 60 Hz, 12 cycles. In both cases the integer number of mains cycles keeps RMS and P accurate.
 
-> The register `RT_period_ms` (`0xCA..0xCD`, u32 LE) reports the **actual wall-clock duration** of the last window — usually close to 200 ms. It is diagnostic only; it does not affect measurement accuracy or the energy calculation (see [Period metering](period-metering.md)).
+> The register `RT_period_ms` (`0xCA..0xCD`, u32 LE) reports the **actual wall-clock duration** of the last window — usually close to 200 ms. It is diagnostic only; it does not affect measurement accuracy or the energy calculation (see chapter 04).
 
 ### When the next window starts
 
@@ -56,7 +58,7 @@ DRDY is an open-drain output pulled up to 3.3 V on the master side. The firmware
 
 ### When DRDY is useful
 
-- The master wants to minimise I²C traffic or free up CPU for other tasks (battery-powered systems)
+- The master wants to minimise I2C traffic or free up CPU for other tasks (battery-powered systems)
 - Precise synchronisation: read the exact moment of measurement completion (useful for high-resolution logs)
 - Event detection: react to every window (e.g. instantaneous-power tracking at 200 ms granularity)
 
@@ -116,7 +118,7 @@ void classify_flow(float p) {
 }
 ```
 
-> On BASIC-tier firmware the tariff accumulator **ignores** export (see [Period metering](period-metering.md)). The RT registers, however, always carry the real-time sign of P — so even on a BASIC SKU the master can detect export events from RT reads, log them, or build a master-side bidirectional accumulator on top of BASIC firmware.
+> On BASIC-tier firmware the tariff accumulator **ignores** export (see [04_period_metering.md](period-metering.md)). The RT registers, however, always carry the real-time sign of P — so even on a BASIC SKU the master can detect export events from RT reads, log them, or build a master-side bidirectional accumulator on top of BASIC firmware.
 
 ## RT register reference
 
@@ -131,14 +133,14 @@ All values are float32 little-endian (4 bytes), read with 4 separate transaction
 
 ### Currents (per channel: 0 = primary, 1/2 on UI2/UI3, more on UI5/UI7)
 
-| Address | Field | Type | Unit | Description |
-|---:|---|---|---|---|
-| `0x8E` | I0_rms | float32 | A | RMS current, channel 0 (primary) |
-| `0x92` | I1_rms | float32 | A | RMS current, channel 1 (UI2/UI3) |
-| `0x96` | I2_rms | float32 | A | RMS current, channel 2 (UI3) |
-| `0x9A` | I0_peak | float32 | A | Peak current sample within the window, channel 0 |
-| `0x9E` | I1_peak | float32 | A | Peak current sample within the window, channel 1 |
-| `0xA2` | I2_peak | float32 | A | Peak current sample within the window, channel 2 |
+| Address | Field | Type | Unit |
+|---:|---|---|---|
+| `0x8E` | I0_rms | float32 | A |
+| `0x92` | I1_rms | float32 | A |
+| `0x96` | I2_rms | float32 | A |
+| `0x9A` | I0_peak | float32 | A |
+| `0x9E` | I1_peak | float32 | A |
+| `0xA2` | I2_peak | float32 | A |
 
 > On variants with fewer channels (e.g. UI1), the unused channel registers return `0.0f` instead of NACK. Higher-channel-count variants (UI5/UI7) place their additional I_rms / P_real / PF / Q values in registers above `0xCF`; refer to the SKU datasheet for the extended map.
 
@@ -157,6 +159,8 @@ All values are float32 little-endian (4 bytes), read with 4 separate transaction
 | `0xD8` | Q2_reac | float32 | VAR | ± |  |
 
 > Apparent power S can be derived master-side: `S = U_rms × I_rms`. RMS values are **always ≥ 0**; flow direction lives in the sign of P.
+
+> **Atomicity caveat for Q:** the RT block `0x86..0xBD` (U/I/P/PF) is delivered under a read-freeze and is guaranteed torn-free in a single burst-read. The Q registers (`0xD0..0xDB`) are **outside** that freeze window — if you read U/I/P + Q together in two separate transactions, U/I/P will be from a coherent snapshot but Q may belong to the *next* RT commit. For inter-quantity coherence at sub-period granularity, either read Q under a `CMD_LATCH_PERIOD` snapshot (`0xC2..0xC9` for ch1/ch2 averaged Q is not exposed — use the snapshot block in chapter 11 §4.12) or accept the up-to-200 ms skew between P and Q.
 
 ### System
 
@@ -241,6 +245,8 @@ P2 = mean(u(t) · i2(t))
 This assumes all CT clamps are on conductors of the **same phase**. For true multi-phase measurement, see the roadmap (rbAmp-U3I3).
 
 ## Multi-module polling — three strategies
+
+![Side-by-side of the 3 multi-module polling strategies: round-robin / DRDY-per-module / wired-OR DRDY — GPIO cost vs precision trade-off.](images/rt-multimodule-strategies.png)
 
 ### Strategy 1 — round-robin polling (simple)
 
@@ -363,7 +369,8 @@ On I1/I2/I3 (and higher-channel I*-only variants), without a voltage sensor:
 | `I*_rms`, `I*_peak` | Real values |
 | `P*_real` (`0xA6`, `0xAA`, `0xAE`) | `0.0f` (no U → no P) |
 | `PF*`, `Q*` | `0.0f` |
-| `AC_FREQ` (`0x20`) | `0` (no U → no zero-cross detection) |
+| `AC_FREQ` (`0x20`) | Real value (50 or 60). Zero-cross detection comes from a dedicated mains-ZC pin independent of the voltage front-end and is available on **all** variants, including I-only. |
+| `ZC_OFFSET` (`0x4E`) | `0xFFFF`. This register is the phase offset between the GC latch instant and the next voltage zero-cross, used for U/I phase compensation — meaningful only when a voltage signal is being measured. On I-only variants it is firmware-gated to `0xFFFF` (no voltage measurement). |
 
 Without P there is no information about current direction — `I_rms` is always ≥ 0 and does not show which way current flows.
 
@@ -377,10 +384,10 @@ I-only variants are intended for:
 ```
 0x00 STATUS (u8)         — bit0=ready, bit1=error
 0x02 ERROR (u8)          — last error code
-0x03 VERSION (u8)        — firmware version
-0x05 CT_MODEL (u8, RW)   — for modules with plug-in CT
-0x20 AC_FREQ (u8)        — mains frequency, Hz
-0x30 I2C_ADDRESS (u8 RW) — slave address (change requires SAVE_GAINS + RESET)
+0x03 VERSION (u8)        — protocol version (0x04 = v1.3)
+0x05 CT_MODEL (u8, RW)   — staging only; bind via CMD_SET_CT_MODEL_CHn (see ch 02)
+0x20 AC_FREQ (u8)        — mains frequency, Hz (all variants — ZC-sourced from a dedicated pin)
+0x30 I2C_ADDRESS (u8 RW) — slave address; change via two-phase commit (see ch 02)
 
 0x86 U_rms (f32)         — V
 0x8A U_peak (f32)        — V
@@ -407,15 +414,5 @@ I-only variants are intended for:
 
 ## Next
 
-- [Period metering](period-metering.md) — atomic period latch for tariff accumulation
-- [Troubleshooting](troubleshooting.md) — what to do if values look wrong
-
-## See also
-
-- [Initialization](initialization.md) — bring-up procedure and helper functions used in these examples
-- [Hardware connection](hardware-connection.md) — DRDY pull-up requirement
-
-
----
-
-[← Initialization](initialization.md) | [Contents](README.md) | [Period Metering →](period-metering.md)
+- [04_period_metering.md](period-metering.md) — atomic period latch for tariff accumulation
+- [05_troubleshooting.md](troubleshooting.md) — what to do if values look wrong

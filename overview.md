@@ -1,10 +1,12 @@
-# Overview
+# 00 · Overview
 
 ## What is rbAmp
 
-**rbAmp** is a compact hardware module for precision measurement of AC mains parameters over an I²C interface. It is built around a Cortex-M0+ microcontroller with an integrated isolated sensor front-end and factory-stored calibration.
+![System block diagram: CT/voltage sensor → rbAmp module → I²C bus → master MCU → cloud/Home Assistant. Shows where the module sits in the signal chain.](images/overview-architecture.png)
 
-From the integrator's point of view, rbAmp behaves like a standard I²C slave: apply power, read registers — receive ready-to-use physical-unit values (volts, amperes, watts). No signal processing is required on the master side.
+**rbAmp** is a compact hardware module for precision measurement of AC mains parameters over an I2C interface. It is built around a Cortex-M0+ microcontroller with an integrated isolated sensor front-end and factory-stored calibration.
+
+From the integrator's point of view, rbAmp behaves like a standard I2C slave: apply power, read registers — receive ready-to-use physical-unit values (volts, amperes, watts). No signal processing is required on the master side.
 
 ## What it measures
 
@@ -20,7 +22,7 @@ From the integrator's point of view, rbAmp behaves like a standard I²C slave: a
 | Line frequency | `0x20` | u8, Hz | 45…65 Hz | ±0.5 Hz |
 | Time-averaged P over period | `0xDC` | float32, W | same as P | ±1% |
 
-The full register map is detailed in [Real-time polling](realtime-polling.md) and [Period metering](period-metering.md).
+The full register map is detailed in [03_realtime_polling.md](realtime-polling.md) and [04_period_metering.md](period-metering.md).
 
 ## Applications
 
@@ -32,20 +34,22 @@ The full register map is detailed in [Real-time polling](realtime-polling.md) an
 
 ## Module variants
 
-| Variant | U | I channels | P | When to choose |
-|---|:---:|:---:|:---:|---|
-| **UI1** | yes | 1 | yes | single accounting point — whole-house meter, boiler, single inverter |
-| **UI2** | yes | 2 | yes | two sub-meters on one phase (lights + outlets, generation + consumption) |
-| **UI3** | yes | 3 | yes | three flows on one phase (maximum sub-metering granularity) |
-| **UI5 / UI7** | yes | 5 / 7 | yes | high-channel-count phase monitoring (large panels, lab benches) |
-| **I1** | no | 1 | no | current-only monitor (master computes P with its own U source) |
-| **I2** | no | 2 | no | two-channel current monitor |
-| **I3** | no | 3 | no | three-channel current monitor |
-| **I6 / I8** | no | 6 / 8 | no | multi-channel current monitor |
+| Variant | U | I channels | P | Status | When to choose |
+|---|:---:|:---:|:---:|---|---|
+| **UI1** | yes | 1 | yes | shipping | single accounting point — whole-house meter, boiler, single inverter |
+| **UI2** | yes | 2 | yes | shipping | two sub-meters on one phase (lights + outlets, generation + consumption) |
+| **UI3** | yes | 3 | yes | **roadmap** (not buildable on current MCU package) | three flows on one phase |
+| **UI5 / UI7** | yes | 5 / 7 | yes | **roadmap** | high-channel-count phase monitoring (large panels, lab benches) |
+| **I1** | no | 1 | no | shipping | current-only monitor (master computes P with its own U source) |
+| **I2** | no | 2 | no | shipping | two-channel current monitor |
+| **I3** | no | 3 | no | shipping | three-channel current monitor |
+| **I6 / I8** | no | 6 / 8 | no | **roadmap** | multi-channel current monitor |
 
 > On I-only variants, active power is not computed (`P_real = 0`), and `PERIOD_AVG_P_W` returns 0. The master must either provide its own voltage source for power calculation, or use the current data alone.
 
 ## Product tiers
+
+![BASIC / STANDARD / PRO ladder — metering capability (unidirectional vs bidirectional vs diagnostics) as a visual progression. Honesty: Basic = consumption-only; not billing-certified.](images/tier-ladder.png)
 
 rbAmp is offered in three product tiers. Each tier is a complete combination of **hardware revision and firmware** — not a firmware-only flag. Moving between tiers requires a physical SKU change, not a firmware update.
 
@@ -78,14 +82,14 @@ The base register block at `0x00..0xCF` is identical across all tiers; the addit
 
 ## Key features
 
-- **I²C slave**: 100 kHz (Standard mode) and 400 kHz (Fast mode), both validated
-- **Address**: 7-bit `0x50` by default, reprovisionable to the `0x08..0x77` range
-- **DATA_READY (DRDY)**: optional open-drain pin, ~10 µs LOW pulse every ~200 ms, marks the moment when RT registers are coherent
-- **Atomic period latch**: command `0x27` freezes the per-period averaged power; *one write closes and opens* — no dropped or duplicated samples at the boundary
-- **General Call (broadcast)**: address `0x00` for simultaneous command to all modules on the bus (available from firmware release 1.0)
-- **Master-side time base**: energy is computed master-side as `avg_P × dt`; eliminates per-module crystal drift in multi-module systems
-- **Calibration in flash**: factory calibration is stored in the on-chip flash; no user calibration is required for stock SKUs
-- **Auto-configuration**: the module starts measuring immediately after power-on (~250 ms to the first valid result)
+- **I²C slave**: recommended 50 kHz; workable at 100 kHz with application-level retry. 400 kHz is **not** validated for v1.3.
+- **Address**: 7-bit `0x50` by default, reprovisionable to the `0x08..0x77` range via two-phase commit (see [02_initialization.md](initialization.md)).
+- **DATA_READY (DRDY)**: optional open-drain pin, ~10 µs LOW pulse every ~200 ms, marks the moment when RT registers are coherent.
+- **Atomic period latch**: command `0x27` freezes the per-period averaged power; *one write closes and opens* — no dropped or duplicated samples at the boundary.
+- **General-Call broadcast latch**: address `0x00` reserved for simultaneous LATCH on all modules sharing a bus. **Opt-in per module** via `FLEET_CONFIG.bit0` (default OFF). When OFF, GC frame NACKs at the bus level — masters detect this and fall back to per-module sequential latch (skew on 50 kHz bus is ~1 ms × N, ≪ 0.03% of 60 s period). See [04_period_metering.md](period-metering.md) for enable sequence and frame format.
+- **Master-side wall-clock**: energy is computed master-side as `avg_P × dt_master`; the chip-side period timestamp register (`0xEC`) is **diagnostic-only** (can undercount up to ~30% under load — by design). Eliminates per-module crystal drift in multi-module systems.
+- **Calibration in flash**: factory calibration (gains, noise floor, phase compensation) is stored on-chip; **no user calibration is required** — the master only writes `SENSOR_CLASS` and `CT_MODEL` per channel.
+- **Auto-configuration**: the module starts measuring immediately after power-on (~250 ms to the first valid result, ~700 ms additional for first persistence write).
 
 ## Roadmap
 
@@ -100,16 +104,11 @@ The current documentation covers single-phase models only. The multi-phase API w
 
 ## What rbAmp does not do
 
-- Does not integrate energy (Wh) internally — energy accumulation is the master's responsibility (see [Period metering](period-metering.md))
+- Does not integrate energy (Wh) internally — energy accumulation is the master's responsibility (see [04_period_metering.md](period-metering.md))
 - Does not drive loads, contain automation logic, or run programmable rules
 - Has no built-in display
 
 ## Next
 
-- [Hardware connection](hardware-connection.md) — connection, power, wiring
-- [Initialization](initialization.md) — first power-on
-
-
----
-
-[Contents](README.md) | [Quick Start →](quickstart.md)
+- [01_hardware.md](hardware-connection.md) — connection, power, wiring
+- [02_initialization.md](initialization.md) — first power-on
