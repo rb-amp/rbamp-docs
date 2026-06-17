@@ -4,7 +4,7 @@ This chapter is the ESP-IDF equivalent of [10_arduino_examples.md](arduino-examp
 
 > **These examples talk to rbAmp directly through the raw I2C register API.** They are intended for production-grade native ESP32 firmware where direct control, full FreeRTOS task design, OTA-friendly project layout and minimal memory footprint matter.
 >
-> **For a more convenient, structured interface — use the `rbamp` ESP-IDF component** (see [chapter 19 · ESP-IDF Library](https://rbamp.com/docs/modules-basic-standard-esp-idf-overview)). The component wraps the register-level details behind an opaque `rbamp_handle_t` with named functions (`rbamp_read_voltage()`, `rbamp_latch_period()`, `rbamp_read_period_snapshot()`, etc.), a per-channel Wh accumulator, multi-module helpers, full `idf.py menuconfig` integration via Kconfig (`CONFIG_RBAMP_NACK_RETRY_ATTEMPTS`, `CONFIG_RBAMP_DEFAULT_I2C_FREQ_HZ`, etc.), and the SPEC §B.5 retry+sanity discipline mandatory for ESP-IDF v5 `i2c_master`. Most user-facing projects should start from the component and fall back to the raw API only when needed.
+> **For a more convenient, structured interface — use the `rbamp` ESP-IDF component** (see [chapter 19 · ESP-IDF Library](esp-idf-overview.md)). The component wraps the register-level details behind an opaque `rbamp_handle_t` with named functions (`rbamp_read_voltage()`, `rbamp_latch_period()`, `rbamp_read_period_snapshot()`, etc.), a per-channel Wh accumulator, multi-module helpers, full `idf.py menuconfig` integration via Kconfig (`CONFIG_RBAMP_NACK_RETRY_ATTEMPTS`, `CONFIG_RBAMP_DEFAULT_I2C_FREQ_HZ`, etc.), and the application-level NACK retry + sanity-check discipline mandatory for ESP-IDF v5 `i2c_master` (see the bus-timing and retry guidance in [chapter 3 · API Reference](api-reference.md)). Most user-facing projects should start from the component and fall back to the raw API only when needed.
 
 ## ESP-IDF version
 
@@ -1612,9 +1612,9 @@ void app_main(void) {
 
 After working through these ten examples:
 
-- For the high-level `rbamp` ESP-IDF component, see [19_esp_idf_library.md](https://rbamp.com/docs/modules-basic-standard-esp-idf-overview).
-- For Arduino-style ESP32 development, see [10_arduino_examples.md](arduino-examples.md) (raw) or [17_arduino_library.md](https://rbamp.com/docs/modules-basic-standard-library-arduino-overview) (library).
-- For MicroPython / CircuitPython, see [12_micropython_examples.md](micropython-examples.md) (raw) or [18_micropython_library.md](https://rbamp.com/docs/modules-basic-standard-micropython-examples) (library).
-- For ESPHome integration (declarative YAML), see [`tools/esphome-rbamp/docs/en/`](https://rbamp.com/docs/modules-basic-standard-esphome-overview).
+- For the high-level `rbamp` ESP-IDF component, see [19_esp_idf_library.md](esp-idf-overview.md).
+- For Arduino-style ESP32 development, see [10_arduino_examples.md](arduino-examples.md) (raw) or [17_arduino_library.md](library-arduino-overview.md) (library).
+- For MicroPython / CircuitPython, see [12_micropython_examples.md](micropython-examples.md) (raw) or [18_micropython_library.md](micropython-examples.md) (library).
+- For ESPHome integration (declarative YAML), see [`tools/esphome-rbamp/docs/en/`](esphome-overview.md).
 - The formal I2C register specification used here lives in [11_api_reference.md](api-reference.md).
-- For Linux SBC (CPython) integration, see [16_python_sbc_examples.md](python-sbc-examples.md) (raw) or [20_python_sbc_library.md](https://rbamp.com/docs/modules-basic-standard-python-overview) (library).
+- For Linux SBC (CPython) integration, see [16_python_sbc_examples.md](python-sbc-examples.md) (raw) or [20_python_sbc_library.md](python-overview.md) (library).

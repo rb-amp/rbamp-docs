@@ -4,7 +4,7 @@ This chapter is the STM32 equivalent of [10_arduino_examples.md](arduino-example
 
 > **These examples talk to rbAmp directly through the raw I2C register API.** They are intended for production embedded firmware on STM32 — direct control over the HAL, predictable RAM/flash footprint, integration with LwIP, FATFS, FreeRTOS and CubeMX HAL generation.
 >
-> **For a more convenient, structured interface — use the `rbamp` STM32 HAL library** (chapter 21 *coming soon* — pending closure of the STM32 bench validation session; see [`baton__stm32__to__root.md`](https://rbamp.com/docs/modules-basic-standard-api-reference) for status). The library will wrap the register-level details behind a single `RbAmp_HandleTypeDef` with named functions (`RbAmp_ReadVoltage()`, `RbAmp_LatchPeriod()`, `RbAmp_ReadPeriodSnapshot()`, etc.), a per-channel Wh accumulator, a multi-module manager, and bare-HAL ergonomics that need no SPEC §B.5 retry layer (STM32 HAL does not share the ESP-IDF v5 NACK pattern). Until chapter 21 lands, the raw-API recipes below are the recommended path on STM32.
+> **For a more convenient, structured interface — use the `rbamp` STM32 HAL library** (chapter 21 *coming soon* — pending closure of bench validation). The library will wrap the register-level details behind a single `RbAmp_HandleTypeDef` with named functions (`RbAmp_ReadVoltage()`, `RbAmp_LatchPeriod()`, `RbAmp_ReadPeriodSnapshot()`, etc.), a per-channel Wh accumulator, a multi-module manager, and bare-HAL ergonomics that need no application-level NACK retry layer (STM32 HAL does not share the ESP-IDF v5 NACK pattern; see the bus-timing and retry guidance in [chapter 3 · API Reference](api-reference.md)). Until chapter 21 lands, the raw-API recipes below are the recommended path on STM32.
 
 ## Supported families and toolchain
 
@@ -1412,9 +1412,9 @@ while (1) {
 
 After working through these ten examples:
 
-- For Arduino-style ESP32 development, see [10_arduino_examples.md](arduino-examples.md) (raw) or [17_arduino_library.md](https://rbamp.com/docs/modules-basic-standard-library-arduino-overview) (library).
-- For MicroPython / CircuitPython, see [12_micropython_examples.md](micropython-examples.md) (raw) or [18_micropython_library.md](https://rbamp.com/docs/modules-basic-standard-micropython-examples) (library).
-- For native ESP-IDF, see [13_esp_idf_examples.md](esp-idf-examples.md) (raw) or [19_esp_idf_library.md](https://rbamp.com/docs/modules-basic-standard-esp-idf-overview) (library).
+- For Arduino-style ESP32 development, see [10_arduino_examples.md](arduino-examples.md) (raw) or [17_arduino_library.md](library-arduino-overview.md) (library).
+- For MicroPython / CircuitPython, see [12_micropython_examples.md](micropython-examples.md) (raw) or [18_micropython_library.md](micropython-examples.md) (library).
+- For native ESP-IDF, see [13_esp_idf_examples.md](esp-idf-examples.md) (raw) or [19_esp_idf_library.md](esp-idf-overview.md) (library).
 - For Raspberry Pi Pico C SDK, see [15_pico_sdk_examples.md](pico-sdk-examples.md).
-- For ESPHome integration (declarative YAML), see [`tools/esphome-rbamp/docs/en/`](https://rbamp.com/docs/modules-basic-standard-esphome-overview).
+- For ESPHome integration (declarative YAML), see [`tools/esphome-rbamp/docs/en/`](esphome-overview.md).
 - The formal I2C register specification used here lives in [11_api_reference.md](api-reference.md).

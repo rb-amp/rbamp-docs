@@ -4,7 +4,7 @@ This chapter collects complete, working Arduino sketches for typical rbAmp scena
 
 > **These examples talk to rbAmp directly through the raw I2C register API.** They are intended for native, embedded, or otherwise resource-constrained integrations where direct control is required and every byte on the bus matters.
 >
-> **For a more convenient, structured interface — use the `rbamp` Arduino library** (see [chapter 17 · Arduino Library](https://rbamp.com/docs/modules-basic-standard-library-arduino-overview)). The library wraps the register-level details behind a high-level `RbAmp` class with named methods (`readVoltage()`, `latchPeriod()`, `readPeriodSnapshot()`, etc.), an automatic per-channel Wh accumulator, SPEC §B.5 retry+sanity discipline for ESP32 targets, and multi-module helpers. Most user-facing projects should start from the library and fall back to the raw API only when needed.
+> **For a more convenient, structured interface — use the `rbamp` Arduino library** (see [chapter 17 · Arduino Library](library-arduino-overview.md)). The library wraps the register-level details behind a high-level `RbAmp` class with named methods (`readVoltage()`, `latchPeriod()`, `readPeriodSnapshot()`, etc.), an automatic per-channel Wh accumulator, application-level NACK retry + sanity-check discipline for ESP32 targets, and multi-module helpers (see the bus-timing and retry guidance in [chapter 3 · API Reference](api-reference.md)). Most user-facing projects should start from the library and fall back to the raw API only when needed.
 
 ## Examples table of contents
 
@@ -1411,11 +1411,11 @@ void loop() {
 
 Once you are comfortable with these ten examples, build the integration code for your target platform. Pre-built libraries:
 
-- Arduino → `RbAmp` class (see [17_arduino_library.md](https://rbamp.com/docs/modules-basic-standard-library-arduino-overview))
-- ESPHome → external component (full deep-dive at [`tools/esphome-rbamp/docs/en/`](https://rbamp.com/docs/modules-basic-standard-esphome-overview))
-- MicroPython → `rbamp` package (see [18_micropython_library.md](https://rbamp.com/docs/modules-basic-standard-micropython-examples))
-- ESP-IDF → `rbamp` component (see [19_esp_idf_library.md](https://rbamp.com/docs/modules-basic-standard-esp-idf-overview))
-- Linux SBC (CPython) → `rbamp` package (see [20_python_sbc_library.md](https://rbamp.com/docs/modules-basic-standard-python-overview))
+- Arduino → `RbAmp` class (see [17_arduino_library.md](library-arduino-overview.md))
+- ESPHome → external component (full deep-dive at [`tools/esphome-rbamp/docs/en/`](esphome-overview.md))
+- MicroPython → `rbamp` package (see [18_micropython_library.md](micropython-examples.md))
+- ESP-IDF → `rbamp` component (see [19_esp_idf_library.md](esp-idf-overview.md))
+- Linux SBC (CPython) → `rbamp` package (see [20_python_sbc_library.md](python-overview.md))
 - Tasmota → Berry driver — deferred (no library shipped)
 
 If your platform is not covered, the Arduino examples here serve as a reference: port the `rb_read_*` helpers to your platform's I2C API and the rest of the logic stays the same.

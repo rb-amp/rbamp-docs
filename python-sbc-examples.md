@@ -4,7 +4,7 @@ This chapter is the SBC equivalent of [10_arduino_examples.md](arduino-examples.
 
 > **These examples talk to rbAmp directly through the raw I2C register API.** They are intended for service-style integrations on Linux — Home Assistant gateways, OpenWrt routers, Docker / k3s containers, custom IoT bridges — where Python is the right tool for the job and direct register access is fine.
 >
-> **For a more convenient, structured interface — use the `rbamp` Python package** (see [chapter 20 · Python SBC Library](https://rbamp.com/docs/modules-basic-standard-python-overview)). The package wraps the register-level details behind a `RbAmp` class with named methods (`dev.voltage`, `dev.latch_period()`, `dev.read_period_snapshot()`, etc.), a per-channel `RbAmpEnergy` accumulator, an `asyncio` variant via `async for`, multi-module helpers, HA MQTT auto-discovery and systemd service templates in the bundled examples, and a `rbamp` CLI (`rbamp scan` / `read --watch` / `period`). The same package runs unmodified on MicroPython — see [chapter 18](https://rbamp.com/docs/modules-basic-standard-micropython-examples). Most projects should start from the package and fall back to the raw API only when needed.
+> **For a more convenient, structured interface — use the `rbamp` Python package** (see [chapter 20 · Python SBC Library](python-overview.md)). The package wraps the register-level details behind a `RbAmp` class with named methods (`dev.voltage`, `dev.latch_period()`, `dev.read_period_snapshot()`, etc.), a per-channel `RbAmpEnergy` accumulator, an `asyncio` variant via `async for`, multi-module helpers, HA MQTT auto-discovery and systemd service templates in the bundled examples, and a `rbamp` CLI (`rbamp scan` / `read --watch` / `period`). The same package runs unmodified on MicroPython — see [chapter 18](micropython-examples.md). Most projects should start from the package and fall back to the raw API only when needed.
 
 ## How Linux differs from a microcontroller
 
@@ -1357,6 +1357,6 @@ After working through these ten examples:
 - For native ESP-IDF firmware, see [13_esp_idf_examples.md](esp-idf-examples.md).
 - For STM32 HAL, see [14_stm32_hal_examples.md](stm32-hal-examples.md).
 - For Raspberry Pi Pico SDK (C, not the Linux-on-Pi case), see [15_pico_sdk_examples.md](pico-sdk-examples.md).
-- For the high-level `rbamp` Python package (CPython on Linux SBC), see [20_python_sbc_library.md](https://rbamp.com/docs/modules-basic-standard-python-overview).
-- For ESPHome integration (declarative YAML), see [`tools/esphome-rbamp/docs/en/`](https://rbamp.com/docs/modules-basic-standard-esphome-overview).
+- For the high-level `rbamp` Python package (CPython on Linux SBC), see [20_python_sbc_library.md](python-overview.md).
+- For ESPHome integration (declarative YAML), see [`tools/esphome-rbamp/docs/en/`](esphome-overview.md).
 - The formal I2C register specification used here lives in [11_api_reference.md](api-reference.md).

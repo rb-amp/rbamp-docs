@@ -4,7 +4,7 @@ This chapter is the Raspberry Pi Pico equivalent of [10_arduino_examples.md](ard
 
 > **These examples talk to rbAmp directly through the raw I2C register API.** They are intended for production embedded firmware on RP2040 / RP2350 — direct control of the dual-core Cortex-M0+ / M33, integration with the LwIP MQTT client, FATFS, and the SDK's sleep / persistence primitives.
 >
-> **No dedicated Pico SDK library is shipped in v1** — the five v1 client libraries cover Arduino (chapter 17, supports STM32duino + arduino-pico for RP2040 via the Arduino Wire API), MicroPython (chapter 18, runs on the RP2040 MicroPython port), ESP-IDF (chapter 19), CPython on Linux SBC (chapter 20), and STM32 HAL (chapter 21, deferred). For native Pico SDK firmware in C, follow the raw-API recipes below. If you want a higher-level API on RP2040, the easiest path is the arduino-pico core + the rbAmp Arduino library — see [chapter 17 · Arduino Library](https://rbamp.com/docs/modules-basic-standard-library-arduino-overview). A native Pico SDK port may land in v2 if there is pilot demand.
+> **No dedicated Pico SDK library is shipped in v1** — the five v1 client libraries cover Arduino (chapter 17, supports STM32duino + arduino-pico for RP2040 via the Arduino Wire API), MicroPython (chapter 18, runs on the RP2040 MicroPython port), ESP-IDF (chapter 19), CPython on Linux SBC (chapter 20), and STM32 HAL (chapter 21, deferred). For native Pico SDK firmware in C, follow the raw-API recipes below. If you want a higher-level API on RP2040, the easiest path is the arduino-pico core + the rbAmp Arduino library — see [chapter 17 · Arduino Library](library-arduino-overview.md). A native Pico SDK port may land in v2 if there is pilot demand.
 
 ## Supported targets and toolchain
 
@@ -1513,9 +1513,9 @@ int main(void) {
 
 After working through these ten examples:
 
-- For Arduino-style ESP32 development, see [10_arduino_examples.md](arduino-examples.md) (raw) or [17_arduino_library.md](https://rbamp.com/docs/modules-basic-standard-library-arduino-overview) (library).
-- For MicroPython / CircuitPython (including on the Pico itself), see [12_micropython_examples.md](micropython-examples.md) (raw) or [18_micropython_library.md](https://rbamp.com/docs/modules-basic-standard-micropython-examples) (library).
-- For native ESP-IDF, see [13_esp_idf_examples.md](esp-idf-examples.md) (raw) or [19_esp_idf_library.md](https://rbamp.com/docs/modules-basic-standard-esp-idf-overview) (library).
+- For Arduino-style ESP32 development, see [10_arduino_examples.md](arduino-examples.md) (raw) or [17_arduino_library.md](library-arduino-overview.md) (library).
+- For MicroPython / CircuitPython (including on the Pico itself), see [12_micropython_examples.md](micropython-examples.md) (raw) or [18_micropython_library.md](micropython-examples.md) (library).
+- For native ESP-IDF, see [13_esp_idf_examples.md](esp-idf-examples.md) (raw) or [19_esp_idf_library.md](esp-idf-overview.md) (library).
 - For STM32 HAL, see [14_stm32_hal_examples.md](stm32-hal-examples.md).
-- For ESPHome integration (declarative YAML), see [`tools/esphome-rbamp/docs/en/`](https://rbamp.com/docs/modules-basic-standard-esphome-overview).
+- For ESPHome integration (declarative YAML), see [`tools/esphome-rbamp/docs/en/`](esphome-overview.md).
 - The formal I2C register specification used here lives in [11_api_reference.md](api-reference.md).
