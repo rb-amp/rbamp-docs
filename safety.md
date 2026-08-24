@@ -10,7 +10,6 @@ This page collects, in one place, the isolation architecture, what you may safel
 to a qualified electrician, and how an isolated design differs from the shunt-based meters common in
 DIY energy monitoring.
 
-![rbAmp isolation — the module is all low-voltage: the CT clamps around the outside of the L conductor with no contact (magnetic coupling only), and on UI variants the sole mains reference is a galvanically isolated L/N tap; the module's GND is the host's ground, not mains neutral.](/web/content/PLACEHOLDER/hw-isolation-architecture.svg)
 
 ## The architecture: an all-low-voltage module
 
