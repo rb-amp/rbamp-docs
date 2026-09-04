@@ -87,6 +87,8 @@ void i2c_scan() {
 - ❌ **Loose 3.5 mm jack** — remove and reinsert the plug.
 - ❌ **`REG_CT_MODEL` not set** — the module does not know the sensor's sensitivity. See [02_initialization.md → Setting the external sensor model](initialization.md). Register `0x05` must contain the correct model code.
 - ❌ **Wrong model code written** — for example, an SCT-013-030 sensor with the SCT-013-100 code → current shown will be **3.3× lower** than reality. Verify the sensor's case marking against the model code.
+
+  > **Confirm every CT-model write by reading it back.** After you set the model — either via the channel access window field 15 (`CHFIELD_CT_MODEL`, see API reference §4.14), or via legacy `REG_CT_MODEL` + `CMD_SET_CT_MODEL_CH*`, or via the library's `setCTModel(ch, code)` — read the applied model back from the module (`0x51..0x53` for ch0..ch2, or field 15 for any channel on firmware ≥ v1.4.18-24M) and compare with what you wrote. If the module rejected the pair (`(SENSOR_CLASS, code)` unknown → `ERR_PARAM 0xFE`), the channel keeps its **previous** model — silent partial state is the failure mode. `REG_ERROR` immediately after the write is the definitive check.
 - ❌ **Current below the noise floor** — for very small loads (< ~10 mA on a 30 A clamp) the sensor output is close to ADC noise. The firmware applies quadrature noise subtraction: `I_corrected = √(I_raw² − NF²)`. If `I_raw ≤ NF`, the result is clamped to 0. This is intended behaviour.
 
 ### 5. `I_rms` off by a large factor
@@ -289,7 +291,7 @@ If any item is unchecked, expect strange readings. The most common causes of met
 | Code | Name | Meaning | Action |
 |:---:|---|---|---|
 | `0x00` | `ERR_OK` | Normal — last write succeeded | — |
-| `0xF9` | `ERR_CLONE` | Anti-clone sentinel — module identity check failed (firmware refuses to operate on a non-genuine unit) | Contact the supplier. |
+| `0xF9` | `ERR_CLONE` | Reserved (anti-clone sentinel). **⚠ NOT raised by v1.4.x firmware** — the anti-clone verification is not implemented in shipped modules. This code is reserved for a future firmware cycle. | Not reachable in current firmware; no user action required. |
 | `0xFA` | `ERR_LUT_BAD` | ADC LUT calibration CRC failed; the module runs on linear approximation | Not fatal. ADC accuracy may be off by 1–5 %. Have the supplier recalibrate. |
 | `0xFB` | `ERR_FLASH_PARAMS_BAD` | Flash parameter block corrupted; defaults restored | Reconfigure address / `SENSOR_CLASS` / `CT_MODEL` and issue `CMD_SAVE_USER_CONFIG` (`0x32`). **Normal on a virgin module** (see chapter 11 §6.5) — do not abort first-time provisioning on `0xFB`. |
 | `0xFC` | `ERR_NOT_READY` | First RT window has not yet completed after boot | Wait 300 ms. |
