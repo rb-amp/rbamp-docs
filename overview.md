@@ -39,7 +39,7 @@ The full register map is detailed in [03_realtime_polling.md](realtime-polling.m
 | **UI1** | yes | 1 | yes | shipping | single accounting point — whole-house meter, boiler, single inverter |
 | **UI2** | yes | 2 | yes | shipping | two sub-meters on one phase (lights + outlets, generation + consumption) |
 | **UI3** | yes | 3 | yes | **roadmap** (not buildable on current MCU package) | three flows on one phase |
-| **UI5 / UI7** | yes | 5 / 7 | yes | **roadmap** | high-channel-count phase monitoring (large panels, lab benches) |
+| **UI5 / UI7** | yes | 5 / 7 | yes | shipping | high-channel-count phase monitoring (large panels, lab benches) |
 | **I1** | no | 1 | no | shipping | current-only monitor (master computes P with its own U source) |
 | **I2** | no | 2 | no | shipping | two-channel current monitor |
 | **I3** | no | 3 | no | shipping | three-channel current monitor |
