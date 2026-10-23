@@ -98,10 +98,9 @@ rbAmp is offered in two product tiers. Each tier is a complete combination of **
 
 ### STANDARD — bidirectional product line
 
-- **Status**: STANDARD (STD) modules are in development — pre-production samples only, not yet on sale.
 - **Hardware**: extended analog stack supporting accurate measurement of both consumption and reverse flow.
 - **Accuracy**: considerably more accurate than BASIC, especially at small currents.
-- **Small loads**: reads currents from 1 mA, so practically any load in the circuit is visible (shown on pre-production samples).
+- **Small loads**: reads currents from 1 mA, so practically any load in the circuit is visible.
 - **Periods and energy**: 8 independent period latches — each master can latch on its own schedule (for example per hour, per day, or since a chosen moment); each latch keeps import and export energy, average U / I / P / Q, peaks and the number of windows. On top of that, continuous real-time energy counters on the module (import and export, active and reactive) that the master never has to reset.
 - **Data stays on the module**: the energy counters are kept in non-volatile memory and survive a restart or power loss. The module is a complete energy-accumulating device (Wh, with import and export); it is a measurement module, not a certified metering instrument.
 - **Interfaces**: I2C or Modbus RTU (selected by a jumper). Modbus uses UART levels; RS-485 needs an external transceiver.

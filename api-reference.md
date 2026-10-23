@@ -18,7 +18,7 @@
 |---|---|---|---|
 | **UI1** | 1 | yes | P, PF, Q |
 | **UI2** | 2 | yes | P, PF, Q per channel |
-| UI3 | 3 | yes | not yet available |
+| UI3 | 3 | yes | P, PF, Q per channel |
 | **I1** | 1 | no | I only (no P/PF/Q) |
 | **I2** | 2 | no | I only per channel |
 | **I3** | 3 | no | I only per channel |
@@ -102,12 +102,12 @@ Authoritative SKU byte:
 |---|---|---|---|
 | `0x01` | UI1 | 1 | yes |
 | `0x02` | UI2 | 2 | yes |
-| `0x03` | UI3 | 3 | yes (not yet available) |
+| `0x03` | UI3 | 3 | yes |
 | `0x04` | I1 | 1 | no |
 | `0x05` | I2 | 2 | no |
 | `0x06` | I3 | 3 | no |
-| `0x07` | UI5 | 5 | yes (not yet available) |
-| `0x08` | UI7 | 7 | yes (not yet available) |
+| `0x07` | UI5 | 5 | yes |
+| `0x08` | UI7 | 7 | yes |
 
 Any other value → the device is not identified as rbAmp.
 
@@ -171,12 +171,12 @@ has_voltage = bool(cap_hi & 0x01)  # bit 8 of the u16 = bit 0 of byte 0x58
 |---|---|---|---|---|
 | **UI1** | 1 | 1 | yes | bit 8 set |
 | **UI2** | 2 | 2 | yes | bit 8 set |
-| UI3 | 3 | 3 | yes | bit 8 set (not yet available) |
+| UI3 | 3 | 3 | yes | bit 8 set |
 | **I1** | 4 | 1 | no | bit 8 clear |
 | **I2** | 5 | 2 | no | bit 8 clear |
 | **I3** | 6 | 3 | no | bit 8 clear |
-| UI5 | 7 | 5 | yes | bit 8 set (not yet available) |
-| UI7 | 8 | 7 | yes | bit 8 set (not yet available) |
+| UI5 | 7 | 5 | yes | bit 8 set |
+| UI7 | 8 | 7 | yes | bit 8 set |
 
 **HW_VARIANT ⟷ CAPABILITY coherence**: `HW_VARIANT` 1..3 and 7..8 (UI*) → bit 8 set; `HW_VARIANT` 4..6 (I*) → bit 8 clear. A mismatch indicates a hardware or firmware anomaly (broken device or misflash).
 
@@ -366,8 +366,8 @@ A period snapshot latched on `CMD_LATCH_PERIOD`. **Ragged layout** (historical l
 | Addr | Name | Size | Type | Access | Persistence | Units | Notes |
 |---|---|---|---|---|---|---|---|
 | `0xBE` | `V03_PERIOD_COMMIT_CNT` | 4 | u32 LE | r | ram | – | RT commits in the latched period. One commit = 0.1 s on current firmware (0.2 s before v1.2) — `count ×` commit length is the module-side measure of the window length (see §7.4) |
-| `0xC2` | `V03_PERIOD_AVG_P_CH1` | 4 | float32 LE | r | ram | W | Latched avg P ch1 (UI2 only; UI3 — not yet available) |
-| `0xC6` | `V03_PERIOD_AVG_P_CH2` | 4 | float32 LE | r | ram | W | Latched avg P ch2 (UI3 only — not yet available) |
+| `0xC2` | `V03_PERIOD_AVG_P_CH1` | 4 | float32 LE | r | ram | W | Latched avg P ch1 (UI2, UI3) |
+| `0xC6` | `V03_PERIOD_AVG_P_CH2` | 4 | float32 LE | r | ram | W | Latched avg P ch2 (UI3) |
 | `0xCA` | `V03_PERIOD_MS` | 4 | u32 LE | r | ram | ms | Current period duration |
 | `0xCE` | `V03_STATUS` | 1 | u8 | r | ram | – | bit 0 = valid (RT commit outcome). **NOT cleared-on-read**. The master polls `STATUS (0x00)` for ready-wait. *Alias `DATA_VALID` is sometimes used for this register in tutorial chapters — same address, same semantics.* |
 
@@ -1140,7 +1140,6 @@ Reference firmware: `protocol_version = 1.3`, `schema_version = 2`. Page-0 contr
 - **Unknown opcodes / out-of-range enums** → rejected: `REG_ERROR = ERR_PARAM (0xFE)` + `EVENT.bit3`. Very early images (1.2–1.4.3) ignored unknown opcodes silently.
 - **Fresh-flash provisioning**: `ERR_FLASH_PARAMS_BAD (0xFB)` on a virgin module → cleared via `CMD_SAVE_USER_CONFIG`.
 - **GC broadcast latch — opt-in per module** via `FLEET_CONFIG.bit0` (default OFF; effective after reset). NACK-on-disabled = hard error, not silent.
-- **Variant family**: UI3 (HW_VARIANT=3) marked **not yet available**.
 - **Read/write asymmetry by design**: READ auto-increment ✅; WRITE byte-at-a-time required ❌ (HW-confirmed).
 - **CAPABILITY register** (0x57/0x58 u16 LE): feature bitmap — detect features by individual bits (§3.2), never by comparing the whole value; bit 12 = SCT_RATING_SELF (fw 1.4.20+).
 - **Atomicity**: V03 RMS block + Digest have read-freeze (atomic burst-read); GC_TICK / I2C_ADDRESS / CT_MODEL_CHn mirrors are read-twice-agree.
