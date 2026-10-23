@@ -215,9 +215,9 @@ This yields ~5 samples per second — every other window on current firmware (th
 every ~100 ms). Poll every 100 ms to catch each window; the 200 ms interval also works on images
 before v1.2.
 
-## Multi-channel current (UI2 / UI3)
+## Multi-channel current (UI2 / UI3 / UI5 / UI7)
 
-On UI2/UI3 variants the master reads currents and powers for all channels:
+On UI2/UI3 variants the master reads currents and powers for all channels straight from the real-time block. UI5 and UI7 (5 and 7 current channels) use the same registers for channels 0..2 and a **channel access window** for channels 3 and up — see [UI5 / UI7: channels 3 and up](#ui5--ui7-channels-3-and-up) below.
 
 ```cpp
 // UI3: three current channels on one module
@@ -236,6 +236,46 @@ void read_ui3(uint8_t addr) {
 ```
 
 The current channels are **independent** — each has its own CT clamp with its own coefficient. A UI3 module can monitor, for example, the main feed, the water heater, and the lighting circuit simultaneously on the same phase. The sign of P can differ between channels: mains-input P > 0 (the house consumes from grid) while the solar-output channel shows P < 0 (the inverter exports while feeding the same phase that the house draws from).
+
+### UI5 / UI7: channels 3 and up
+
+The flat real-time block holds channels **0, 1 and 2** only. On **UI5** (channels 0..4) and **UI7** (channels 0..6) the remaining channels are read through the **channel access window**: write `(field << 4) | channel` to `REG_CHANNEL_SELECT` (`0x32`), then read the value from `REG_CHANNEL_DATA` (`0x3C`, float32). Fields: `0` = RMS current, `1` = peak current, `2` = active power, `3` = power factor, `13` = period-average power.
+
+Three rules that avoid silently wrong numbers:
+
+- **Do not extend the flat pattern.** The register after `V03_I2_RMS` (`0x96`) is `V03_I0_PEAK` (`0x9A`), not channel 3 — channel 3 and up exist only in the window.
+- **Select before every read.** `REG_CHANNEL_DATA` is a snapshot taken when the selector is written; reading it again without a new selector write returns the same old value.
+- **Period average and energy for channels 3 and up come only from field `13`** — there are no flat period registers for them.
+
+```cpp
+// UI5 / UI7: read current and power on every channel.
+// rb_read_u8 / rb_read_float_le / rb_write_u8 are the helpers from 02_initialization.md.
+
+float rb_read_channel(uint8_t addr, uint8_t field, uint8_t ch) {
+  rb_write_u8(addr, 0x32, (field << 4) | ch);   // REG_CHANNEL_SELECT: choose field + channel
+  return rb_read_float_le(addr, 0x3C);          // REG_CHANNEL_DATA: the selected value
+}
+
+void read_ui7(uint8_t addr) {
+  uint8_t n = rb_read_u8(addr, 0x24);           // TOPOLOGY: number of current channels (5 on UI5, 7 on UI7)
+  float u = rb_read_float_le(addr, 0x86);       // one shared voltage
+
+  Serial.printf("U=%.1f V\n", u);
+  for (uint8_t ch = 0; ch < n; ch++) {
+    float i, p;
+    if (ch < 3) {                               // channels 0..2: flat real-time block
+      i = rb_read_float_le(addr, 0x8E + 4 * ch);
+      p = rb_read_float_le(addr, 0xA6 + 4 * ch);
+    } else {                                    // channels 3..n-1: channel access window
+      i = rb_read_channel(addr, 0, ch);         // field 0 = RMS current
+      p = rb_read_channel(addr, 2, ch);         // field 2 = active power
+    }
+    Serial.printf("Ch%u: %.3f A  %.1f W\n", ch, i, p);
+  }
+}
+```
+
+The window also works for channels 0..2, so you can use it for every channel if you prefer a single code path (one extra small write per value). Details and all field codes: [11_api_reference.md → Channel access window](api-reference.md#414-channel-access-window-0x32--0x3c0x3f).
 
 ### All channels share one voltage U
 
