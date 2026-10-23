@@ -16,18 +16,11 @@
 
 ### 1.1 SKU lineup
 
-| SKU | Current channels (N_I) | U channel | Power calculation |
-|---|---|---|---|
-| **UI1** | 1 | yes | P, PF, Q |
-| **UI2** | 2 | yes | P, PF, Q per channel |
-| UI3 | 3 | yes | P, PF, Q per channel |
-| **I1** | 1 | no | I only (no P/PF/Q) |
-| **I2** | 2 | no | I only per channel |
-| **I3** | 3 | no | I only per channel |
+The module variants (SCT-UI1 … SCT-I3, with their voltage and current channels) are listed in [00_overview.md → Module variants](overview.md#module-variants).
 
 I-variants (`I1`/`I2`/`I3`) have **no voltage hardware** — `U_RMS`, `U_PEAK`, and `P` registers return `0.0`. Frequency (`AC_FREQ`) is available on all variants (ZC-sourced).
 
-**Calibration is factory.** The consumer master does **NOT** configure noise floor (NF), gain, phase compensation, or any other factory parameters — these are all factory calibration burned into the module (see §4.0 reserved ranges). The consumer writes only **SENSOR_CLASS + CT_MODEL** (see §6.2) — the module applies everything else automatically from the preset table.
+**Calibration is factory.** The consumer master does **NOT** configure noise floor (NF), gain, phase compensation, or any other factory parameters — these are all factory calibration burned into the module (see §4.0 reserved ranges). On **BASIC SCT-series modules** (used with SCT-013 sensors) the consumer writes only **SENSOR_CLASS + CT_MODEL** (see §6.2) — the module applies everything else automatically from the preset table. BASIC CT-series and STANDARD (STD) modules are supplied as a pair with their sensors, preset and calibrated at the factory: nothing is written.
 
 ### 1.2 Versioning
 
