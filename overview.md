@@ -30,7 +30,7 @@ The two module lines report the same quantities in different formats. BASIC retu
 | Average power over a period | float32, W; one latch (average and peak P) | 8 independent latches: import/export energy, average U/I/P/Q, peaks |
 | Energy | not kept on the module — the host (library) integrates it | on the module: import/export in Wh / mWh / µWh, reactive in varh / µvarh; kept when the power is off |
 
-Accuracy is not part of this table: for BASIC with an SCT-013 sensor see the next section; specifications of individual modules are given with the model descriptions. The BASIC register map is in [03_realtime_polling.md](realtime-polling.md), [04_period_metering.md](period-metering.md) and [11_api_reference.md](api-reference.md); the STD register map is in the [STD technical reference](std/reference/README.md).
+Accuracy is not part of this table: for BASIC with an SCT-013 sensor see the [SCT-013 characteristics table](#current-channel-accuracy-with-sct-013-sensors) below; specifications of individual modules are given with the model descriptions. The BASIC register map is in [03_realtime_polling.md](realtime-polling.md), [04_period_metering.md](period-metering.md) and [11_api_reference.md](api-reference.md); the STD register map is in the [STD technical reference](std/reference/README.md).
 
 ### Current-channel accuracy with SCT-013 sensors
 
@@ -67,7 +67,7 @@ Accuracy is not part of this table: for BASIC with an SCT-013 sensor see the nex
 
 ## Module variants
 
-Current BASIC product line: **SCT-UI1, SCT-UI2, SCT-UI3, SCT-UI5, SCT-UI7, SCT-I1, SCT-I2, SCT-I3**. In the code, **UI***n* means one voltage input and *n* current channels; **I***n* means *n* current channels only. The modules are supplied without a sensor. Other module lines have a different composition; a table for each line will be added here as it goes on sale.
+Current BASIC product line: **SCT-UI1, SCT-UI2, SCT-UI3, SCT-UI5, SCT-UI7, SCT-I1, SCT-I2, SCT-I3**. In the code, **UI***n* means one voltage input and *n* current channels; **I***n* means *n* current channels only. The modules are supplied without a sensor; characteristics for each SCT-013 rating are in the [SCT-013 table](#current-channel-accuracy-with-sct-013-sensors). Other module lines have a different composition; a table for each line will be added here as it goes on sale.
 
 **BASIC — for SCT-013 type sensors**
 

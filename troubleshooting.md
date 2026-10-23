@@ -278,7 +278,7 @@ Before powering up a module in a production system:
 - [ ] CT cable intact, jack fully seated in the socket
 - [ ] Power VCC within 4.5…5.5 V, clean ground
 - [ ] I2C pull-ups verified (see [01_hardware.md → I2C pull-ups](hardware-connection.md))
-- [ ] For modules with a plug-in CT: `REG_CT_MODEL` written and saved to match the installed sensor
+- [ ] For BASIC SCT-series modules: `REG_CT_MODEL` written and saved to match the installed sensor
 - [ ] Smoke test with a resistive load completed — all five values (U, I, P, PF, Q) within the expected ranges
 
 If any item is unchecked, expect strange readings. The most common causes of metering errors are sensor installation issues, not firmware or electronics faults.

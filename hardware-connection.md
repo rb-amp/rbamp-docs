@@ -151,7 +151,7 @@ Correct polarity is critical for:
 
 ### Current sensor — CT and SCT-013 (for SKUs with external CT)
 
-External CT clamps connect to the module through a 3.5 mm jack. The connector is keyed for correct polarity out of the box; no wiring decisions are needed.
+External CT clamps connect to the module through a 3.5 mm jack. The connector is keyed for correct polarity out of the box; no wiring decisions are needed. Characteristics of each SCT-013 rating (floors, class, tolerance, clipping): see the [SCT-013 table](overview.md#current-channel-accuracy-with-sct-013-sensors).
 
 ![How the current clamp connects to the rbAmp module through the 3.5 mm jack.](images/mains-ct-connection.png)
 
