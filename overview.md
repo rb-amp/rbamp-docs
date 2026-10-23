@@ -67,6 +67,8 @@ Accuracy is not part of this table: for BASIC with an SCT-013 sensor see the nex
 
 ## Module variants
 
+The BASIC modules form the **SCT-UI series**: **UI***n* means one voltage input and *n* current channels (SCT-UI1, SCT-UI2, …); the **I***n* variants are current-only. The modules are supplied without a sensor — you connect your own SCT-013 clamp (supported ratings: see the table above). The lineup is growing and other module lines have a different composition, so a table for each line will be added here as it goes on sale. The table below lists the BASIC SCT-UI series.
+
 | Variant | U | I channels | P | Status | When to choose |
 |---|:---:|:---:|:---:|---|---|
 | **UI1** | yes | 1 | yes | shipping | single accounting point — whole-house meter, boiler, single inverter |
@@ -94,9 +96,15 @@ rbAmp is offered in two product tiers. Each tier is a complete combination of **
 
 ### STANDARD — bidirectional product line
 
+- **Status**: STANDARD (STD) modules are in development — pre-production samples only, not yet on sale.
 - **Hardware**: extended analog stack supporting accurate measurement of both consumption and reverse flow.
+- **Accuracy**: considerably more accurate than BASIC, especially at small currents.
+- **Small loads**: reads currents from 1 mA, so practically any load in the circuit is visible (shown on pre-production samples).
+- **Periods and energy**: 8 independent period latches — each master can latch on its own schedule (for example per hour, per day, or since a chosen moment); each latch keeps import and export energy, average U / I / P / Q, peaks and the number of windows. On top of that, continuous real-time energy counters on the module (import and export, active and reactive) that the master never has to reset.
+- **Data stays on the module**: the energy counters are kept in non-volatile memory and survive a restart or power loss. The module is a complete energy-accumulating device (Wh, with import and export); it is a measurement module, not a certified metering instrument.
+- **Interfaces**: I2C or Modbus RTU (selected by a jumper). Modbus uses UART levels; RS-485 needs an external transceiver.
 - **Firmware**: bidirectional metering with signed on-device energy. Bidirectional products belong to the **rbAmp STD line**, which uses a different, 16-bit register map — see the STD reference documentation.
-- **Use cases**: homes with rooftop solar, wind generators, battery storage, regenerative loads, V2G EV chargers.
+- **Use cases**: industrial and commercial installations; homes with rooftop solar, wind generators, battery storage, regenerative loads, V2G EV chargers.
 
 ### Where the tier shows up in this documentation
 
