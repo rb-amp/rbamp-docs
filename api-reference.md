@@ -76,7 +76,7 @@ Several rbAmp modules can share one bus:
 
 - **Up to ~16 modules** (limited by total bus capacitance ≤ 400 pF at 100 kHz).
 - **Pull-ups**: the on-board 4.7 kΩ pull-ups on every module in parallel overload the sink. **Cut the on-board pull-ups** on every module except one (or use a PCA9515/9615 I²C buffer).
-- **Length**: up to 0.3 m plain → 100 kHz; 0.3–1 m twisted pair (SDA+GND and SCL+GND in **separate** pairs) → 100 kHz; > 1 m — I²C buffer; > 3 m — differential bus (PCA9615 / LTC4332).
+- **Length**: up to 0.15 m plain → 100 kHz; 0.15–1 m twisted pair (SDA+GND and SCL+GND in **separate** pairs) → 100 kHz; > 1 m — I²C buffer; > 3 m — differential bus (PCA9615 / LTC4332).
 
 ### 2.4 Bus polling budget
 

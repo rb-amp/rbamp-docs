@@ -21,7 +21,7 @@ This chapter is a quick reference for common problems and their solutions. Each 
 - ❌ **SDA and SCL swapped** — verify against the wiring diagram in [01_hardware.md](hardware-connection.md).
 - ❌ **No pull-ups on the bus** — if the built-in pull-ups have been cut on a module and no external ones are installed, the bus is dead. With everything unpowered, measure SDA↔VCC: it must read 1.5–4.7 kΩ.
 - ❌ **Too many pull-ups in parallel** — built-in pull-ups still active on every module, plus master pull-ups, dropping the equivalent below ~1 kΩ. The master cannot pull the bus to LOW. Cut the built-in pull-ups on all but one module.
-- ❌ **Long cable without twisted pair or buffer** — past ~0.3 m, parallel wires couple capacitively and edges round off. Use UTP cat-5 (up to 1 m) or a PCA9515 buffer (up to 3 m). See [01_hardware.md → Bus length](hardware-connection.md).
+- ❌ **Long cable without twisted pair or buffer** — past ~0.15 m, parallel wires couple capacitively and edges round off. Use UTP cat-5 (up to 1 m) or a PCA9515 buffer (up to 3 m). See [01_hardware.md → Bus length](hardware-connection.md).
 - ❌ **Wrong slave address** — the module may have been readdressed. Run an I2C scan:
 
 ```cpp

@@ -103,19 +103,21 @@ The module contains a galvanic isolation barrier between the mains side (CT clam
 
 ### Bus length
 
-I2C is, by default, a short bus (~30 cm). The following topologies are validated for rbAmp:
+I2C is, by default, a short bus (~15 cm). Many users connect modules with low-quality jumper wires, which pick up a lot of noise and lose many transfers — hence the short limit. Recommended topologies for rbAmp:
 
 | Cable topology | Max length | Speed |
 |---|---|---|
-| Standard JST / 4-wire flat cable | up to 0.3 m | 100 kHz |
+| Standard JST / 4-wire flat cable | up to 0.15 m | 100 kHz |
 | Twisted pair UTP (cat-5/5e/6) — SDA+GND and SCL+GND in separate pairs | up to 1 m | 100 kHz |
 | Twisted pair UTP + I2C buffer (PCA9515 / TCA9617) | up to 3 m | 100 kHz |
 | Differential bus (PCA9615 / LTC4332) | up to 100 m | 100 kHz |
 
-> The lengths above were validated at 100 kHz; the **50 kHz recommendation** (§Parameters) applies to
+> The lengths above are given for 100 kHz; the **50 kHz recommendation** (§Parameters) applies to
 > every topology — the lower speed only adds margin.
 
-> For runs longer than 0.3 m, **twisted pair is required**: SDA and SCL must be in **separate** pairs, each with its own ground (for example, blue + blue-white for SDA, green + green-white for SCL). Putting SDA and SCL in the same pair causes cross-coupling that distorts edges.
+> For runs longer than 0.15 m, **twisted pair is required**: SDA and SCL must be in **separate** pairs, each with its own ground (for example, blue + blue-white for SDA, green + green-white for SCL). Putting SDA and SCL in the same pair causes cross-coupling that distorts edges.
+
+> ⚠ **Inside an electrical cabinet, shield the I2C cable.** Strong magnetic fields near mains conductors, contactors and transformers induce noise in an unshielded cable. Keep the cable as short as possible and away from the mains wiring.
 
 ### Multi-module bus
 
@@ -137,6 +139,8 @@ The PCB exposes `L` (line / phase) and `N` (neutral) terminals. **Polarity matte
 
 - Correct wiring (L → L, N → N): `P > 0` means **consumption** (current flowing into the load from the grid), `P < 0` means **export** to the grid (generation).
 - Swapped wiring (L and N exchanged): the sign of P is inverted — consumption is reported as negative power.
+
+**Wire and fuse.** A thick wire is not required for the voltage connection: AWG26–22 is enough, because the voltage sensor draws very little current. A fuse in the L line is **mandatory**, rated up to 0.1 A.
 
 Correct polarity is critical for:
 
