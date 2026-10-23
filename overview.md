@@ -34,31 +34,27 @@ Accuracy is not part of this table: for BASIC with an SCT-013 sensor see the nex
 
 ### Current-channel accuracy with SCT-013 sensors
 
-**Current-channel error — module + your own SCT-013 sensor, resistive load, measured at 50 Hz.**
-Module contribution: **±1 % of reading** for averaged readings at or above the load shown; add up to
-~1 % for your sensor's unit-to-unit tolerance (≈ ±2 % total on current). Below that load the error
-is larger and is not specified.
+**BASIC modules (SCT-UI series) with your own SCT-013 sensor — resistive load, measured at 50 Hz.**
 (Modules with a factory-paired CT sensor, and STD modules, are specified separately — this table does not apply to them.)
 
-| Sensor rating | Averaged readings within ±1 % from about | Power factor reads (resistive load) | Clipping begins at about |
-|---|---|---|---|
-| 5 A   | 0.1–0.15 A | 0.985–0.993 | 115–120 % of rating |
-| 10 A  | 0.2–0.3 A  | about 0.996 | 115–120 % of rating |
-| 20 A  | 0.4–0.6 A  | about 1.00 | 115–120 % of rating |
-| 30 A  | 0.6–0.9 A  | about 1.00 | 115–120 % of rating |
-| 50 A  | 1–1.5 A    | about 1.00 | 115–120 % of rating |
-| 60 A  | 1.2–1.8 A  | about 1.00 | 115–120 % of rating |
-| 100 A | 2–3 A      | about 1.00 | 115–120 % of rating |
+| Characteristic | SCT-013-005 | SCT-013-010 | SCT-013-020 | SCT-013-030 | SCT-013-050 | SCT-013-060 | SCT-013-100 |
+|---|---|---|---|---|---|---|---|
+| Detectable floor (the reading with no load) | ~3 mA | 6–9 mA | ~10 mA | ~13 mA | ~25 mA | ~30 mA | ~60 mA |
+| Readable floor (error ≤ 10 %; 0.5 % of rating) | 25 mA | 50 mA | 0.10 A | 0.15 A | 0.25 A | 0.30 A | 0.50 A |
+| Class near the floor, UI1 / UI2 / UI3 (±1 % of the average, from ~0.7 % of rating) | from 35 mA | from 70 mA | from 0.14 A | from 0.21 A | from 0.35 A | from 0.42 A | from 0.70 A |
+| Class near the floor, UI5 / UI7 (±0.5 %, from 2 % of rating) | from 0.10 A | from 0.20 A | from 0.40 A | from 0.60 A | from 1.0 A | from 1.2 A | from 2.0 A |
+| Class in the working range (5–100 % of rating, of the average) | ≤ 0.5 % | 0.16–0.35 % | ≤ 0.5 % | 0.53 % | ≤ 0.5 % | ≤ 0.5 % | 0.47 % |
+| Tolerance of the sensor unit (added on top of the class) | ≤ 0.8 % | 0.5–1.0 % | 0.8 % | 1.2 % | 0.7 % | 0.3–0.4 % | 0.45 % |
+| Step of one instantaneous value | 4.1 mA | 8.1 mA | 16 mA | 24 mA | 41 mA | 49 mA | 83 mA |
+| Top of the range (clipping, sine wave) | ~6.0 A | 11.9 A | ~24 A | 35 A | ~60 A | ~72 A | ~117 A |
 
-"From about" = 2–3 % of the sensor rating. Basis of the figures: 10, 30 and 100 A were verified on a module with the
-production firmware; 5, 20, 50 and 60 A are derived from measurements of the sensors themselves.
+**Source:** verified in bench laboratory tests. Note that real SCT-013 sensors have an actual error of about 1 %, and it can grow with time or with temperature. If you need good measurement quality at small currents, choose a sensor with a smaller rating.
 
-- "Averaged" = the average of several 100 ms measurement windows, as used for energy and average power. A single
-  reading is noisier near the low end of the range.
-- Power factor is specified only at PF ≈ 1 on a resistive load. On the 5 A sensor its own phase shift lowers the
-  reading to 0.985–0.993 even on a resistive load. No accuracy is stated for reactive or distorted loads.
-- Clipping is a property of the SCT-013 sensor (its output level at rated current); stay below the rating for
-  reliable readings.
+- **Step of one instantaneous value** is about 0.08 % of the rating. The RMS reading is computed over the whole 100 ms window and returned as a fractional number, so it is finer than the step: for example, with the 5 A sensor the no-load reading is ~3 mA although the step is 4.1 mA. The real resolution is limited by noise, not by the step.
+- **Near the floor:** a single reading (one 100 ms window) at 1 % of the rating is noisy by 0.6–2 %. The average over a period and the energy stay within the class shown in the table.
+- **UI5 / UI7 below 2 % of the rating:** the spread between modules is up to ±5 %, so for these modules the class near the floor starts at 2 % of the rating.
+- "Average" = the average of several 100 ms measurement windows, as used for energy and average power.
+- Clipping is a property of the SCT-013 sensor (its output level at rated current); stay below the rating for reliable readings.
 - Changing the sensor model is writing the model code to the module — no recalibration step.
 
 ## Applications
