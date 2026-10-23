@@ -8,6 +8,8 @@ This chapter is a quick reference for common problems and their solutions. Each 
 
 ![Flowchart for narrowing down a problem from the symptom.](images/troubleshoot-flowchart.png)
 
+---
+
 ## I2C bus
 
 ### 1. NACK / no response from the module
@@ -37,6 +39,8 @@ void i2c_scan() {
 
 - ❌ **I2C speed too high for the cable length**. Drop to 50 kHz: `Wire.setClock(50000);`.
 
+---
+
 ### 2. Intermittent read/write timeouts
 
 **Symptom**: transactions succeed sometimes, fail other times — especially in electrically noisy environments or near inductive loads.
@@ -63,6 +67,8 @@ void i2c_scan() {
 > | ESP-IDF | [`rbamp_retry_exhaustion_count()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_retry_exhaustion_count--rbamp_sanity_reject_count--rbamp_reset_counters) / [`rbamp_sanity_reject_count()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_retry_exhaustion_count--rbamp_sanity_reject_count--rbamp_reset_counters) | count exhausted bus retries and rejected readings |
 > | Python | [`dev.sanity_reject_count`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devsanity_reject_count-int) / [`MachineI2CBackend` counters](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#machinei2cbackend-diagnostic-counters-micropython-only) | count rejected readings; retry counters on the MicroPython backend |
 > | ESPHome | — | no diagnostic counters exposed |
+
+---
 
 ### 3. `DATA_VALID` (`0xCE`) never becomes 1
 
@@ -91,6 +97,8 @@ void i2c_scan() {
 > | Python | [`dev.wait_ready(timeout_ms=1000)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devwait_readytimeout_ms1000---none) / [`dev.read_last_error()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_last_error---int) | wait for the ready flag (raises on timeout); read the device error code |
 > | ESPHome | [`update()` ready check](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#3-data-flow-and-timing) / [`get_last_error_str()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) | reads are published once the module reports ready; the error code as text |
 
+---
+
 ## Calibration and accuracy
 
 ### 4. `I_rms` close to 0 while a load is running
@@ -107,6 +115,8 @@ void i2c_scan() {
 - ❌ **Wrong model code written** — for example, an SCT-013-030 sensor with the SCT-013-010 code → current shown will be **~3× lower** than reality (and conversely, a too-large code reads high). Verify the sensor's case marking against the model code.
 - ❌ **Current below the noise floor** — for very small loads (< ~10 mA on a 30 A clamp) the sensor output is close to the noise floor. The firmware applies quadrature noise subtraction: `I_corrected = √(I_raw² − NF²)`. If `I_raw ≤ NF`, the result is clamped to 0. This is intended behaviour.
 
+---
+
 ### 5. `I_rms` off by a large factor
 
 **Symptom**: real load is ~10 A (per reference meter), the module shows 3 A or 30 A.
@@ -117,6 +127,8 @@ void i2c_scan() {
 - ❌ **Wrong CT model installed** — somebody fitted a 100 A clamp where the configuration calls for a 30 A clamp (or vice versa).
 - ❌ **Clamp not fully closed** (see #4) — typically reads 5–20 % low.
 - ❌ **Suspected factory calibration drift** — if all of the above are ruled out and the disagreement persists on a known reference load, contact your module supplier; recalibration is a factory operation.
+
+---
 
 ### 6. Sign of `P_real` is wrong (consumption shows as export)
 
@@ -131,6 +143,8 @@ void i2c_scan() {
   physical polarity is corrected** — negating in master code (`p_corrected = -p_raw`) only fixes
   your own RT integration, never the on-module period data. Fix the wiring (de-energised!).
 
+---
+
 ### 7. Energy total disagrees with a reference meter by a few percent
 
 **Symptom**: `E_Wh` over one hour differs from the utility meter by 2–10 %.
@@ -144,6 +158,8 @@ void i2c_scan() {
 - ❌ **Distorted mains voltage** (micro-sags, high-order harmonics) — RMS and mean computation are more robust than peak detection, but accuracy is not specified for heavily distorted mains voltage; contact your supplier if this matters for your installation.
 - ❌ **Damaged CT cable or loose jack** — open-circuit or cold-solder inside the plug. Check with a multimeter, with the jack unplugged from the module (the CT clamp is a step-down transformer; the secondary winding should read 50–200 Ω depending on model).
 
+---
+
 ### 8. `avg_P_W` is much lower than expected
 
 **Symptom**: a 1000 W heater is on, RT `P_real ≈ 1000 W`, but `PERIOD_AVG_P_W` reads ~200 W over a one-minute period.
@@ -154,6 +170,8 @@ void i2c_scan() {
 - ❌ If the load is steady and RT `P_real ≈ avg_P_W` does not hold:
   - On **BASIC tier**: check the RT sign of `P_real`. If `P` is occasionally negative (a solar inverter is feeding back, for example), negative samples are excluded from `PERIOD_AVG_P_W`, dragging the average down. See [04_period_metering.md → BASIC tier](period-metering.md).
   - On **STANDARD (STD)**: compute `total_avg = avg_P_consume + avg_P_export` (export taken as magnitude) to see the channel's true activity.
+
+---
 
 ### 9. `PERIOD_VALID = 0` after a snapshot
 
@@ -184,6 +202,8 @@ if ((rb_read_u8(0x50, 0x07) & 0x01) == 0) {
 > | Python | [`dev.is_period_valid()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devis_period_valid---bool) / [`dev.read_period_snapshot()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_period_snapshotsettle_ms50-skip_latchfalse---rbampperiodsnapshot) | check the snapshot-ready bit; take and validate a period snapshot |
 > | ESPHome | [Period snapshot not valid](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/10_troubleshooting.md#period-snapshot-not-valid--energy-does-not-grow) | what the component logs when the valid flag is 0; the first snapshot after boot is discarded |
 
+---
+
 ## Multi-module issues
 
 ### 10. Address collision
@@ -211,6 +231,8 @@ See [02_initialization.md → Recommended workflow](initialization.md).
 > | Python | [`fleet.check_conflict(addr)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#addressing-and-conflict-checking) / [`fleet.scan()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#discovery--scan) | check an address for a second device; scan the bus for modules |
 > | ESPHome | [`rbamp:` list](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#1-component-block--rbamp) | one block per module, each with its own `id` and `address` |
 
+---
+
 ### 11. Wired-OR DRDY fires several times in quick succession
 
 **Symptom**: with [wired-OR DRDY](realtime-polling.md), the master EXTI fires every 1–5 ms a few times in a row.
@@ -223,6 +245,8 @@ See [02_initialization.md → Recommended workflow](initialization.md).
 - Use broadcast snapshot (see [04_period_metering.md → Approach 2](period-metering.md)) for precise synchronisation — but only for period snapshots, not for RT.
 - Move to DRDY-per-module — each module on its own GPIO.
 
+---
+
 ### 12. I2C bus busy when DRDY fires
 
 **Symptom**: DRDY fires while the master is already in a transaction with another module. The EXTI handler is delayed.
@@ -232,6 +256,8 @@ See [02_initialization.md → Recommended workflow](initialization.md).
 - Finishes the current transaction.
 - Services the delayed EXTI and reads the next module.
 - Latency: 1–10 ms typically — not critical.
+
+---
 
 ### 13. Multi-module clock drift in long tests
 
@@ -264,6 +290,8 @@ This drift only affects the chip-side diagnostic register; **energy accuracy is 
 > | Python | [`dev.read_period_latch_ms()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_period_latch_ms---int) | read the module-side period length (diagnostic only) |
 > | ESPHome | — | not exposed |
 
+---
+
 ## Power and flash
 
 ### 14. Power loss during a flash-write command → partial flash write
@@ -277,6 +305,8 @@ This drift only affects the chip-side diagnostic register; **energy accuracy is 
 - Factory defaults are restored — the module works, but its custom address / sensor configuration is gone.
 - Re-apply the configuration: set `SENSOR_CLASS` + bind `CT_MODEL` per channel + issue `CMD_SAVE_USER_CONFIG` (and re-do address change if needed).
 - To avoid this in the future: do not cut power for at least **1 second** after any flash-write command. The flash erase + write window itself is ~700 ms; allow margin.
+
+---
 
 ### 15. Module is hot
 
@@ -293,6 +323,8 @@ This drift only affects the chip-side diagnostic register; **energy accuracy is 
 - ❌ External CT overloaded (current beyond the sensor range).
 
 **Action**: disconnect power immediately, isolate the module, contact the supplier.
+
+---
 
 ## Sensor wiring — critical errors
 
@@ -312,6 +344,8 @@ After installing or reinstalling a module, run a smoke test with a **known purel
 **If `|I_rms − expected|` > 10 %**: see #5 — wrong CT model or clamp not closed.
 **If `|P_real − U × I|` > 5 %** at PF = 1: phase compensation may be off — contact the supplier.
 
+---
+
 ### 17. Pre-commissioning checklist
 
 Before powering up a module in a production system:
@@ -328,6 +362,8 @@ Before powering up a module in a production system:
 
 If any item is unchecked, expect strange readings. The most common causes of metering errors are sensor installation issues, not firmware or electronics faults.
 
+---
+
 ## Error codes (`REG_ERROR` = `0x02`)
 
 | Code | Name | Meaning | Action |
@@ -340,6 +376,8 @@ If any item is unchecked, expect strange readings. The most common causes of met
 | `0xFD` | `ERR_SENSOR_OVERFLOW` | Input signal clipping (full scale exceeded) | Reduce current or use a larger CT. |
 | `0xFE` | `ERR_PARAM` | Invalid command code or out-of-range value | Check command and value range. |
 | `0xFF` | `ERR_UNHANDLED` | HardFault or unhandled condition | Power-cycle. If it recurs, contact the supplier. |
+
+---
 
 ### Semantics — `REG_ERROR` is NOT sticky (v1.3)
 
@@ -358,6 +396,8 @@ Explicit clear (rarely needed): `CMD_CLEAR_ERROR` (opcode `0x31`) zeros `REG_ERR
 > | Python | [`dev.read_last_error()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_last_error---int) / [`dev.clear_error()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devclear_error---none) | read the last-write error code; clear it |
 > | ESPHome | [`get_last_error_str()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) / [`write_clear_error()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#7-native-api-services-v13-new--recovery-automations) | the error code as text; clear the error |
 
+---
+
 ## When to contact the supplier
 
 Symptoms that warrant service:
@@ -368,6 +408,8 @@ Symptoms that warrant service:
 - The enclosure is hot or smells of burnt material
 - Disagreement with a reference meter > 5 % despite the checklist in #17 being satisfied
 - A new module boots with `ERR_LUT_BAD` (`0xFA`) on first power-on
+
+---
 
 ## Next
 

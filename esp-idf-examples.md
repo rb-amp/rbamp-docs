@@ -6,11 +6,15 @@ This chapter is the ESP-IDF equivalent of [10_arduino_examples.md](arduino-examp
 >
 > **For a more convenient, structured interface — use the `rbamp` ESP-IDF component** (see the [client-libraries table in the README](README.md#client-libraries-high-level-api-per-platform)). The component wraps the register-level details behind an opaque `rbamp_handle_t` with named functions (`rbamp_read_voltage()`, `rbamp_latch_period()`, `rbamp_read_period_snapshot()`, etc.), a per-channel Wh accumulator, multi-module helpers, full `idf.py menuconfig` integration via Kconfig (`CONFIG_RBAMP_NACK_RETRY_ATTEMPTS`, `CONFIG_RBAMP_DEFAULT_I2C_FREQ_HZ`, etc.), and the SPEC §B.5 retry+sanity discipline mandatory for ESP-IDF v5 `i2c_master`. Most user-facing projects should start from the component and fall back to the raw API only when needed.
 
+---
+
 ## ESP-IDF version
 
 Examples are written for **ESP-IDF 5.2+** using the new I2C-master driver in `driver/i2c_master.h`. The legacy `driver/i2c.h` API still works and the helpers are easy to port — see the inline note in the common header.
 
 Targets validated in this chapter: **ESP32**, **ESP32-S3**, **ESP32-C3**. Other targets (ESP32-C6, H2) require no code changes.
+
+---
 
 ## Project layout
 
@@ -52,6 +56,8 @@ idf.py menuconfig            # set Wi-Fi creds, MQTT host etc.
 idf.py build flash monitor
 ```
 
+---
+
 ## Examples table of contents
 
 | # | Title | Difficulty | Output | MQTT | DRDY | Multi-module | Bidirectional | Use case |
@@ -72,6 +78,8 @@ idf.py build flash monitor
 ## Common helpers (`rbamp_io.h` / `rbamp_io.c`)
 
 These helpers are included by every example. To save space in the rest of this chapter, the `#include "rbamp_io.h"` line and any `rbamp_io_*` calls are shown without re-defining the helpers.
+
+---
 
 ### `rbamp_io.h`
 
@@ -193,6 +201,8 @@ esp_err_t rbamp_io_wait_ready(i2c_master_dev_handle_t dev, uint32_t timeout_ms);
 #endif
 ```
 
+---
+
 ### `rbamp_io.c`
 
 ```c
@@ -312,6 +322,8 @@ esp_err_t rbamp_io_wait_ready(i2c_master_dev_handle_t dev, uint32_t timeout_ms) 
     return ESP_ERR_TIMEOUT;
 }
 ```
+
+---
 
 ### Porting to the legacy I2C driver (`driver/i2c.h`)
 
@@ -1596,6 +1608,8 @@ void app_main(void) {
 | 9 | medium | — | yes | — | — | — | RTC memory | off-grid / outdoor logger |
 | 10 | medium | UART log | yes | — | — | optional | RAM + MQTT | TOU peak/off-peak with SNTP |
 
+---
+
 ## Best practices
 
 - **Always check `ESP_ERROR_CHECK()` return paths.** I2C transactions can transiently fail on long buses; production code should retry rather than abort.
@@ -1607,6 +1621,8 @@ void app_main(void) {
 - **Use `i2c_master_probe()` for bus scans** — it is the IDF 5.x equivalent of the Arduino `endTransmission()` ping.
 - **For battery applications, gate the rbAmp power** through a MOSFET and call `esp_sleep_enable_timer_wakeup()` + `esp_deep_sleep_start()` between samples. Use `RTC_DATA_ATTR` for state that must survive sleep.
 - **Persist Wh totals to NVS** if you need them to survive a full power loss (battery removal). RTC slow memory only survives deep sleep.
+
+---
 
 ## What next
 

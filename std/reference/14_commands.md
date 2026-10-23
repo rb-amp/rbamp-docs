@@ -4,6 +4,8 @@ All device actions go through the **COMMAND register (`0x0060`, u8)** — on Mod
 (write-only there). A write queues the opcode; execution happens in the device's main loop
 (milliseconds for most commands; flash-touching commands take longer).
 
+---
+
 ## Completion and result semantics
 
 - **Busy:** `CMD_STATE` (0x006A) bit 0 = BUSY while a command executes. **BUSY is the completion
@@ -24,6 +26,8 @@ All device actions go through the **COMMAND register (`0x0060`, u8)** — on Mod
   module): over Modbus the reply may be truncated or absent (and a configured TX delay can suppress
   it); confirm by re-polling the device after the restart.
 
+---
+
 ## Error codes (`ERROR` 0x0002)
 
 | Code | Name | Meaning |
@@ -39,6 +43,8 @@ All device actions go through the **COMMAND register (`0x0060`, u8)** — on Mod
 | 0xFC | VALUE_CRC | update-page CRC mismatch (resend the page) · time epoch below 1 600 000 000 · UID mismatch (ADDR_BY_UID) · no such history record (HIST_READ) |
 | 0xFD | PARAM | invalid parameter / config value — **nothing persisted** |
 | 0xFE | UNKNOWN_CMD | opcode not implemented by this build |
+
+---
 
 ## Command set
 
@@ -63,6 +69,8 @@ All device actions go through the **COMMAND register (`0x0060`, u8)** — on Mod
 | 0x15 | — | reserved (factory/service) |
 | 0x16 | ADDR_BY_UID | the module whose UID matches `ADDR_UID` takes the staged address(es), **persists them together with any other pending CFG_ changes** and restarts; other modules answer 0xFC. Both new-address fields zero → 0xFD; illegal address → 0xFD; save rate limit → 0xF9. Works on a Modbus broadcast. Not gated |
 
+---
+
 ### Keyed commands (life-time counters and history)
 
 These change metering-relevant state, so each requires the matching **single-shot key** written to
@@ -81,6 +89,8 @@ deliberate-action protection on top of the transport (not the Modbus UNLOCK).
 
 Life-time resets, adopts and history writes are recorded in the event log with before/after values —
 they cannot happen silently.
+
+---
 
 ## Gating summary
 

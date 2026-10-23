@@ -3,6 +3,8 @@
 How to run an STD module from your own code — with our libraries or with nothing but an I²C/Modbus
 master.
 
+---
+
 ## With the rbAmp libraries
 
 One client library per platform covers the whole line; channel count and features are discovered at
@@ -34,12 +36,16 @@ If your application persists a library energy snapshot (NVS, EEPROM, file), stor
 fields you need in your own fixed format, not the struct as a raw blob — the snapshot structures
 gain fields across library versions.
 
+---
+
 ## Without our libraries
 
 Everything the libraries do is plain register I/O. The protocol is documented and stable; map
 changes are versioned (`VERSION`) and feature-gated (`CAPABILITIES`). **The canonical step-by-step
 flows (init, command, config, address change, energy, history, OTA, unlock) are in
 [Sequences](22_sequences.md)** — below are the shortest working patterns.
+
+---
 
 ### Minimal I²C bring-up (pseudocode)
 
@@ -65,6 +71,8 @@ freq  = read_u16(0x0010)                      # /100 Hz
 tot_p = read_i32(0x0300 + 0x04)               # grand active power
 ```
 
+---
+
 ### Energy accounting pattern
 
 ```
@@ -85,6 +93,8 @@ transactions can tear across a publication ([I²C transport](11_transport_i2c.md
 Never integrate power over time on the host — the module's counters are gap-compensated and
 persisted; your integral is neither. Details: [Measurement & energy](16_measurement_energy.md#energy).
 
+---
+
 ### History back-fill after your own outage
 
 ```
@@ -100,10 +110,14 @@ rec   = read(0x0C20, 80)          # one transaction; see record layout
 Records carry the **absolute** life-time Wh at period end plus per-phase period energy, so gaps
 close exactly ([layout](16_measurement_energy.md#history-records)).
 
+---
+
 ### Health poll
 
 See the [diagnostics checklist](19_diagnostics.md#health-checklist-for-a-supervising-master) — six
 reads cover liveness, storage health, restarts and counter generations.
+
+---
 
 ## Modbus integration without libraries
 
@@ -115,6 +129,8 @@ reads cover liveness, storage health, restarts and counter generations.
   commands. Full map: [register map](13_register_map.md#modbus-mapping); rules:
   [Modbus transport](12_transport_modbus.md).
 - FC03-only masters read the native data through the 0xA000+ mirror (input + 0x4000).
+
+---
 
 ## Integration rules worth repeating
 

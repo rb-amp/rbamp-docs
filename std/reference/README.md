@@ -13,6 +13,8 @@ channels, three-phase) run the same map — they
 differ only in `N_VOLTAGE` / `N_CURRENT` and the variant code, so everything here is written
 generically by channel count. 
 
+---
+
 ## Contents
 
 | # | File | Covers |
@@ -30,6 +32,8 @@ generically by channel count.
 | 11 | Hardware interface | signals, wiring, transport jumper, DRDY, reset |
 | 12 | [Host integration](21_integration.md) | raw register sequences without our libraries; library pointers |
 | 13 | [Sequences](22_sequences.md) | canonical step-by-step flows: init, commands, config, address change, energy, history, OTA, unlock |
+
+---
 
 ## Conventions used throughout
 

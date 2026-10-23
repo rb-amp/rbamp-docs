@@ -14,6 +14,8 @@
 
 **rbAmp** is a compact hardware module for precision measurements of AC mains parameters over an I²C interface. The module behaves as a standard I²C slave with a fixed register map (page-0, 0x00..0xFF). This document describes the **wire protocol** at the level of registers, commands, and sequences.
 
+---
+
 ### 1.1 SKU lineup
 
 The module variants (SCT-UI1 … SCT-I3, with their voltage and current channels) are listed in [00_overview.md → Module variants](overview.md#module-variants).
@@ -21,6 +23,8 @@ The module variants (SCT-UI1 … SCT-I3, with their voltage and current channels
 I-variants (`I1`/`I2`/`I3`) have **no voltage hardware** — `U_RMS`, `U_PEAK`, and `P` registers return `0.0`. Frequency (`AC_FREQ`) is available on all variants (ZC-sourced).
 
 **Calibration is factory.** The consumer master does **NOT** configure noise floor (NF), gain, phase compensation, or any other factory parameters — these are all factory calibration burned into the module (see §4.0 reserved ranges). On **BASIC SCT-series modules** (used with SCT-013 sensors) the consumer writes only **SENSOR_CLASS + CT_MODEL** (see §6.2) — the module applies everything else automatically from the preset table. BASIC CT-series and STANDARD (STD) modules are supplied as a pair with their sensors, preset and calibrated at the factory: nothing is written.
+
+---
 
 ### 1.2 Versioning
 
@@ -49,6 +53,8 @@ I-variants (`I1`/`I2`/`I3`) have **no voltage hardware** — `U_RMS`, `U_PEAK`, 
 
 > Four wires are mandatory on the LV side: `VCC`, `GND`, `SDA`, `SCL`. `DRDY` (open-drain) is optional. See §2.3 for pull-up and multi-module guidance.
 
+---
+
 ### 2.1 I²C parameters
 
 - **Default address**: `0x50` (7-bit).
@@ -56,6 +62,8 @@ I-variants (`I1`/`I2`/`I3`) have **no voltage hardware** — `U_RMS`, `U_PEAK`, 
 - **Logic levels**: 3.3 V (5 V-tolerant on pull-ups to 3.3 V).
 - **On-board pull-ups**: 4.7 kΩ on SDA/SCL to 3.3 V (module).
 - **Clock stretching**: the module does **NOT** use SCL clock-stretching as a routine flow-control mechanism. Between transactions the master must observe an **inter-transaction gap ≥ 100 µs** (`tBUF`). Back-to-back transactions without a gap (back-to-back START without `tBUF`) are permitted but discouraged — some host stacks (ESP-IDF i2c_master) exhibit an elevated NACK rate. See §5 acceptance / EMI section separately.
+
+---
 
 ### 2.2 Bus speed
 
@@ -65,6 +73,8 @@ I-variants (`I1`/`I2`/`I3`) have **no voltage hardware** — `U_RMS`, `U_PEAK`, 
 | **100 kHz** | workable with retry | application-level 3× retry is mandatory. |
 | **400 kHz** | **not validated** | do not advertise as supported. |
 
+---
+
 ### 2.3 Multi-module bus
 
 Several rbAmp modules can share one bus:
@@ -72,6 +82,8 @@ Several rbAmp modules can share one bus:
 - **Up to ~16 modules** (limited by total bus capacitance ≤ 400 pF at 100 kHz).
 - **Pull-ups**: the on-board 4.7 kΩ pull-ups on every module in parallel overload the sink. **Cut the on-board pull-ups** on every module except one (or use a PCA9515/9615 I²C buffer).
 - **Length**: up to 0.15 m plain → 100 kHz; 0.15–1 m twisted pair (SDA+GND and SCL+GND in **separate** pairs) → 100 kHz; > 1 m — I²C buffer; > 3 m — differential bus (PCA9615 / LTC4332).
+
+---
 
 ### 2.4 Bus polling budget
 
@@ -114,6 +126,8 @@ Any other value → the device is not identified as rbAmp.
 > | ESP-IDF | [`rbamp_read_variant()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_variant) | read the hardware variant (SKU) |
 > | Python | [`dev.read_variant()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_variant---int) | read the hardware variant (SKU) |
 > | ESPHome | [`get_variant_str()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) | read the hardware variant (SKU) |
+
+---
 
 ### 3.2 `CAPABILITY` (regs `0x57/0x58`, u16 LE, read-only)
 
@@ -178,6 +192,8 @@ has_voltage = bool(cap_hi & 0x01)  # bit 8 of the u16 = bit 0 of byte 0x58
 > | Python | [`dev.read_capability()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_capability---int) / [`dev.has_voltage()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devhas_voltage---bool) | read the 16-bit feature map; check for a voltage channel |
 > | ESPHome | [`get_capability_hex()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) | read the capability bitmap |
 
+---
+
 ### 3.3 Variant profile table — invariant
 
 | SKU | HW_VARIANT (0x55) | N_I | voltage-HW | CAPABILITY bit 8 (voltage-HW) |
@@ -193,9 +209,13 @@ has_voltage = bool(cap_hi & 0x01)  # bit 8 of the u16 = bit 0 of byte 0x58
 
 **HW_VARIANT ⟷ CAPABILITY coherence**: `HW_VARIANT` 1..3 and 7..8 (UI*) → bit 8 set; `HW_VARIANT` 4..6 (I*) → bit 8 clear. A mismatch indicates a hardware or firmware anomaly (broken device or misflash).
 
+---
+
 ### 3.4 `SENSOR_CLASS` ≠ variant discriminator
 
 ⚠ **`SENSOR_CLASS (0x25)` is NOT a variant discriminator.** It is a **user-config provisioned register** (CT sensor class selector: `Unset`/`Sct013`/`WiredCT`/`BuiltinCT`) and does not reflect the hardware variant. For variant detection use **only** `HW_VARIANT (0x55)` + `CAPABILITY (0x57/0x58)`.
+
+---
 
 ### 3.5 `PRODUCT_ID` (`0x54`, u8, read-only)
 
@@ -216,6 +236,8 @@ The master **MUST** read `PRODUCT_ID` before interpreting any family-specific re
 > | ESP-IDF | [`rbamp_read_product_id()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_product_id) | read the family id byte |
 > | Python | [`dev.read_product_id()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_product_id---int) | read the family id byte |
 > | ESPHome | — | not exposed |
+
+---
 
 ### 3.6 Canonical detection algorithm
 
@@ -250,6 +272,8 @@ return UNKNOWN_DEVICE
 
 ![Overview of the rbAmp register map and its address blocks.](images/api-register-map.png)
 
+---
+
 ### 4.0 Reserved ranges (internal)
 
 The following ranges are reserved for internal/factory use and are **not described** in this document. Reads return either data that is not relevant to consumer logic or `0x00` for non-existent addresses (see §5.2). Writes to these addresses are either silently dropped or answered with `ERR_PARAM`:
@@ -265,6 +289,8 @@ The following ranges are reserved for internal/factory use and are **not describ
 > **Note on `0xD0..0xE3`**: in the **production** build this range is occupied by the `V03 Q` block (see §4.12). In the separate **cal firmware** (not shipped to the consumer) the same range is overlaid with the calibration block (build:cal). The consumer master sees only the production overlay — the Q block.
 
 3rd-party integrators must ignore these ranges.
+
+---
 
 ### 4.1 Control block (0x00..0x07)
 
@@ -286,6 +312,8 @@ The following ranges are reserved for internal/factory use and are **not describ
 > | Python | [`dev.wait_ready(timeout_ms=1000)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devwait_readytimeout_ms1000---none) / [`dev.read_last_error()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_last_error---int) | wait for the ready flag (raises on timeout); read the device error code |
 > | ESPHome | [`update()` ready check](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#3-data-flow-and-timing) / [`get_last_error_str()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) | reads are published once the module reports ready; the error code as text |
 
+---
+
 ### 4.2 Diagnostics — raw input means and capture window (0x10..0x1C)
 
 | Addr | Name | Size | Type | Access | Persistence | Notes |
@@ -297,6 +325,8 @@ The following ranges are reserved for internal/factory use and are **not describ
 | `0x18` | `CAPTURE_STATUS` | 1 | u8 | r | ram | Raw-sample capture: bit0=ready |
 | `0x19` | `CAPTURE_PAGE` | 1 | u8 | rw | ram | Page 0..15 → 16 raw I0 samples into `CAPTURE_WINDOW` |
 | `0x1A` | `CAPTURE_WINDOW` | 32 | bytes | r | ram | 16×u16 LE pre-LUT I0 codes. Burst-read 32 bytes. |
+
+---
 
 ### 4.3 System (0x20..0x25)
 
@@ -316,6 +346,8 @@ The following ranges are reserved for internal/factory use and are **not describ
 > | ESP-IDF | [`rbamp_set_sensor_class()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_set_sensor_class) / [`rbamp_read_sensor_class()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_sensor_class) | set the sensor class; read it back |
 > | Python | [`dev.set_sensor_class(cls)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devset_sensor_classcls---none) / [`dev.read_sensor_class()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_sensor_class---int) | set the sensor class; read it back |
 > | ESPHome | [`sensor_class:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#sensor_class) | YAML option that pins the sensor class |
+
+---
 
 ### 4.4 Fleet config (0x27..0x2F)
 
@@ -338,6 +370,8 @@ The following ranges are reserved for internal/factory use and are **not describ
 > | Python | [`dev.enable_gc(enable=True)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devenable_gcenable-bool--true---none) / [`dev.read_event_flags()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_event_flags---int--devclear_event_flagsmask-int---none) | enable General Call on a module; read the event flags (no device-threshold setter) |
 > | ESPHome | [`fleet_gc_enable:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#fleet_gc_enable-v13-new) / [`group_id:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#group_id-v13-new) | YAML options for General Call opt-in and group id |
 
+---
+
 ### 4.5 Address (0x30..0x31)
 
 | Addr | Name | Size | Type | Access | Persistence | Notes |
@@ -355,6 +389,8 @@ See §6.1 for the sequence.
 > | ESP-IDF | [`rbamp_prepare_address_change()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_prepare_address_change--rbamp_commit_address_change) / [`rbamp_read_active_address()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_active_address) | stage and arm the new address; read the active address |
 > | Python | [`dev.prepare_address_change(new_addr)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devprepare_address_changenew_addr---none) / [`dev.commit_address_change()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devcommit_address_change---none) | stage and arm the new address, then commit it |
 > | ESPHome | [`new_address:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#new_address) | one-time address change at boot; remove the option afterwards |
+
+---
 
 ### 4.6 Health / diagnostics (0x46..0x4F)
 
@@ -375,6 +411,8 @@ See §6.1 for the sequence.
 > | Python | — | BASIC health registers not exposed (STD line only) |
 > | ESPHome | — | no uptime or health entity |
 
+---
+
 ### 4.7 CT model verify mirrors (0x51..0x53)
 
 Read-only mirrors of the **applied** CT model preset per channel. The write wire protocol is unchanged (see §6.2) — this is purely a read-back for verification.
@@ -393,6 +431,8 @@ Read-only mirrors of the **applied** CT model preset per channel. The write wire
 > | ESP-IDF | [`rbamp_read_ct_model_ch()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_ct_model_ch) | read the CT model actually applied on a channel |
 > | Python | [`dev.read_ct_model_ch(ch)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_ct_model_chch-int---int) | read the CT model actually applied on a channel |
 > | ESPHome | [boot log `ct_model[0]: matches`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/05_quickstart.md#step-5--what-to-expect-in-the-boot-log) | log lines confirming the sensor class and model were applied |
+
+---
 
 ### 4.8 Identity (0x54..0x6F)
 
@@ -414,6 +454,8 @@ Read-only mirrors of the **applied** CT model preset per channel. The write wire
 > | ESP-IDF | [`rbamp_read_product_id()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_product_id) / [`rbamp_read_uid()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_uid) | read the family id; read the 96-bit UID |
 > | Python | [`dev.read_product_id()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_product_id---int) / [`dev.read_uid()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_uid---bytes) | read the family id; read the 96-bit UID |
 > | ESPHome | [`get_uid_hex()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) / [`get_variant_str()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) | the UID as hex; the variant as text |
+
+---
 
 ### 4.9 Digest window (0x70..0x85)
 
@@ -440,6 +482,8 @@ Read-only mirrors of the **applied** CT model preset per channel. The write wire
 > | ESP-IDF | [`rbamp_set_digest_fields()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#basic-digest) / [`rbamp_read_digest()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#basic-digest) | choose the digest fields; read them in one transaction (BASIC) |
 > | Python | — | digest window not exposed |
 > | ESPHome | — | digest window not exposed |
+
+---
 
 ### 4.10 V03 real-time block (0x86..0xBD)
 
@@ -472,6 +516,8 @@ Read-only mirrors of the **applied** CT model preset per channel. The write wire
 > | Python | [`dev.read_all()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#one-shot-read-of-the-entire-rt-block) / [`dev.channels`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#properties--handle-state) | read the whole real-time block; number of current channels |
 > | ESPHome | [`voltage`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#voltage) / [`power`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#power--power_1--power_6) | YAML sensors for the real-time values |
 
+---
+
 ### 4.11 V03 period block (0xBE..0xCF)
 
 A period snapshot taken on `CMD_LATCH_PERIOD`. **Ragged layout** (historical legacy from v1.2, frozen at v1.3): `avg_p` for ch1/ch2 lives here, while `avg_p` for ch0 sits in §4.12 at address `0xDC` (the legacy energy primitive was not relocated, to avoid an API break for existing integrators). Logically these three values belong to the same group.
@@ -493,6 +539,8 @@ A period snapshot taken on `CMD_LATCH_PERIOD`. **Ragged layout** (historical leg
 > | Python | [`dev.read_period_avg_power(ch)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_period_avg_powerch0---float) / [`dev.read_period_snapshot()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_period_snapshotsettle_ms50-skip_latchfalse---rbampperiodsnapshot) | read the period average power; take and read a whole period snapshot |
 > | ESPHome | [`update_interval:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#update_interval) / [`latch_interval:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#latch_interval) | YAML options for the period and snapshot cadence |
 
+---
+
 ### 4.12 V03 Q + period ch0 (0xD0..0xE3, production build)
 
 | Addr | Name | Size | Type | Access | Persistence | Units | Notes |
@@ -512,6 +560,8 @@ A period snapshot taken on `CMD_LATCH_PERIOD`. **Ragged layout** (historical leg
 > | Python | [`dev.read_period_avg_power(ch)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_period_avg_powerch0---float) / [`dev.read_period_max_power()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_period_max_power---float) | read the period average and maximum power |
 > | ESPHome | [`reactive_power`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#reactive_power--reactive_power_1--reactive_power_2) / [`update_interval:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#update_interval) | reactive power sensor; each update closes the period and reads the averages |
 
+---
+
 ### 4.13 Diagnostic chip-side dt (0xEC)
 
 | Addr | Name | Size | Type | Access | Persistence | Units | Notes |
@@ -526,6 +576,8 @@ A period snapshot taken on `CMD_LATCH_PERIOD`. **Ragged layout** (historical leg
 > | ESP-IDF | [`rbamp_read_period_latch_ms()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_period_latch_ms) | read the module-side period length (diagnostic only) |
 > | Python | [`dev.read_period_latch_ms()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_period_latch_ms---int) | read the module-side period length (diagnostic only) |
 > | ESPHome | — | not exposed |
+
+---
 
 ### 4.14 Channel access window (`0x32` + `0x3C..0x3F`)
 
@@ -656,11 +708,15 @@ for i, byte in enumerate(label):
 
 The GC broadcast frame (`0x00` general-call address + 5-byte payload) is a **separate wire-protocol path**, not a register write. The read/write asymmetry from §5.1 **does not apply** to GC. See §6.3.
 
+---
+
 ### 5.2 Unmapped registers behavior
 
 **Any read from an unmapped address** returns `0x00`. The firmware **never** NACKs on register reads. This is by design (wedge fix).
 
 **Implication for detection**: detection of a missing device must go through the **I²C address-frame ACK**, **not** through register probes.
+
+---
 
 ### 5.3 Error model
 
@@ -729,6 +785,8 @@ A `write rejection` asserts `EVENT_FLAGS.bit3` **asynchronously**, within one me
 > | ESP-IDF | [`rbamp_read_last_error()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_last_error) / [`rbamp_has_error()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_has_error) | read the last-write error code; read the durable error flag |
 > | Python | [`dev.read_last_error()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_last_error---int) / [`dev.has_error()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devhas_error---bool) | read the last-write error code; read the durable error flag |
 > | ESPHome | [`get_last_error_str()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) / [`get_event_flags()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) | the error code as text; the event flags |
+
+---
 
 ### 5.4 Atomicity / read-freeze semantics
 
@@ -817,6 +875,8 @@ After POR (power-on reset) or hard reset the module passes through the following
 > | Python | [`dev.begin()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devbegin) / [`dev.wait_ready(timeout_ms=1000)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devwait_readytimeout_ms1000---none) | probe the module, then wait for the ready flag |
 > | ESPHome | [`rbamp: address:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#address) | module address set in YAML; the component probes the module at setup |
 
+---
+
 ### 6.1 Address change — two-phase commit (production-OK)
 
 **Wire protocol** (v1.3 canonical):
@@ -859,6 +919,8 @@ After POR (power-on reset) or hard reset the module passes through the following
 > | Python | [`dev.prepare_address_change(new_addr)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devprepare_address_changenew_addr---none) / [`dev.commit_address_change()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devcommit_address_change---none) | stage and arm the new address, then commit it |
 > | ESPHome | [`new_address:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#new_address) | one-time address change at boot; remove the option afterwards |
 
+---
+
 ### 6.2 CT model binding — pure staging + per-channel CMD
 
 > On images before fw 1.4.20 (`CAPABILITY` bit 12 clear) the applied per-model scaling reverts to
@@ -894,6 +956,8 @@ After POR (power-on reset) or hard reset the module passes through the following
 > | ESP-IDF | [`rbamp_set_sensor_class()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_set_sensor_class) / [`rbamp_set_ct_model_ch()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_set_ct_model_ch) | set the sensor class and the per-channel CT model |
 > | Python | [`dev.set_sensor_class(cls)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devset_sensor_classcls---none) / [`dev.set_ct_model_ch(channel, code)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devset_ct_model_chchannel-code---none) | set the sensor class and the per-channel CT model |
 > | ESPHome | [`sensor_class:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#sensor_class) / [`ct_model:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#ct_model) | YAML options for the sensor class and CT model |
+
+---
 
 ### 6.3 GC broadcast snapshot — opt-in fleet sync
 
@@ -952,6 +1016,8 @@ foreach module: read period snapshot with skip_latch=true
 > | Python | [`fleet.gc_latch(group, tick, settle_ms)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) / [`fleet.check_sync(expected_tick)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) | send the General Call snapshot frame; check each module |
 > | ESPHome | [`fleet_gc_enable:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#fleet_gc_enable-v13-new) / [sync-check log](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/05_quickstart.md#synchronization-check) | opt-in General Call snapshot; log line confirming the modules are in sync |
 
+---
+
 ### 6.4 Period sync — two strategies
 
 #### Strategy 1 — sequential snapshot + shared settle (any firmware)
@@ -989,6 +1055,8 @@ Skew = 0 (atomic at bus level). See §6.3.
 > | Python | [sequential snapshot, `skip_latch=True`](https://github.com/rb-amp/rbamp-python/blob/main/docs/04_hardware.md#period-sync--synchronizing-the-periods) / [`fleet.gc_latch()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) | sequential read after one shared snapshot; General Call snapshot frame |
 > | ESPHome | [`latch_interval:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#latch_interval) / [`fleet_gc_enable:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#fleet_gc_enable-v13-new) | separate snapshot cadence; opt-in General Call snapshot |
 
+---
+
 ### 6.5 Provisioning — fresh-flash + SAVE
 
 **Freshly flashed module behavior**:
@@ -1016,6 +1084,8 @@ This is **NORMAL** for a virgin module and **not fatal**. Do not abort provision
 > | ESP-IDF | [`rbamp_provision()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#provisioning--rbamp_provision) / [`rbamp_save_user_config()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_save_user_config) | move one virgin module to its address; save the user config |
 > | Python | [fleet provisioning](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#provisioning) / [`dev.save_user_config()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devsave_user_config---none) | provision one virgin module, then add it to the fleet; save the user config |
 > | ESPHome | [Provisioning workflow](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/06_examples.md#2--provisioning-workflow-virgin--fleet) / [`new_address:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#new_address) | step-by-step YAML for a virgin module; one-time address change |
+
+---
 
 ### 6.7 Error-state recovery — decision tree
 
@@ -1078,6 +1148,8 @@ read REG_ERROR (0x02):
 > | Python | [`dev.read_last_error()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_last_error---int) / [`dev.clear_error()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devclear_error---none) | read the error code; clear it |
 > | ESPHome | [`write_clear_error()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#7-native-api-services-v13-new--recovery-automations) / [`write_reset()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#7-native-api-services-v13-new--recovery-automations) | clear the error; soft reset of the module |
 
+---
+
 ### 6.6 Commands reference
 
 #### Core opcodes (write to `REG_COMMAND (0x01)`)
@@ -1123,6 +1195,8 @@ read REG_ERROR (0x02):
 - The master sees bit 5 → knows the module rebooted → must re-initialize the RAM-only fields (DIGEST_CONFIG, THRESH_*, EVENT_MASK).
 - The master clears bit 5 via W1C: `write 1<<5 → EVENT_FLAGS`.
 
+---
+
 ### 7.1 Persistence model
 
 | Command | Production | Persists |
@@ -1134,6 +1208,8 @@ read REG_ERROR (0x02):
 | `CMD_CLEAR_ERROR` (0x31) | ✅ OK | — (clears `REG_ERROR`) |
 | `CMD_SAVE_GAINS` (0x26) | ❌ **BLOCKED** in production (rejected: `REG_ERROR = 0xFE`; reboot reverts) | factory calibration |
 | `CMD_FACTORY_RESET` (0xAA) | ❌ **BLOCKED** in production | — |
+
+---
 
 ### 7.2 Read-back ≠ persistence
 
@@ -1151,11 +1227,15 @@ read REG_ERROR (0x02):
 
 **Address is an exception** (v1.3 canonical): `REG_I2C_ADDRESS (0x30)` at boot reads the **active** address. After staging it echoes the candidate; after reboot it shows the actual persisted value.
 
+---
+
 ### 7.3 Single voltage reference caveat
 
 The module uses **one** U channel to compute `P` on **all** I channels. If a CT clamp hangs on a wire of **another** phase (multi-phase distribution panel) — the `P` readings for that channel will be **wrong** (arbitrary U/I phase offset). `I_RMS` remains correct.
 
 Multi-phase measurement (L1/L2/L3 simultaneously) is a **separate SKU** with its own specification.
+
+---
 
 ### 7.4 Master energy integration — wall-clock canon
 
@@ -1191,6 +1271,8 @@ cross-checks; the master wall-clock stays authoritative for billing.
 > | Python | [`dev.energy.wh(ch)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devenergy--rbampenergy-instance) | running Wh total of a channel |
 > | ESPHome | [`energy`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#energy--energy_1--energy_6) | Wh sensor per channel |
 
+---
+
 ### 7.5 Failed-snapshot period preservation
 
 The firmware **PRESERVES** the period accumulator on an empty snapshot. When `g_period_count == 0` (a snapshot with no readable period):
@@ -1216,6 +1298,8 @@ if PERIOD_VALID == 1:
 > | Python | [`dev.read_period_snapshot()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_period_snapshotsettle_ms50-skip_latchfalse---rbampperiodsnapshot) / [`RbAmpStaleError`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_period_snapshotsettle_ms50-skip_latchfalse---rbampperiodsnapshot) | take a period snapshot; raised when the snapshot is not ready, the next one covers the full interval |
 > | ESPHome | [Period snapshot not valid](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/10_troubleshooting.md#period-snapshot-not-valid--energy-does-not-grow) | logged when the valid flag is 0; the first snapshot after boot is discarded |
 
+---
+
 ### 7.6 Clock-drift tolerance
 
 **Canon**: the module's internal timebase may read short under load by up to **30 %** — this is **normal**, a property of the module's timebase, by design. Hardware-measured under production load.
@@ -1223,6 +1307,8 @@ if PERIOD_VALID == 1:
 **Acceptance**: the chip is OK at drift ≤ 30 %.
 
 ⚠ **The legacy 3 % threshold is WRONG.** That threshold would mass-reject healthy chips.
+
+---
 
 ### 7.7 EMI / switch-transient resilience
 
@@ -1262,6 +1348,8 @@ Consolidated list of known characteristics the master must account for:
 | GC default | OFF (opt-in per module); NACK on GC = "not enabled" | §6.3 |
 | Flash endurance | ~10 000 cycles/page; don't loop SAVE | §7.0 |
 
+---
+
 ## 8 · Wire-trace examples
 
 ### 8.1 Detection — read PRODUCT_ID + HW_VARIANT + CAPABILITY
@@ -1284,6 +1372,8 @@ Where `S`=start, `Sr`=repeated start, `P`=stop, `W`=write bit, `R`=read bit, `0x
 > | Python | [`dev.read_variant()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_variant---int) / [`dev.read_capability()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_capability---int) | read the hardware variant; read the capability map |
 > | ESPHome | [`get_variant_str()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) / [`get_capability_hex()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) | the variant as text; the capability bitmap as hex |
 
+---
+
 ### 8.2 Burst-read RT block (UI variant, all channels)
 
 ```text
@@ -1299,6 +1389,8 @@ S 0xA0 W 0x86 Sr 0xA1 R [56 bytes] P
 > | ESP-IDF | [`rbamp_read_all()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#one-shot-read-of-the-whole-rt-block) | read the whole real-time block in one call |
 > | Python | [`dev.read_all()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#one-shot-read-of-the-entire-rt-block) | read the whole real-time block in one call |
 > | ESPHome | [burst read of the instantaneous block](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#3-data-flow-and-timing) | the component reads the instantaneous block in one burst per update |
+
+---
 
 ### 8.3 Multi-byte WRITE — `LABEL` byte-at-a-time
 
@@ -1326,6 +1418,8 @@ S 0xA0 W 0x6F '1' P
 > | Python | [`dev.set_label(label)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devset_labellabel-str---none) / [`dev.read_label()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_label---str) | write the 8-byte label; read it back |
 > | ESPHome | — | label option not documented |
 
+---
+
 ### 8.4 GC broadcast snapshot + witness fallback
 
 ```text
@@ -1350,6 +1444,8 @@ foreach module in [0x50, 0x51, 0x52]:
 > | ESP-IDF | [`rbamp_fleet_gclatch()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) / [`rbamp_fleet_check_sync()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) | send the General Call snapshot frame; check each module |
 > | Python | [`fleet.gc_latch(group, tick, settle_ms)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) / [`fleet.check_sync(expected_tick)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) | send the General Call snapshot frame; check each module |
 > | ESPHome | [`fleet_gc_enable:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#fleet_gc_enable-v13-new) / [sync-check log](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/05_quickstart.md#synchronization-check) | opt-in General Call snapshot; log line confirming the modules are in sync |
+
+---
 
 ### 8.5 Address change 5-step
 
@@ -1383,6 +1479,8 @@ S 0xA2 W 0x55 Sr 0xA3 R [HW_VARIANT] P   # 0xA2 = 0x51 << 1
 > | Python | [`dev.prepare_address_change(new_addr)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devprepare_address_changenew_addr---none) / [`dev.commit_address_change()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devcommit_address_change---none) | stage and arm the new address, then commit it |
 > | ESPHome | [`new_address:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#new_address) | one-time address change at boot; remove the option afterwards |
 
+---
+
 ### 8.6 Fresh-flash provisioning
 
 ```text
@@ -1414,6 +1512,8 @@ S 0xA0 W 0x02 Sr 0xA1 R [0x00] P
 > | Python | [`dev.configure_channels(cls, models)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devconfigure_channelscls-rbampsensorclass-models-sequenceint-n-int--none---none) / [`dev.save_user_config()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devsave_user_config---none) | set the class and all channel models; save the user config |
 > | ESPHome | [`sensor_class:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#sensor_class) / [`ct_model:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#ct_model) | YAML options for the sensor class and CT model |
 
+---
+
 ### 8.7 DIGEST round-trip — configure + read
 
 ```text
@@ -1442,6 +1542,8 @@ S 0xA0 W 0x70 Sr 0xA1 R [22 bytes] P
 > | ESP-IDF | [`rbamp_set_digest_fields()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#basic-digest) / [`rbamp_read_digest()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#basic-digest) | choose the digest fields; read them in one transaction (BASIC) |
 > | Python | — | digest window not exposed |
 > | ESPHome | — | digest window not exposed |
+
+---
 
 ### 8.8 Threshold event flow — write threshold → trigger → W1C clear
 
@@ -1472,6 +1574,8 @@ S 0xA0 W 0x2A 0x02 P
 > | Python | [`dev.read_event_flags()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_event_flags---int--devclear_event_flagsmask-int---none) | read and clear the event flags (no device-threshold setter) |
 > | ESPHome | [Threshold alarms in YAML](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/06_examples.md#13--ha-automations-on-rbamp-sensors) / [`get_event_flags()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) | threshold automations on sensor values; the event flags |
 
+---
+
 ### 8.9 Raw-capture diagnostic burst (`CAPTURE_*`)
 
 `CMD_CAPTURE_RAW (0x38)` and the `CAPTURE_*` registers are a **diagnostic facility** — not needed in
@@ -1493,6 +1597,8 @@ S 0xA0 W 0x1A Sr 0xA1 R [32 bytes] P
 
 # Repeat steps 3-4 for pages 1..15 (256 samples total ≈ 1.3 mains periods)
 ```
+
+---
 
 ### 8.10 CT model verify-mirror read-back (post-binding sanity)
 
@@ -1535,6 +1641,8 @@ S 0xA0 W 0x51 Sr 0xA1 R [model_ch0][model_ch1][model_ch2] P
 ### 1.3.0 (2026-06-15) — Initial public release.
 
 Reference firmware: `protocol_version = 1.3`, `schema_version = 2`. Page-0 contract frozen.
+
+---
 
 ### Major v1.3 changes vs prior internal versions
 

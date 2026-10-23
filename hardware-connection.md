@@ -8,6 +8,8 @@ This chapter describes the physical connection of rbAmp to a master device and t
 > conductor only (`L`) — never the whole cable. The sensor clamp is contactless, but it needs a
 > conductor with intact insulation.
 
+---
+
 ## LV-side pinout
 
 The module runs on 3.3 V logic and is tolerant to 5 V logic on the I2C lines. All LV-side pins are fully galvanically isolated from mains.
@@ -22,9 +24,13 @@ The module runs on 3.3 V logic and is tolerant to 5 V logic on the I2C lines. Al
 
 ![Pinout of the rbAmp low-voltage side: VCC, GND, SDA, SCL and the optional DRDY line.](images/hw-pinout.png)
 
+---
+
 ## I2C pull-ups — installed on the board
 
 **Important**: each rbAmp module has built-in 4.7 kΩ pull-up resistors on SDA and SCL to 3.3 V. For a **single-module** bus, no external pull-ups are required — connect the master directly.
+
+---
 
 ### When to disable the built-in pull-ups
 
@@ -39,6 +45,8 @@ Solution: each module has **solder-jumper cuts** on the bottom of the PCB next t
 - Leave the pull-ups enabled on **only one** module on the bus (or relocate them to a single point near the master).
 - Cut the jumpers on the remaining modules.
 - If the master board already provides bus pull-ups, cut the jumpers on **all** rbAmp modules.
+
+---
 
 ### Rule of thumb
 
@@ -56,6 +64,8 @@ Solution: each module has **solder-jumper cuts** on the bottom of the PCB next t
 
 > **In doubt**: measure the resistance between SDA and VCC with all devices unpowered. For a single-module bus the typical value is ~4.7 kΩ (one built-in pull-up); on a multi-module bus the parallel combination drops to the **1.5–4.7 kΩ** range depending on how many built-in pull-ups remain active. Anything below ~1 kΩ means too many active pull-ups in parallel — cut the built-in pull-ups on all but one module.
 
+---
+
 ## Power
 
 ### VCC parameters
@@ -69,17 +79,23 @@ Solution: each module has **solder-jumper cuts** on the bottom of the PCB next t
 > VCC/GND wiring before power-up. Double-check the wiring colour convention of your harness before
 > first power-on, especially when crimping your own cables.
 
+---
+
 ### I2C voltage compatibility
 
 - SDA/SCL run on 3.3 V logic (the built-in pull-ups tie them to 3.3 V).
 - The lines are **5 V-tolerant**, so a 5 V master (Arduino UNO / Nano) reads HIGH (~3.3 V) correctly and can drive the bus.
 - Standard setup: pull-ups to 3.3 V. Only if you deliberately want 5 V bus levels, disable the built-in pull-ups and add external pull-ups to +5 V on the master side.
 
+---
+
 ### Power-on behavior
 
 - Cold start: ~250 ms to the first valid measurement result.
 - After RESET (software or brown-out): ~250 ms to recover.
 - Before the first valid result, registers read 0 and `DATA_VALID` (`0xCE`) is 0.
+
+---
 
 ### Isolation
 
@@ -89,6 +105,8 @@ The module contains a galvanic isolation barrier between the mains side (CT clam
 - Connecting the LV side to a 5 V master is safe — no short-circuit risk through ground.
 
 > Do not open the enclosure — it will void factory calibration.
+
+---
 
 ## I2C bus
 
@@ -100,6 +118,8 @@ The module contains a galvanic isolation barrier between the mains side (CT clam
 - **READ auto-increment**: **YES** — burst-read supported (multi-byte registers, V03 RT block, DIGEST window).
 - **WRITE auto-increment**: **NO** — every byte written needs an explicit register address, including multi-byte fields (write low byte, then high byte separately).
 - **Clock-stretching**: not used by the module as a flow-control mechanism. The master should observe an inter-transaction gap (`tBUF`) of ≥ 100 µs.
+
+---
 
 ### Bus length
 
@@ -119,6 +139,8 @@ I2C is, by default, a short bus (~15 cm). Many users connect modules with low-qu
 
 > ⚠ **Inside an electrical cabinet, shield the I2C cable.** Strong magnetic fields near mains conductors, contactors and transformers induce noise in an unshielded cable. Keep the cable as short as possible and away from the mains wiring.
 
+---
+
 ### Multi-module bus
 
 Multiple rbAmp modules can share a single I2C bus:
@@ -129,9 +151,13 @@ Multiple rbAmp modules can share a single I2C bus:
 - **Addresses**: every module has its own 7-bit address. All modules ship from the factory on `0x50`; readdress them one at a time before connecting in parallel (see [02_initialization.md → Address change](initialization.md)).
 - **Pull-ups**: follow the module-count table above (recommended values) — with 3+ modules cut the built-in pull-ups on all of them and use one external pair sized for the module count.
 
+---
+
 ## Sensor connections (mains side)
 
 ![Mains-side connection of an rbAmp module inside a panel: the L and N tap and the current clamp on the L conductor.](images/mains-ct-connection-panel.png)
+
+---
 
 ### Voltage sensor (UI* variants)
 
@@ -148,6 +174,8 @@ Correct polarity is critical for:
 - Correct separation of consumption and generation on the STANDARD (STD) tier.
 
 > **Quick check**: with a purely resistive load (electric kettle, heater, incandescent bulb), `P > 0` and `PF ≈ 1.0`. If P is negative while the load is consuming, de-energise the circuit first, then swap L and N on the PCB.
+
+---
 
 ### Current sensor — CT and SCT-013 (for SKUs with external CT)
 
@@ -176,9 +204,13 @@ Each jack on the PCB is labeled with the channel name (`I0`, `I1`, `I2`, …) an
 - Arrow in the correct direction + correct L/N polarity → `P > 0` for consumption, `P < 0` for export.
 - Clamp installed reversed (arrow against current direction) → the sign of P is inverted.
 
+---
+
 ## DATA_READY (DRDY)
 
 Optional pin for optimized polling. If your application is happy polling on its own fixed interval (100 ms or slower), you can leave DRDY disconnected.
+
+---
 
 ### Electrical parameters
 
@@ -187,9 +219,13 @@ Optional pin for optimized polling. If your application is happy polling on its 
 - **Ready pulse**: LOW for ~10 µs, after RT registers (`0x86..0xCF`) have been refreshed
 - **Pulse frequency**: ~10 Hz (one pulse per ~100 ms RT window; ~5 Hz on images before v1.2)
 
+---
+
 ### Semantics
 
 The falling edge of DRDY guarantees that **all RT registers are coherent and freshly published** (the firmware updates them atomically inside an ISR before lowering the pin). The master can read `0x86..0xCD` immediately on the falling edge with no risk of a split sample.
+
+---
 
 ### Master-side usage
 
@@ -197,6 +233,8 @@ The falling edge of DRDY guarantees that **all RT registers are coherent and fre
 - Use **any input-capable GPIO** — the pin numbers in the examples (e.g. GPIO 15) are illustrative, not a requirement.
 - Pull-up 10 kΩ to 3.3 V on the master side.
 - Multiple module DRDYs can be combined into a wired-OR (see [03_realtime_polling.md → Multi-module DRDY](realtime-polling.md)).
+
+---
 
 ### Applicability
 
@@ -213,6 +251,8 @@ The falling edge of DRDY guarantees that **all RT registers are coherent and fre
 > | Python | — | the library does not use the DRDY pin |
 > | ESPHome | [`drdy_pin:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#drdy_pin) | optional DRDY input; only logged, not used as a read trigger |
 
+---
+
 ## Reference wiring example (ESP32, single module)
 
 ![Reference wiring of a single rbAmp module to an ESP32 master: SDA, SCL, DRDY with a 10K pull-up, power and ground, plus the mains-side clamp and L/N terminals.](images/hw-wiring-esp32.png)
@@ -224,9 +264,13 @@ In this configuration:
 - The SCT-013 jack is fully inserted.
 - The clamp is fully closed on the L wire, arrow pointing toward the load.
 
+---
+
 ## Other module variants
 
 Other module variants use the same LV-side pinout (VCC / GND / SDA / SCL / DRDY); only the mains side differs.
+
+---
 
 ## Next
 

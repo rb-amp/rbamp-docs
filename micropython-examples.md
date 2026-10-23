@@ -6,6 +6,8 @@ This chapter is the Python equivalent of [10_arduino_examples.md](arduino-exampl
 >
 > **For a more convenient, structured interface — use the `rbamp` MicroPython library** (see the [client-libraries table in the README](README.md#client-libraries-high-level-api-per-platform)). The library wraps the register-level details behind a high-level `RbAmp` class with named methods (`dev.voltage`, `dev.latch_period()`, `dev.read_period_snapshot()`, etc.), sync and `uasyncio` APIs, an automatic per-channel Wh accumulator, multi-module helpers, and SPEC §B.5 retry+sanity discipline for ESP32 ports via `MachineI2CBackend(retry_attempts=…)`. The same package runs unmodified on CPython — see the README client-libraries table. Most user-facing projects should start from the library and fall back to the raw API only when needed.
 
+---
+
 ## MicroPython vs CircuitPython — quick reference
 
 The Python language is the same; the device-access modules differ. The table below maps each concept used in the examples to the equivalent module / class on each dialect.
@@ -27,6 +29,8 @@ The Python language is the same; the device-access modules differ. The table bel
 
 Each example below is written in MicroPython. Where the CircuitPython equivalent differs by more than a single import line, an explicit "CircuitPython delta" block is given.
 
+---
+
 ## Examples table of contents
 
 | # | Title | Difficulty | Output | MQTT | DRDY | Multi-module | Bidirectional | Use case |
@@ -41,6 +45,8 @@ Each example below is written in MicroPython. Where the CircuitPython equivalent
 | 8 | [MQTT publisher with HA Auto-discovery](#example-8--mqtt-publisher-with-home-assistant-auto-discovery) | medium | — | yes (+disco) | — | — | optional | Drop-in HA integration |
 | 9 | [Battery-powered remote logger with deep sleep](#example-9--battery-powered-remote-logger-with-deep-sleep) | medium | — | yes | — | — | — | Off-grid / outdoor meter |
 | 10 | [Time-of-use (TOU) tariff with NTP wall-clock](#example-10--time-of-use-tou-tariff-with-ntp-wall-clock) | medium | REPL | yes | — | — | optional | Peak / off-peak tariff metering |
+
+---
 
 ## Common header for all examples
 
@@ -121,6 +127,8 @@ def rb_wait_ready(i2c, addr, timeout_ms=2000):
         time.sleep_ms(50)
     raise OSError("rbAmp at 0x{:02X} not ready".format(addr))
 ```
+
+---
 
 ### CircuitPython delta — common header
 
@@ -203,6 +211,8 @@ while True:
     print("U={:.1f}V  I={:.3f}A  P={:+.1f}W  PF={:+.3f}".format(u, i_, p, pf))
     time.sleep(1)
 ```
+
+---
 
 ### CircuitPython delta
 
@@ -1045,6 +1055,8 @@ while True:
 | 9 | medium | — | yes | — | — | — | RTC memory | off-grid / outdoor logger |
 | 10 | medium | REPL | yes | — | — | optional | RAM + MQTT | TOU peak/off-peak with NTP |
 
+---
+
 ## Best practices
 
 - Always check `DATA_VALID` (bit 0 of register `0xCE`) after boot and `PERIOD_VALID` (bit 0 of `0x07`) after each `CMD_LATCH_PERIOD`.
@@ -1054,6 +1066,8 @@ while True:
 - **Master-side persistence is mandatory** for long-term accounting — rbAmp does not store Wh internally. Use RTC memory (Example 9), SD card (Example 7), or MQTT-retained payloads (Example 6).
 - MicroPython IRQ handlers must be tiny (set a flag, no I2C). Do all I2C work in the main loop.
 - For CircuitPython, prefer `countio.Counter` or `keypad.Keys` for edge events instead of user-defined IRQs.
+
+---
 
 ## What next
 

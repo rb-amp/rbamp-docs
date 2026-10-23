@@ -14,6 +14,8 @@
 | `EVENT_MASK`, `THRESH_I/P`, `PERIOD_ARM` | ✗ | ✗ | ✗ | RAM — re-arm after any reset ([DRDY](15_drdy_events.md)) |
 | Device clock | ✗ | ✗ | ✗ | master re-feeds time after every reset |
 
+---
+
 ## Saving configuration
 
 1. Write the wanted `CFG_*` registers (list: [register map](13_register_map.md#configuration-0x00700x0085-persisted-by-save_config-unless-marked-ram)).
@@ -37,6 +39,8 @@ unconfigured module by the zeros.
 
 Over Modbus the config rows are holding 0x8000–0x800C; SAVE_CONFIG itself is **not** UNLOCK-gated.
 Step-by-step: [Sequences D3](22_sequences.md#d3--configuration).
+
+---
 
 ## Calibration — the user-visible part
 

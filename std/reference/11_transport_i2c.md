@@ -8,6 +8,8 @@ The active transport (I²C or Modbus RTU) is selected once per boot by the trans
 Hardware interface. On the I²C setting the Modbus register space is not served,
 and vice versa; commands and data are the same on both.
 
+---
+
 ## Register pointer
 
 - **16-bit register pointer, big-endian on the wire** (high byte first), with **auto-increment**.
@@ -25,6 +27,8 @@ There is no bus-level probe for 8- vs 16-bit addressing (an 8-bit device would m
 pointer byte as data). A master knows the convention by product line; the STD signature after a
 16-bit read of `0x0000` is `'S','T'` + `VERSION ≥ 0x30` + CAPABILITIES bit 9.
 
+---
+
 ## Timing and robustness
 
 - **Readiness after reset:** the register interface comes up within milliseconds of a reset, before
@@ -41,6 +45,8 @@ pointer byte as data). A master knows the convention by product line; the STD si
   publication and cannot tear (this is how to read i64 energy fields and whole blocks). Fields read
   in *separate* transactions may come from different windows. To detect a module restart between
   reads, check `FRAME_CNT` (0x0020) monotonicity and `BOOT_COUNT` (0x00CE).
+
+---
 
 ## Changing the I²C address
 

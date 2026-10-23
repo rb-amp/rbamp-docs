@@ -10,6 +10,8 @@ This chapter collects complete, working Arduino sketches for typical rbAmp scena
 >
 > **For a more convenient, structured interface — use the `rbamp` Arduino library** (see the [client-libraries table in the README](README.md#client-libraries-high-level-api-per-platform)). The library wraps the register-level details behind a high-level `RbAmp` class with named methods (`readVoltage()`, `latchPeriod()`, `readPeriodSnapshot()`, etc.), an automatic per-channel Wh accumulator, SPEC §B.5 retry+sanity discipline for ESP32 targets, and multi-module helpers. Most user-facing projects should start from the library and fall back to the raw API only when needed.
 
+---
+
 ## Examples table of contents
 
 | # | Title | Difficulty | Display / Output | MQTT | DRDY | Multi-module | Bidirectional | Use case |
@@ -24,6 +26,8 @@ This chapter collects complete, working Arduino sketches for typical rbAmp scena
 | 8 | [MQTT publisher with HA Auto-discovery](#example-8--mqtt-publisher-with-home-assistant-auto-discovery) | medium | — | yes (+disco) | — | — | optional | Drop-in HA integration |
 | 9 | [Battery-powered remote logger with deep sleep](#example-9--battery-powered-remote-logger-with-deep-sleep) | medium | — | yes | — | — | — | Off-grid / outdoor meter |
 | 10 | [Time-of-use (TOU) tariff with NTP wall-clock](#example-10--time-of-use-tou-tariff-with-ntp-wall-clock) | medium | Serial | yes | — | — | optional | Peak / off-peak tariff metering |
+
+---
 
 ## Common header for all examples
 
@@ -1400,6 +1404,8 @@ void loop() {
 | 9 | medium | — | yes | — | — | — | RTC memory | off-grid / outdoor logger |
 | 10 | medium | Serial | yes | — | — | optional | RAM + MQTT (day close) | TOU peak/off-peak metering with NTP wall-clock |
 
+---
+
 ## Best practices
 
 - Always check `DATA_VALID` after boot and `PERIOD_VALID` after `CMD_LATCH_PERIOD`.
@@ -1409,6 +1415,8 @@ void loop() {
 - For multi-module setups, **broadcast snapshot via general call** delivers precise synchronisation (firmware 1.0+).
 - **Master-side persistence is mandatory** for long-term accounting — rbAmp does not store Wh, only the current `avg_P`.
 - When swapping an rbAmp in a running system, save the accumulated `total_wh` master-side before the swap and restore it afterwards — the new module starts its counters from zero.
+
+---
 
 ## What next
 

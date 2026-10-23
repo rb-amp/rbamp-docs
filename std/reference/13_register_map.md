@@ -8,6 +8,8 @@ current STD build (one code base) unless marked *reserved*.
 Access column: r = read, w = write, rw = both. Persistence: regs marked *flash* survive power-off
 after SAVE_CONFIG / SAVE_CAL; *RAM* regs reset to defaults at every boot.
 
+---
+
 ## CORE 0x0000–0x00FF
 
 | Addr | Name | Type | Acc | Meaning |
@@ -46,6 +48,8 @@ after SAVE_CONFIG / SAVE_CAL; *RAM* regs reset to defaults at every boot.
 | 0x00ED | ADDR_UID_UNIT | u8 | w | new Modbus unit 1..247, 0 = keep |
 | 0x00F4 | UID | 12 B | r | unique chip id |
 
+---
+
 ### Configuration 0x0070–0x0085 (persisted by SAVE_CONFIG unless marked RAM)
 
 | Addr | Name | Type | Acc | Default | Meaning |
@@ -67,6 +71,8 @@ after SAVE_CONFIG / SAVE_CAL; *RAM* regs reset to defaults at every boot.
 | 0x0081 | CFG_VIRTUAL_IDS | u8 | rw | 0 | publish per-channel virtual Modbus unit ids (applied at boot; [Modbus](12_transport_modbus.md#virtual-unit-ids)) |
 | 0x0082 | CFG_LED | u8 | rw | 1 | status LEDs: 1 = on, 0 = off (IDENTIFY still works) |
 | 0x0084 | CFG_START_UA | u16 | rw | 400 | image 0x7B+: starting current for energy, µA — while a channel's current is below it, that channel adds no active or reactive energy to any counter; readings (I/P/Q/S/PF) unaffected. 0 = off; 10 µA steps, max 2540 (out of range → rejected); applies at once, SAVE_CONFIG persists |
+
+---
 
 ## DIAG / OTA 0x0100–0x018F
 
@@ -106,6 +112,8 @@ ADS_ID, RING_DROP, WIN_NSAMP, WIN_PERIOD. Gate on `VARIANT` before interpreting 
 | 0x01A0–0x01E7 | — | — | — | reserved (service) |
 | 0x0500 | OTA_PAYLOAD | 256 B | rw | firmware page buffer |
 
+---
+
 ## Measurement blocks
 
 ### VOLTAGE — base 0x0200, stride 0x20, v = 0..7 (gate on N_VOLTAGE)
@@ -116,6 +124,8 @@ ADS_ID, RING_DROP, WIN_NSAMP, WIN_PERIOD. Gate on `VARIANT` before interpreting 
 | +0x04 | U_PEAK | i32 | mV (reads 0 — not computed on current builds) |
 | +0x08 | THD_U | u16 | centi-% (THD capability = 0: reads 0 on I²C, sentinel on Modbus native) |
 | +0x0A | ANGLE | i16 | centi-degree (image 0x7A+): fundamental phase angle vs voltage 0, range (−18000, +18000]; voltage 0 reads 0; `0x8000` = no angle (that input, or voltage 0, below 50 V). Forward sequence: v1 ≈ −12000, v2 ≈ +12000 |
+
+---
 
 ### CURRENT (I + P channels) — base 0x1000, stride 0x40, c = 0..63 (gate on N_CURRENT)
 
@@ -133,6 +143,8 @@ ADS_ID, RING_DROP, WIN_NSAMP, WIN_PERIOD. Gate on `VARIANT` before interpreting 
 | +0x2A | PF1 | i16 | displacement PF, Q10 (gated, as THD_I) |
 | +0x2C | Q1 | i32 | displacement reactive, mvar (gated, as THD_I) |
 
+---
+
 ### TOTALS — base 0x0300, stride 0x40, k = 0..3; same field layout as CURRENT
 
 k = 0 grand total (all channels) · k = 1..3 per-phase totals (phase = channel when
@@ -143,6 +155,8 @@ aggregate power per window (net at the service entry), which is not the same as 
 per-channel imports — both are available. Note: the first field is I (µA); total P sits at +0x04.
 Over Modbus the totals P/Q/S are i64.
 
+---
+
 ### Calibration blocks (factory-written; see [Calibration](17_config_calibration.md))
 
 | Block | Base | Stride | Fields |
@@ -152,6 +166,8 @@ Over Modbus the totals P/Q/S are i64.
 | CHMAP_ASSOC | 0x0640 | 1, c=0..63 | reserved — current channel → voltage channel index (reads 0 on current builds) |
 | CHMAP_MODEL | 0x0680 | 1, c=0..63 | reserved — per-channel CT model metadata (reads 0 on current builds) |
 
+---
+
 ### Snapshot banks — base 0x2000, **stride 0x800**, b = 0..7 *(capability-gated: bit 8)*
 
 Period snapshots armed by `PERIOD_ARM` and taken by command 0x03; banks are read **directly** at
@@ -160,6 +176,8 @@ Fields: P/Q/S (i32, period averages) · E_POS/E_NEG (i64, mW·samples) · NSAMP 
 MAX_P/MAX_I/MAX_U/MIN_U (i32) · per-channel energy sub-block at +0x40 + c·0x10 (E_POS/E_NEG i64).
 **Current firmware reports CAPABILITIES bit 8 = 0 — the block is unmapped (command 0x03 → unknown
 command) and energy accounting uses the cumulative counters below.**
+
+---
 
 ## Energy / time region 0x0800–0x0FFF
 
@@ -185,6 +203,8 @@ command) and energy accounting uses the cumulative counters below.**
 | 0x08E8 | E_REA_IMP_UVARH | i64 | µvarh (image 0x7B+; varh = floor(µvarh / 1 000 000)) |
 | 0x08F0 | E_REA_EXP_UVARH | i64 | µvarh (magnitude ≥ 0). Grand only — there is no per-channel reactive energy |
 
+---
+
 ### Life-time counter management
 
 | Addr | Name | Type | Acc | Meaning |
@@ -192,6 +212,8 @@ command) and energy accounting uses the cumulative counters below.**
 | 0x0840 | LT_GEN | u32 | r | life-time generation counter (++ on reset/adopt) |
 | 0x0844 | LT_KEY | u32 | w | single-shot key for keyed commands; consumed by any command |
 | 0x0848 | LT_ADOPT | 32 B | rw | staging for counter adopt/import (4×i64) |
+
+---
 
 ### NVM / store diagnostics
 
@@ -209,6 +231,8 @@ command) and energy accounting uses the cumulative counters below.**
 | 0x0898 | NVM_REJ_CNT | u16 | NVM records rejected as foreign since boot |
 | 0x089A | NVM_REJ_ADDR | u16 | address of the first rejected record |
 
+---
+
 ### GROUP_ENERGY — base 0x0900 (Wh) and 0x0A80 (mWh), stride 0x10, g = 0..15 / 0..7
 
 Per-group cumulative energy (E_IMP i64 / E_EXP i64). On current firmware the groups are implicit:
@@ -216,11 +240,15 @@ Per-group cumulative energy (E_IMP i64 / E_EXP i64). On current firmware the gro
 every second; **informative** — the grand ENERGY block is the canonical cumulative counter; the per-channel
 counters restart at 0 with `LT_GEN` or on new/foreign storage (`LTG_STATUS` = 3).
 
+---
+
 ### GROUP_ENERGY_UWH — base 0x0C80, stride 0x10, g = 0..7 *(image 0x7A+, capability bit 15)*
 
 The same per-group counters at µWh resolution: +0x00 E_IMP (i64 µWh) · +0x08 E_EXP (i64 µWh).
 Published in the same snapshot as the mWh fields (mWh = floor(µWh / 1000)); the same restart and
 generation rules apply ([Measurement & energy](16_measurement_energy.md#cumulative-counters)).
+
+---
 
 ### METER_GROUP (group configuration) — base 0x0A00, stride 0x08, g = 0..15 *(reserved)*
 
@@ -228,6 +256,8 @@ generation rules apply ([Measurement & energy](16_measurement_energy.md#cumulati
 CH_A/CH_B/CH_C (channel indices, 0xFF unused) · V_ASSOC · VIRT_ID · FLAGS (enable, per-channel
 invert). Today's virtual unit ids are derived per channel from `CFG_VIRTUAL_IDS`
 ([Modbus](12_transport_modbus.md#virtual-unit-ids)).
+
+---
 
 ## Security block 0x0B00–0x0BFF
 
@@ -247,6 +277,8 @@ Attestation: the device signs a fixed ASCII domain-separation tag (the `ATTEST_M
 Ed25519; the host verifies the certificate against the manufacturer public key, then the signature
 against the device public key from the certificate.
 
+---
+
 ## History / event-log query 0x0C00–0x0C6F
 
 | Addr | Name | Type | Acc | Meaning |
@@ -263,6 +295,8 @@ against the device public key from the certificate.
 
 Record layouts (history and event records) are in
 [Measurement & energy](16_measurement_energy.md#history-records).
+
+---
 
 ## Modbus mapping
 

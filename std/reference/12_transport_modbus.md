@@ -4,6 +4,8 @@ On the Modbus setting of the transport jumper the module is a Modbus RTU slave o
 ready-to-poll electricity meter. The Modbus layer is a **translation onto the same register file**
 as I²C: same quantities, same commands, one command queue; only the wire format differs.
 
+---
+
 ## Serial
 
 - **Framing:** standard RTU `[addr][function][data][CRC16]`, CRC16 poly 0xA001 (reflected),
@@ -26,6 +28,8 @@ as I²C: same quantities, same commands, one command queue; only the wire format
   truncated or absent — the device may restart before the reply completes, and a configured TX delay
   can suppress it entirely. Confirm by re-polling after the restart, not by the reply.
 
+---
+
 ## Function codes
 
 **FC03** read holding · **FC04** read input · **FC06** write single · **FC16** write multiple.
@@ -34,6 +38,8 @@ Any other function code → exception 01.
 Limits: FC03/FC04 quantity 1..125, FC16 1..123 — outside → exception 03.
 **FC16 is all-or-nothing:** the whole frame is validated first; one bad register → nothing applied.
 `COMMAND` (holding 0x8113) is write-only — reading it → exception 02.
+
+---
 
 ## Register spaces
 
@@ -51,6 +57,8 @@ Modbus addresses are **their own namespace** — independent of I²C addresses. 
 The per-block native and holding addresses are listed with the I²C map in the
 [register map](13_register_map.md#modbus-mapping).
 
+---
+
 ### Native profile (input 0x6000+)
 
 Fixed-scale integers, same units as I²C. **Word order ABCD** (high word first) by default;
@@ -59,6 +67,8 @@ profile (i64 = all four words reversed), and — from image 0x79 — the absent-
 the same way. **The holding windows (0x81xx/0x83xx) are always high-word-first**, regardless of
 `CFG_WORD_ORDER`. i32 = 2 registers, i64 = 4 registers. Totals P/Q/S are published as i64 over
 Modbus (sign-extended from the device values).
+
+---
 
 ### SDM630-compatible profile (input 0x0000)
 
@@ -78,6 +88,8 @@ Every other address in 0x0000–0x03FF reads 0. Phases the module does not have 
 0x79). Single-phase members publish their channel as L1. There are no SDM configuration aliases —
 configuration is done through the native holding registers.
 
+---
+
 ### Virtual unit ids
 
 With `CFG_VIRTUAL_IDS` = 1 (saved + restart; takes effect at boot) a module with more than one
@@ -88,6 +100,8 @@ exception 02. Pick the base unit id so the derived ids do not collide with other
 
 (The METER_GROUP configuration table in the map is **reserved** — group composition is not
 configurable on current firmware.)
+
+---
 
 ## Broadcast (unit id 0)
 
@@ -102,6 +116,8 @@ response on broadcast, per the Modbus standard):
 
 A broadcast FC16 must stay within the whitelisted registers — a frame that touches anything else is
 refused as a whole.
+
+---
 
 ## UNLOCK (gated commands)
 
@@ -120,6 +136,8 @@ SET_TIME · `0x08–0x0F` · `0x11` page write · `0x16` address by UID. On modu
 an opcode the refusal is exception 03 before the gate is even checked. The life-time energy commands
 use a different, single-shot key mechanism (`LT_KEY`), not UNLOCK — see [Commands](14_commands.md).
 
+---
+
 ## Behaviour rules (family contract)
 
 - `COMMAND`, `LATCH_BANK`, `PERIOD_ARM` values > 0xFF → exception 03 (no silent low-byte
@@ -135,6 +153,8 @@ use a different, single-shot key mechanism (`LT_KEY`), not UNLOCK — see [Comma
 - Fields the build does not offer (absent channels; THD and displacement quantities with
   CAPABILITIES bit 2 = 0) read the sentinel in the native profile (`0xFFFF` / `0x8000…`); in the SDM
   profile they read 0.
+
+---
 
 ## Exceptions
 

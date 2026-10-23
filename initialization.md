@@ -24,6 +24,8 @@ No start command, no register-level configuration on the chip is required. Facto
 > | Python | [`dev.begin()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devbegin) / [`dev.wait_ready(timeout_ms=1000)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devwait_readytimeout_ms1000---none) | probe the module, then wait for the ready flag |
 > | ESPHome | [`rbamp: address:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#address) | module address set in YAML; the component probes the module at setup |
 
+---
+
 ## Helper functions (platform-neutral C)
 
 All examples below use three small helpers that are easy to implement on any platform:
@@ -41,6 +43,8 @@ float rb_read_float_le(uint8_t addr, uint8_t reg);
 // Write one byte to a slave register.
 void rb_write_u8(uint8_t addr, uint8_t reg, uint8_t val);
 ```
+
+---
 
 ## Bring-up on Arduino (`Wire.h`)
 
@@ -74,6 +78,8 @@ void rb_write_u8(uint8_t addr, uint8_t reg, uint8_t val) {
   Wire.endTransmission();
 }
 ```
+
+---
 
 ### Smoke test (single module)
 
@@ -124,6 +130,8 @@ U=230.1 V  I=8.73 A  P=2008 W  PF=0.999
 ...
 ```
 
+---
+
 ## Bring-up on STM32 HAL (C)
 
 ```c
@@ -165,11 +173,15 @@ void main_app(void) {
 }
 ```
 
+---
+
 ## Setting the sensor class and CT model
 
 > Required **only** for BASIC SCT-series modules used with SCT-013 sensors. BASIC CT-series and STANDARD (STD) modules are supplied as a pair with their sensors: everything is preset and calibrated at the factory for that particular sensor, and they start without initialization — skip this section.
 
 Two registers describe the external sensor: `SENSOR_CLASS` (the family — SCT-013 clip-on clamps, the wired CT clamp series, built-in CT) and `CT_MODEL` (the specific model code within that family). On v1.3 the model is written using a **pure-staging** scheme — writing `CT_MODEL` does **not** apply it on its own; a dedicated per-channel command commits the staged value.
+
+---
 
 ### Registers
 
@@ -225,6 +237,8 @@ Modules of the **CT- series** ship as a factory-calibrated set with their own cl
 
 > The window size follows from the rated current (a thicker conductor needs a bigger window) — it is a consequence of the nominal, not a separate choice.
 
+---
+
 ### Commands
 
 | Name | Opcode | Effect | Wait |
@@ -233,6 +247,8 @@ Modules of the **CT- series** ship as a factory-calibrated set with their own cl
 | `CMD_SET_CT_MODEL_CH1` | `0x29` | Bind to channel 1 (UI2/UI3/I2/I3) | ~5 ms |
 | `CMD_SET_CT_MODEL_CH2` | `0x2A` | Bind to channel 2 (UI3/I3) | ~5 ms |
 | `CMD_SAVE_USER_CONFIG` | `0x32` | Persist user-config block (sensor class, CT model, address, label) to flash | ~700 ms |
+
+---
 
 ### Procedure
 
@@ -261,6 +277,8 @@ Modules of the **CT- series** ship as a factory-calibrated set with their own cl
 
 > **Channel-order independence**: on v1.3 you can call `CMD_SET_CT_MODEL_CH0/1/2` in any order. There is no descending-order workaround required (that was an internal artifact of earlier firmware).
 
+---
+
 ### Behaviour with the current client libraries
 
 The rbAmp client libraries (Arduino, ESP-IDF, ESPHome, Python) wrap this procedure and add:
@@ -276,6 +294,8 @@ The rbAmp client libraries (Arduino, ESP-IDF, ESPHome, Python) wrap this procedu
   where clipping sets in, and the peak limit — use them to validate readings against the connected
   sensor.
 
+---
+
 ### Verification
 
 After binding, the **applied** CT model on each channel is mirrored at `0x51..0x53` (read-only verify mirrors). These are NOT the staging register `0x05`:
@@ -290,6 +310,8 @@ Serial.printf("Applied: ch0=0x%02X ch1=0x%02X ch2=0x%02X\n", ch0, ch1, ch2);
 > ⚠ **Readback ≠ persistence.** A successful read of `0x51..0x53` confirms the value is **live in RAM**, not that it survived to flash. To verify persistence, issue `CMD_RESET` (or power-cycle) and re-read after the boot window. The full pattern is in [04_period_metering.md](period-metering.md).
 
 > When commissioning a new module, perform a sanity check with a known resistive load (for example a 100 W incandescent lamp): `I_rms ≈ 100 W / U_rms ≈ 0.43 A` and `P_real ≈ 100 W`. If readings are off by a large factor, the model code is probably wrong.
+
+---
 
 ### What persists across a restart
 
@@ -330,6 +352,8 @@ unaffected on every image — the factory scaling is the correct one.
 > | Python | [`dev.set_sensor_class(cls)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devset_sensor_classcls---none) / [`dev.set_ct_model_ch(channel, code)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devset_ct_model_chchannel-code---none) | set the sensor class and the per-channel CT model |
 > | ESPHome | [`sensor_class:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#sensor_class) / [`ct_model:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#ct_model) | YAML options for the sensor class and CT model |
 
+---
+
 ## Single-module workflow
 
 1. Wire the module according to [01_hardware.md](hardware-connection.md).
@@ -338,21 +362,31 @@ unaffected on every image — the factory scaling is the correct one.
 4. Open the serial monitor — you should see U/I/P every second.
 5. If readings look wrong, see [05_troubleshooting.md](troubleshooting.md).
 
+---
+
 ## Multi-module setup
 
 Scenario: three rbAmp modules on a single bus to monitor different sections of a house (main feed, water heater, air conditioner).
+
+---
 
 ### Step 1 — Addresses
 
 Out of the box all three modules carry address `0x50`. They must be readdressed one at a time. **Connect only one module to the bus until readdressing is complete.**
 
+---
+
 ### Step 2 — Smoke test with one module
 
 Use the section above. Confirm one module works correctly.
 
+---
+
 ### Step 3 — Readdress (and, if needed, set the CT model)
 
 Use the address-change procedure below. If the modules use different SCT-013 sensors, set the CT model on each one before readdressing.
+
+---
 
 ### Step 4 — Multi-module polling loop
 
@@ -409,11 +443,15 @@ Module AC   (0x52): OK
 > | Python | [`fleet.scan(match_product=True)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#discovery--scan) / [`fleet.poll_all()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#polling--poll_all) | discover the modules on the bus; read all of them in one pass |
 > | ESPHome | [`rbamp: (list)`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#1-component-block--rbamp) | one `rbamp:` block per module, each with its own `id` and `address` |
 
+---
+
 ## Address change
 
 The factory address `0x50` is stored in the user-config block in flash. v1.3 uses a **two-phase commit** sequence to make accidental address changes hard: a candidate address goes into a RAM staging register first, has to be armed with a magic byte, and only then is committed to flash by an explicit command. A reset re-enumerates the module at the new address.
 
 ![The two-phase address change: stage the candidate address, arm it, commit it, then reset.](images/init-addr-2phase.png)
+
+---
 
 ### Registers and commands
 
@@ -423,6 +461,8 @@ The factory address `0x50` is stored in the user-config block in flash. v1.3 use
 | `ADDR_COMMIT_MAGIC` | `0x31` | u8 W | Arm the commit with `0xA5`. Consumed (cleared) on the commit attempt. |
 | `CMD_COMMIT_ADDR` | opcode `0x30` written to `REG_COMMAND` (`0x01`) | command | Validates the staged address against the magic, persists to flash. |
 | `CMD_RESET` | opcode `0x01` written to `REG_COMMAND` (`0x01`) | command | Soft reset. Module re-enumerates at the new address after ~300 ms. |
+
+---
 
 ### Procedure
 
@@ -455,6 +495,8 @@ The factory address `0x50` is stored in the user-config block in flash. v1.3 use
    ```
 9. Mark the PCB with the new address using a wax pencil or label so you can identify the module physically.
 
+---
+
 ### Important notes
 
 - **Both stages are mandatory.** Writing the candidate to `0x30` alone does nothing persistent — it only lands in RAM and is lost on the next reset. The magic-and-commit pair is what actually rewrites flash.
@@ -469,6 +511,8 @@ The factory address `0x50` is stored in the user-config block in flash. v1.3 use
   | `0x27` | `FLEET_CONFIG` | `CMD_LATCH_PERIOD` |
   | `0x28` | `GROUP_ID` | `CMD_SET_CT_MODEL_CH0` |
   | `0x30` | `REG_I2C_ADDRESS` | `CMD_COMMIT_ADDR` |
+
+---
 
 ### Full address-change example
 
@@ -516,9 +560,13 @@ void setup() {
 > | Python | [`dev.prepare_address_change(new_addr)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devprepare_address_changenew_addr---none) / [`dev.commit_address_change()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devcommit_address_change---none) | stage and arm the new address, then commit it |
 > | ESPHome | [`new_address:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#new_address) | one-time address change at boot; remove the option afterwards |
 
+---
+
 ## General Call (broadcast at address 0x00)
 
 The I²C protocol reserves address **`0x00` (general call)** — frames sent to this address are received by all slaves on the bus simultaneously. rbAmp can take its period snapshot on a general-call frame, but only **after the feature has been explicitly enabled** on the module.
+
+---
 
 ### Opt-in enable (default OFF)
 
@@ -547,6 +595,8 @@ GC snapshot reception is disabled by default — a fresh module will **NACK** th
    if (cfg & 0x01) Serial.println("GC enabled");
    ```
 
+---
+
 ### GC frame format
 
 GC snapshot frames have a fixed magic-and-opcode layout:
@@ -563,6 +613,8 @@ addr 0x00 | A5 27 <group_id> <tick_lo> <tick_hi>
 - `<tick_lo/hi>` — master-side 16-bit tick counter, mirrored into each module's `GC_TICK (0x59)` register for missed-frame detection.
 
 By design GC frames carry **only the snapshot command** — destructive opcodes (`SAVE_*`, `COMMIT_ADDR`, `FACTORY_RESET`) are not honoured over general-call.
+
+---
 
 ### Broadcast snapshot example (after enable)
 
@@ -594,6 +646,8 @@ Application: precise period synchronisation for multi-module energy balancing (e
 > | Python | [`dev.enable_gc(enable=True)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devenable_gcenable-bool--true---none) / [`fleet.gc_latch(group, tick, settle_ms)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) | enable General Call on a module; send the snapshot frame to the fleet |
 > | ESPHome | [`fleet_gc_enable:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#fleet_gc_enable-v13-new) / [`group_id:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#group_id-v13-new) | YAML options for General Call opt-in and group id |
 
+---
+
 ## Recommended multi-module deployment workflow
 
 ```
@@ -618,6 +672,8 @@ Step 4: At master boot, run a scan loop and verify every readdressed
         module responds at its expected address.
 ```
 
+---
+
 ## BASIC or STD?
 
 The rbAmp **STD** line answers on the same bus but uses a different, **16-bit** register map. Before
@@ -638,6 +694,8 @@ by their own reference documentation.
 > | ESP-IDF | [`rbamp_line()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#handle-state-getters) / [`rbamp_begin()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_begin) | line detected in begin; read it back from the cached value |
 > | Python | [`dev.is_std`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#properties--handle-state) / [`dev.begin()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devbegin) | line detected in begin(); read it back from the property |
 > | ESPHome | — | not exposed — detection is automatic, nothing to configure in YAML |
+
+---
 
 ## Module variant auto-detection
 
@@ -679,6 +737,8 @@ VariantInfo detect_variant(uint8_t addr) {
 > | ESP-IDF | [`rbamp_read_variant()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_variant) / [`rbamp_read_capability()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_capability) | read the hardware variant and the capability map |
 > | Python | [`dev.read_variant()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_variant---int) / [`dev.read_capability()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_capability---int) | read the hardware variant and the capability map |
 > | ESPHome | [`get_variant_str()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) / [`get_capability_hex()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) | variant string and capability bitmap from the identity surface |
+
+---
 
 ## Next
 

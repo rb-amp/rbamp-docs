@@ -10,6 +10,7 @@ This page collects, in one place, the isolation architecture, what you may safel
 to a qualified electrician, and how an isolated design differs from the shunt-based meters common in
 DIY energy monitoring.
 
+---
 
 ## The architecture: an all-low-voltage module
 
@@ -33,6 +34,8 @@ ESP32/Arduino/Pi carries **no shock risk and no short-circuit-through-ground ris
 
 > **Never open the enclosure** — it voids the factory calibration.
 
+---
+
 ## What *you* touch — always the safe side
 
 - The **four I²C wires** (`VCC`, `GND`, `SDA`, `SCL`) and the optional **`DRDY`** line — isolated, low-voltage, safe.
@@ -42,6 +45,8 @@ ESP32/Arduino/Pi carries **no shock risk and no short-circuit-through-ground ris
 
 That's the whole of the user's job on a current-only build: bus wires to your controller, clamp on an
 insulated conductor.
+
+---
 
 ## The voltage connection (UI* voltage-sensing variants)
 
@@ -61,6 +66,8 @@ safe as before. There are two ways to bring L/N in:
 > proper plug, or a qualified electrician. **Never connect bare mains conductors yourself unless you
 > are qualified to do so.**
 
+---
+
 ## Who does what
 
 | Task | You | Electrician |
@@ -71,6 +78,8 @@ safe as before. There are two ways to bring L/N in:
 | Hardwired L/N at the panel / consumer unit | | ✅ |
 | CTs around panel busbars / inside a live panel | | ✅ |
 | Any work on bare or exposed mains conductors | | ✅ |
+
+---
 
 ## Isolated by design vs a non-isolated shunt
 
@@ -93,12 +102,16 @@ sticker, an **architecture.**
 *(rbAmp is designed for isolation as described here; it is not a substitute for following your local
 electrical code, and it is not sold as a certified metering instrument.)*
 
+---
+
 ## In short
 
 - The module is **all low-voltage** — the CT clamps the wire without touching it, and voltage (UI* variants) comes in through an **isolated** tap; the side you touch is never at mains potential.
 - Current is sensed by a **CT** (no contact); voltage (UI* variants) via an **isolated divider** — bring L/N in with a **plug into a socket**, or an electrician.
 - **Don't open the enclosure.** For panel work, kill the main, verify dead, and use a qualified electrician.
 - Isolation is in the design — unlike a bare shunt meter, the side you handle is never live.
+
+---
 
 ## Related
 

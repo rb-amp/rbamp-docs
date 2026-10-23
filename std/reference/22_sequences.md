@@ -4,6 +4,8 @@ Canonical host-side flows. Every step names the register (I²C address; Modbus i
 to check. The command-polling rules used everywhere here are defined once in
 [D2](#d2--executing-a-command).
 
+---
+
 ## D1 — Power-up / discovery
 
 1. Read **12 bytes at 0x0000 in one transaction**: `ID` = 'S','T' · `VERSION` ≥ 0x36 ·
@@ -21,6 +23,8 @@ to check. The command-polling rules used everywhere here are defined once in
 
 Modbus: the same identity set is input 0x6000–0x601F ([mirror](10_identity_discovery.md#modbus-discovery-mirror));
 `FW_VER` holding 0x8315–16, `BOARD_ID` holding 0x831B–1C.
+
+---
 
 ## D2 — Executing a command
 
@@ -41,6 +45,8 @@ Modbus: the same identity set is input 0x6000–0x601F ([mirror](10_identity_dis
 second frame) → `COMMAND` 0x06 → poll → `ERROR` 0xFC = epoch below 1 600 000 000. `STATUS` bit 4
 sets immediately.
 
+---
+
 ## D3 — Configuration
 
 1. Write the wanted `CFG_*` registers (0x0070–0x0085; holding 0x8000–0x800C).
@@ -53,6 +59,8 @@ sets immediately.
 
 `CFG_LED` / `CFG_WORD_ORDER` act on write but revert at boot unless saved. `CFG_CLASS`,
 `CFG_CT_MODEL`, `CFG_TZ_OFFSET_MIN`, `CFG_TIME_AUTH`, `CFG_ENERGY_PERSIST_S` are stored metadata.
+
+---
 
 ## D4 — Address / serial change
 
@@ -71,6 +79,8 @@ sets immediately.
    module answers `ERROR` 0xFC. Both new-address fields 0 or an illegal address → 0xFD; save rate
    limit → 0xF9.
 4. Probe the module at its new address/unit; identify by UID.
+
+---
 
 ## D5 — Energy: read, reset, adopt
 
@@ -99,6 +109,8 @@ order import Wh · export Wh · reactive import varh · reactive export varh →
 ("LTAP") → `COMMAND` 0x0B. Negative value → 0xFA. Both reset and adopt bump `LT_GEN` and land in the
 event log with before/after values.
 
+---
+
 ## D6 — History and the event log
 
 1. `HIST_PERIOD` 0x0C00 (holding 0x8160): 0 = last 15-min (then `HIST_BACK` must be 0) · 1 = hourly
@@ -110,6 +122,8 @@ event log with before/after values.
 5. Read the record at 0x0C20 (`HIST_RECSZ` bytes, one transaction; Modbus holding 0x8180+ byte
    pairs). Layouts: [Measurement & energy](16_measurement_energy.md#history-records).
 6. Iterate `HIST_BACK` = 0 … COUNT−1 for a back-fill; diff rules per the record FLAGS.
+
+---
 
 ## D7 — Firmware update
 
@@ -130,6 +144,8 @@ event log with before/after values.
 7. **Do not reset the module for ~10 s** (trial + self-confirm), then verify: `FW_ACTIVE_BANK`
    flipped · `FW_VER` = new version · `SWAP_PENDING` 0x011C = 0. Old `FW_VER` = it rolled back —
    read `OTA_DIAG`.
+
+---
 
 ## D8 — Modbus unlock
 

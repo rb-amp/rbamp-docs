@@ -10,9 +10,13 @@ Real-time polling — reading instantaneous values of U, I, P, PF, flow directio
 
 For **tariff energy accumulation** (Wh over a period) use the period-snapshot mechanism described in [04_period_metering.md](period-metering.md).
 
+---
+
 ## The measurement window (100 ms)
 
 ![Timing of the measurement window and when its result set is published.](images/rt-window-timing.png)
+
+---
 
 ### What it is
 
@@ -29,6 +33,8 @@ The module measures continuously and publishes a result set every ~100 ms
 
 After computing a window, the firmware **atomically** publishes the entire result set (50+ bytes) into the I2C register block `0x86..0xCD`.
 
+---
+
 ### Window length is fixed
 
 The window is **hard-coded to 100 ms** on current firmware, independent of mains frequency. On images before v1.2 the window is 200 ms.
@@ -37,15 +43,21 @@ At 50 Hz mains a 100 ms window covers exactly 5 cycles; at 60 Hz, 6 cycles (10 a
 
 > The register `V03_PERIOD_MS` (`0xCA..0xCD`, u32 LE) reports the duration of the **current snapshot period** so far (ms since the last `CMD_LATCH_PERIOD` — see chapter 04). It is diagnostic only; it does not affect measurement accuracy or the energy calculation.
 
+---
+
 ### When the next window starts
 
 Immediately after the previous one is published. There is no gap between windows — measurement is continuous.
 
 ![How the measurement window relates to the period snapshot.](images/window-period-latch-concept.png)
 
+---
+
 ## DATA_READY (DRDY) — the ready pin
 
 DRDY is an open-drain output pulled up to 3.3 V on the master side. The firmware drives it LOW for ~10 µs **after** the RT registers have been refreshed — a hardware signal that says "data is ready to read".
+
+---
 
 ### Pulse parameters
 
@@ -54,16 +66,22 @@ DRDY is an open-drain output pulled up to 3.3 V on the master side. The firmware
 - Output type: open-drain (supports wired-OR in multi-module topologies)
 - Semantics: **the falling edge guarantees all RT registers are coherent and up to date**
 
+---
+
 ### When DRDY is not needed
 
 - The master polls slower than the window rate (once per second or minute) — data is refreshed ten times a second on current firmware, so any read picks up fresh data.
 - A trivial polling loop — `read_rt()` can be called any time; you get the latest committed result.
+
+---
 
 ### When DRDY is useful
 
 - The master wants to minimise I2C traffic or free up CPU for other tasks (battery-powered systems)
 - Precise synchronisation: read the exact moment of measurement completion (useful for high-resolution logs)
 - Event detection: react to every window (e.g. instantaneous-power tracking at ~100 ms granularity)
+
+---
 
 ### Usage (Arduino, one module)
 
@@ -103,6 +121,8 @@ void loop() {
 > | Python | — | not exposed — the library does not use the pin; handle it in your own code |
 > | ESPHome | [`drdy_pin:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#drdy_pin) | optional DRDY input in YAML; the component only logs it |
 
+---
+
 ## The sign of P and flow direction
 
 In the RT registers, the sign of active power is the **primary indicator of current direction**:
@@ -114,6 +134,8 @@ In the RT registers, the sign of active power is the **primary indicator of curr
 | `P_real ≈ 0` while `I_rms > 0` | Purely reactive load (unloaded transformer, capacitor) |
 
 RMS values of current and voltage are **always ≥ 0** (RMS is non-negative by definition). Therefore `I_rms` **cannot** be used to determine flow direction — use `P_real`.
+
+---
 
 ### Flow-classification example
 
@@ -132,9 +154,13 @@ void classify_flow(float p) {
 
 > On BASIC-tier firmware the tariff accumulator **ignores** export (see [04_period_metering.md](period-metering.md)). The RT registers, however, always carry the real-time sign of P — so even on a BASIC SKU the master can detect export events from RT reads, log them, or build a master-side bidirectional accumulator on top of BASIC firmware.
 
+---
+
 ## RT register reference
 
 All values are float32 little-endian (4 bytes). READ supports auto-increment — read each value as a single 4-byte burst (or the whole `0x86..0xBD` block in one burst, see §read-freeze). Integer fields are marked with their type.
+
+---
 
 ### Voltage
 
@@ -142,6 +168,8 @@ All values are float32 little-endian (4 bytes). READ supports auto-increment —
 |---:|---|---|---|---|
 | `0x86` | U_rms | float32 | V | RMS voltage over the last measurement window |
 | `0x8A` | U_peak | float32 | V | Maximum deviation from mean during the window |
+
+---
 
 ### Currents (per channel: 0 = primary, 1/2 on UI2/UI3, more on UI5/UI7)
 
@@ -155,6 +183,8 @@ All values are float32 little-endian (4 bytes). READ supports auto-increment —
 | `0xA2` | I2_peak | float32 | A |
 
 > On variants with fewer channels (e.g. UI1), the unused channel registers return `0.0f` instead of NACK. Higher-channel-count variants (UI5/UI7) place their additional I_rms / P_real / PF / Q values in registers above `0xCF`; refer to the SKU datasheet for the extended map.
+
+---
 
 ### Power
 
@@ -173,6 +203,8 @@ All values are float32 little-endian (4 bytes). READ supports auto-increment —
 > Apparent power S can be derived master-side: `S = U_rms × I_rms`. RMS values are **always ≥ 0**; flow direction lives in the sign of P.
 
 > **Atomicity caveat for Q:** the RT block `0x86..0xBD` (U/I/P/PF) is delivered under a read-freeze and is guaranteed torn-free in a single burst-read. The Q registers (`0xD0..0xDB`) are **outside** that freeze window — if you read U/I/P + Q together in two separate transactions, U/I/P will be from a coherent snapshot but Q may belong to the *next* RT commit. For inter-quantity coherence at sub-period granularity, either read Q under a `CMD_LATCH_PERIOD` snapshot (`0xC2..0xC9` for ch1/ch2 averaged Q is not exposed — use the snapshot block in chapter 11 §4.12) or accept the up-to-one-window (~100 ms) skew between P and Q.
+
+---
 
 ### System
 
@@ -194,6 +226,8 @@ All values are float32 little-endian (4 bytes). READ supports auto-increment —
 > | Python | [`dev.read_all()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#one-shot-read-of-the-entire-rt-block) / [`dev.read_power(ch)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#methods-fully-equivalent-to-the-property-form) | read the whole RT block, or one value at a time |
 > | ESPHome | [`voltage`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#voltage) / [`power`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#power--power_1--power_6) | YAML sensors for the RT values |
 
+---
+
 ## Polling — single module
 
 ### Simplest 1 Hz polling loop
@@ -213,6 +247,8 @@ void loop() {
   delay(1000);
 }
 ```
+
+---
 
 ### Fixed-interval polling without DRDY
 
@@ -242,6 +278,8 @@ before v1.2.
 > | Python | [`dev.read_all()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#one-shot-read-of-the-entire-rt-block) | read the whole RT block in one call |
 > | ESPHome | [`update_interval:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#3-data-flow-and-timing) | the component reads the RT block in one burst on each update |
 
+---
+
 ## Multi-channel current (UI2 / UI3 / UI5 / UI7)
 
 On UI2/UI3 variants the master reads currents and powers for all channels straight from the real-time block. UI5 and UI7 (5 and 7 current channels) use the same registers for channels 0..2 and a **channel access window** for channels 3 and up — see [UI5 / UI7: channels 3 and up](#ui5--ui7-channels-3-and-up) below.
@@ -263,6 +301,8 @@ void read_ui3(uint8_t addr) {
 ```
 
 The current channels are **independent** — each has its own CT clamp with its own coefficient. A UI3 module can monitor, for example, the main feed, the water heater, and the lighting circuit simultaneously on the same phase. The sign of P can differ between channels: mains-input P > 0 (the house consumes from grid) while the solar-output channel shows P < 0 (the inverter exports while feeding the same phase that the house draws from).
+
+---
 
 ### UI5 / UI7: channels 3 and up
 
@@ -304,6 +344,8 @@ void read_ui7(uint8_t addr) {
 
 The window also works for channels 0..2, so you can use it for every channel if you prefer a single code path (one extra small write per value). Details and all field codes: [11_api_reference.md → Channel access window](api-reference.md#414-channel-access-window-0x32--0x3c0x3f).
 
+---
+
 ### All channels share one voltage U
 
 UI* variants contain a **single** voltage sensor — it measures the phase that powers the module. All channels' P values are computed against this **shared** U:
@@ -325,9 +367,13 @@ This assumes all CT clamps are on conductors of the **same phase**.
 > | Python | [`dev.channels`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#properties--handle-state) / [`dev.current[ch]`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#properties) | channel count after begin(); read a channel by index |
 > | ESPHome | [`current_N:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#21-single-fields) | declare one sensor slot per current channel |
 
+---
+
 ## Multi-module polling — three strategies
 
 ![The three strategies for polling several modules: round-robin, DRDY per module and wired-OR DRDY.](images/rt-multimodule-strategies.png)
+
+---
 
 ### Strategy 1 — round-robin polling (simple)
 
@@ -349,6 +395,8 @@ void loop() {
 
 **Pros**: minimal code, no extra GPIO required.
 **Cons**: master CPU continuously busy; no precise "new window" timestamp.
+
+---
 
 ### Strategy 2 — DRDY per module (precise, GPIO-heavy)
 
@@ -385,6 +433,8 @@ void loop() {
 
 **Pros**: precise synchronisation, minimal read latency.
 **Cons**: one GPIO + EXTI per module; does not scale beyond ~4 modules.
+
+---
 
 ### Strategy 3 — wired-OR DRDY (compact)
 
@@ -425,6 +475,8 @@ void loop() {
 **Pros**: one GPIO + EXTI for any number of modules; wire-economical.
 **Cons**: the master does not know which module asserted the line — it must read all of them. Slightly-offset module periods (each module has its own crystal) produce "double" triggers (one module ready, another a millisecond later). Harmless — just read all modules.
 
+---
+
 ### Trade-off table
 
 | Approach | Master GPIO | Latency | Complexity | Scalability |
@@ -432,6 +484,8 @@ void loop() {
 | Polling without DRDY | 0 | up to 1 window (~100 ms) | minimal | up to ~16 modules |
 | DRDY per module | N | < 1 ms | medium | up to ~4 modules |
 | Wired-OR DRDY | 1 | ~1–5 ms | low | up to ~10 modules |
+
+---
 
 ### Recommendation
 
@@ -447,6 +501,8 @@ void loop() {
 > | ESP-IDF | [`rbamp_fleet_scan()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#discovery--rbamp_fleet_scan) / [`rbamp_fleet_poll_all()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#polling--rbamp_fleet_poll_all) | discover the modules; read all of them in one pass |
 > | Python | [`fleet.scan(match_product=True)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#discovery--scan) / [`fleet.poll_all()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#polling--poll_all) | discover the modules; read all of them in one pass |
 > | ESPHome | [`rbamp:` (list)](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#1-component-block--rbamp) | one `rbamp:` block per module, each with its own `id` and `address` |
+
+---
 
 ## I-only variants (no voltage sensor)
 
@@ -468,6 +524,8 @@ I-only variants are intended for:
 
 - Masters that provide their own voltage source and compute P themselves (e.g. an ESP32 with a built-in ZMPT module plus an rbAmp-I3 for three loads)
 - Current-only applications: load presence detection, overcurrent protection, balancing of resistive heating elements
+
+---
 
 ## RT register quick reference
 
@@ -501,6 +559,8 @@ I-only variants are intended for:
 0xD4 Q1_reac (f32, ≥0)   — VAr
 0xD8 Q2_reac (f32, ≥0)   — VAr
 ```
+
+---
 
 ## Next
 

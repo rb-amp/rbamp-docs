@@ -3,6 +3,8 @@
 Everything a host (or a person with a bus adapter) can read to answer "is this module healthy, and
 if not — why".
 
+---
+
 ## STATUS (0x0006)
 
 | Bit | Name | Meaning |
@@ -15,6 +17,8 @@ if not — why".
 | 5 | NVM_FAULT | energy store FAULT/CORRUPT — energy not persisting |
 | 6 | — | service mode indicator |
 
+---
+
 ## Boot forensics
 
 - **RESET_CAUSE (0x00CC)** — why *this* boot happened, raw reset flags: bit0 PIN · bit1 POWER ·
@@ -23,6 +27,8 @@ if not — why".
 - **BOOT_COUNT (0x00CE)** — persisted boot counter (low 16 bits). A master that missed a restart
   sees it step; pair with EVENT_FLAGS bit 5 (RESET_OCCURRED).
 - **UPTIME (0x08A0)** — seconds since boot; decreasing between polls = restart.
+
+---
 
 ## Measurement-path counters
 
@@ -33,6 +39,8 @@ if not — why".
 | RING_DROP (0x0106) | 0 | sample loss under load — report it |
 | WIN_NSAMP / WIN_PERIOD (0x0110/0x0112) | stable; WIN_NSAMP ≈ 5 mains periods per window at 50 Hz / 6 at 60 Hz on image 0x7C+ (≈8 up to 0x7B) | unstable = mains lock problems |
 | CRC_ERR (0x0024) / FRAME_OK (0x0104) | 0 / 1 | measurement-link errors |
+
+---
 
 ## Storage and energy health
 
@@ -47,12 +55,16 @@ if not — why".
 | NVM_REJ_CNT / NVM_REJ_ADDR (0x0898/0x089A) | records rejected as not written by this device |
 | SEC_ROLLBACK (0x0BED) | reserved — rollback-anchor detection not implemented on current firmware (reads 0) |
 
+---
+
 ## Transport diagnostics
 
 - **LAST_EXCEPTION (0x0158 / holding 0x830A)** — the last Modbus exception with function code and
   address: the first thing to read when a SCADA integration "sometimes gets errors".
 - **I2C_DIAG (0x013A)** — bus health counters (address matches / bus errors / overruns).
 - **CMD_SEQ / CMD_STATE** — command flow sanity ([Commands](14_commands.md)).
+
+---
 
 ## Status LEDs
 
@@ -66,6 +78,8 @@ if not — why".
 | both | alternating ~5 Hz for 10 s | IDENTIFY command (0x0E) — locating the module |
 
 `CFG_LED` = 0 turns the LEDs off (IDENTIFY still blinks).
+
+---
 
 ## Health checklist for a supervising master
 

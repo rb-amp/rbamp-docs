@@ -3,6 +3,8 @@
 What the numbers in the map mean, when they update, and how energy is kept so that a power cut,
 reset or firmware update never silently loses or invents it.
 
+---
+
 ## Sampling and windows
 
 - All channels are measured **synchronously**; power is computed **per sample**
@@ -25,6 +27,8 @@ reset or firmware update never silently loses or invents it.
 - **Low currents:** below roughly 20 mA the published current value is additionally smoothed over a
   few seconds for a stable reading (power and energy are unaffected); the smoothing resets on a load
   step, so transitions stay fast.
+
+---
 
 ## Published quantities
 
@@ -49,6 +53,8 @@ scales — see [Conventions](README.md#conventions-used-throughout).
   2 = reverse · 3 = abnormal (no 120° pattern — e.g. two inputs wired to the same phase). A useful
   installation check before trusting per-phase readings.
 
+---
+
 ## Energy
 
 ### Per-window accumulators (realtime block)
@@ -57,6 +63,8 @@ scales — see [Conventions](README.md#conventions-used-throughout).
 (TOTALS do not carry them). The split is per window: each window's energy lands in the import or
 export bucket by the sign of that window's power, so a mixed flow splits correctly. These are
 diagnostic/derivation values — billing uses the cumulative counters.
+
+---
 
 ### Cumulative counters
 
@@ -110,12 +118,16 @@ floor(net µWh / 1000) by 1). Rules:
   (`NVM_REJ_CNT`). (Rollback-anchor detection — `SEC_ROLLBACK`, events 10/11 — is reserved, not
   implemented on current firmware.)
 
+---
+
 ### Snapshot banks (capability bit 8)
 
 The family contract also defines 8 independent snapshot banks (master-timed period snapshots with
 per-channel energy). **Current firmware does not provide them** (capability bit 8 = 0; the snapshot
 command answers "unknown command") — interval energy comes from cumulative-counter deltas as above.
 Gate any snapshot usage on the capability bit.
+
+---
 
 ## Time
 
@@ -129,6 +141,8 @@ Modules have **no battery clock** (capability bit 12 = 0). The master owns time:
 - Before the first time-set nothing is bucketed into history. The first set **opens** a period
   flagged PARTIAL + POWERUP; a later step/correction marks the affected period with the CLOCK flag.
   Time never moves backwards inside the history.
+
+---
 
 ## History records
 
@@ -159,6 +173,8 @@ Flags: bit0 PARTIAL (period not fully observed) · bit1 POWERUP (first after a b
 **Diff consecutive records only when the timestamp steps by exactly one period and neither record
 has LTA_JUMP** — the absolute Wh fields make gap-filling after a master outage exact.
 
+---
+
 ## Event log
 
 `HIST_PERIOD` = 2 selects the **event log ring** through the same query window. Every
@@ -180,6 +196,8 @@ Event types: 1 counter reset · 2 counter adopt · 3 late counter load (store re
 rejected (A = count / first address) · 10/11 reserved (rollback detection — not implemented).
 
 Capacity on current boards: 10 event records (`HIST_CAP` with `HIST_PERIOD` = 2).
+
+---
 
 ## Boot readiness
 

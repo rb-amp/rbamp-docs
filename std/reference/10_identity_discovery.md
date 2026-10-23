@@ -3,6 +3,8 @@
 How a host recognises an STD module, what it is, and what it can do. All registers in this chapter
 are read-only unless stated otherwise. I²C addresses; Modbus discovery mirrors are listed at the end.
 
+---
+
 ## Discovery sequence
 
 On first contact a master reads the identity block at `0x0000` and gates everything else on it:
@@ -18,6 +20,8 @@ On first contact a master reads the identity block at `0x0000` and gates everyth
 6. `UID` (0x00F4, 12 bytes) — the chip's unique id. Addresses can be changed; the UID cannot: use it
    as the device identity in any database.
 7. `FW_VER` (0x0114, u32) — the **running image version**, e.g. `0x00010077`.
+
+---
 
 ## Identity registers
 
@@ -41,6 +45,8 @@ On first contact a master reads the identity block at `0x0000` and gates everyth
 > marks the firmware line. The actual, monotonically increasing image version is **`FW_VER`
 > (0x0114, u32)** — use it for inventory and update decisions.
 
+---
+
 ### BOARD_ID (0x017C)
 
 `BOARD_ID` identifies the board the running image was built for:
@@ -49,6 +55,8 @@ Every release image carries the same word, covered by the image's
 integrity and signature checks; a firmware update with a different board id is refused
 (see [Firmware update](18_firmware_update.md)). **Compare `BOARD_ID` with the release file before
 sending an update.**
+
+---
 
 ## CAPABILITIES bitmap (0x0004)
 
@@ -78,6 +86,8 @@ example, current three-phase firmware reports THD = 0,
 MULTI_LATCH = 0 (no snapshot banks; energy is read from cumulative counters) and RTC = 0 (the master
 feeds the clock).
 
+---
+
 ## VARIANT codes (0x0009)
 
 | Code | Member | Channels | Status |
@@ -90,6 +100,8 @@ feeds the clock).
 
 Other codes in the enum space are reserved and must not be assumed absent-forever; a master decides
 by `N_VOLTAGE` / `N_CURRENT` + `CAPABILITIES`, not by hardcoding variant codes.
+
+---
 
 ## Modbus discovery mirror
 

@@ -6,6 +6,8 @@ This chapter is the SBC equivalent of [10_arduino_examples.md](arduino-examples.
 >
 > **For a more convenient, structured interface — use the `rbamp` Python package** (see the [client-libraries table in the README](README.md#client-libraries-high-level-api-per-platform)). The package wraps the register-level details behind a `RbAmp` class with named methods (`dev.voltage`, `dev.latch_period()`, `dev.read_period_snapshot()`, etc.), a per-channel `RbAmpEnergy` accumulator, an `asyncio` variant via `async for`, multi-module helpers, HA MQTT auto-discovery and systemd service templates in the bundled examples, and a `rbamp` CLI (`rbamp scan` / `read --watch` / `period`). The same package runs unmodified on MicroPython — see the README client-libraries table. Most projects should start from the package and fall back to the raw API only when needed.
 
+---
+
 ## How Linux differs from a microcontroller
 
 The single-biggest difference: **Linux already does a lot of the work** that the bare-metal examples wire up by hand. You don't initialise the I2C peripheral, you don't synchronise the wall clock, you don't fight for retained memory across reboots. All of that exists at the system level. Your Python script does measurement-and-business-logic and nothing else.
@@ -27,9 +29,13 @@ Concretely:
 
 If you've been writing firmware up to now, the mental shift is: **stop reaching for low-level APIs**. The OS already exposes everything as files or stdlib calls.
 
+---
+
 ## Linux I2C setup (one-time)
 
 Steps below are for **Raspberry Pi OS** with a Raspberry Pi 3/4/5; other SBCs (Orange Pi, BeagleBone, x86 + USB-I2C adapter) follow the same pattern with a different bus number.
+
+---
 
 ### 1. Enable the I2C controller in the kernel
 
@@ -66,6 +72,8 @@ Other SBCs:
 - **BeagleBone Black**: `config-pin P9.19 i2c` / `P9.20 i2c` for I2C-2; node is `/dev/i2c-2`.
 - **x86 / generic Linux**: a USB-I2C adapter (FT232H, MCP2221A, CH341) shows up as `/dev/i2c-N` after the right kernel module is loaded.
 
+---
+
 ### 2. Install kernel-level access tools (optional but useful)
 
 ```bash
@@ -85,6 +93,8 @@ i2cdetect -y 1                              # scan bus 1
 60: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
 70: -- -- -- -- -- -- -- --
 ```
+
+---
 
 ### 3. Userspace permissions
 
@@ -108,6 +118,8 @@ Verify:
 groups
 # -> ... i2c gpio ...
 ```
+
+---
 
 ### 4. Python packages
 
@@ -140,6 +152,8 @@ dependencies = [
 
 > **paho-mqtt 2.x note** — the 2.0 release made the callback-API version a required constructor argument. All examples in this chapter pass `mqtt.CallbackAPIVersion.VERSION1` to keep the simple legacy signatures (`on_connect(client, userdata, flags, rc, properties=None)`); if you prefer v2 (with `ReasonCode` + `ConnectFlags`), pass `CallbackAPIVersion.VERSION2` and update the callbacks accordingly.
 
+---
+
 ### 5. Time
 
 By default `systemd-timesyncd` keeps the system clock in UTC sync with NTP. Verify:
@@ -153,6 +167,8 @@ timedatectl
 ```
 
 In Python you then call `time.time()` (UTC seconds since epoch), `datetime.datetime.now(timezone.utc)`, `time.localtime()` — and that's the wall-clock you need. **No SNTP code in your script**.
+
+---
 
 ### 6. SBC quick-reference
 
@@ -990,6 +1006,8 @@ After the first publish Home Assistant auto-creates a `Mains rbAmp` device with 
 **Goal**: a long-running daemon that snapshots a period every minute, writes the result to SQLite, and publishes a state to MQTT. The process restarts cleanly after a reboot, picking up the accumulated total from the database.
 **Hardware**: any SBC + one rbAmp UI1.
 
+---
+
 ### Daemon (`rbamp_daemon.py`)
 
 ```python
@@ -1147,6 +1165,8 @@ def main() -> int:
 if __name__ == "__main__":
     sys.exit(main())
 ```
+
+---
 
 ### systemd unit (`/etc/systemd/system/rbamp.service`)
 
@@ -1334,6 +1354,8 @@ with SMBus(I2C_BUS) as bus:
 | 9 | medium | journald + SQLite | yes | — | — | — | SQLite | production daemon |
 | 10 | medium | Console | yes | — | — | optional | RAM + MQTT (day close) | TOU peak/off-peak |
 
+---
+
 ## Best practices
 
 - **Run scripts as a non-root user**, in the `i2c` and `gpio` groups. Avoid `sudo python ...` — it pollutes paths and breaks `pip --user` installs.
@@ -1346,6 +1368,8 @@ with SMBus(I2C_BUS) as bus:
 - **Persist totals to the filesystem** — JSON, SQLite, InfluxDB. Filesystem is the SBC equivalent of "RTC backup registers + NVM". Cheap and reliable.
 - **Wrap the main loop with signal handlers** (`SIGTERM`, `SIGINT`) so `systemctl stop` shuts the daemon down cleanly with a final state write.
 - **Log to stdout/stderr** in daemons — `journald` captures it automatically; you get rotation, filtering and `journalctl -u rbamp` for free.
+
+---
 
 ## What next
 

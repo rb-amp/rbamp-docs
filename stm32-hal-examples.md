@@ -6,6 +6,8 @@ This chapter is the STM32 equivalent of [10_arduino_examples.md](arduino-example
 >
 > Configure the I²C peripheral in CubeMX for **50 kHz** (recommended — see chapter 11 §2.2) and wrap register reads in a short retry.
 
+---
+
 ## Supported families and toolchain
 
 | Family | Validated | I2C peripheral | Notes |
@@ -17,6 +19,8 @@ This chapter is the STM32 equivalent of [10_arduino_examples.md](arduino-example
 | STM32H7 (Nucleo-H743) | ✓ | I2C1..4 | Built-in Ethernet PHY → MQTT directly via LwIP |
 
 Toolchain: **CubeMX 6.x** + **CubeIDE** or a Makefile project (`arm-none-eabi-gcc`). Examples assume HAL version that matches your CubeMX-generated project. The new I2C HAL signature (`HAL_I2C_Mem_Read/Write`) is supported by every modern family.
+
+---
 
 ## Networking note
 
@@ -36,6 +40,8 @@ extern HAL_StatusTypeDef Net_MqttPublish(const char *topic,
 ```
 
 Reference implementations for each network path are out of scope for this chapter; pick the one that fits your hardware and replace the stubs.
+
+---
 
 ## Project layout
 
@@ -63,6 +69,8 @@ CubeMX pin setup used in every example unless noted:
 - **EXTI**: PA0 = DRDY (falling edge, pull-up)
 - I2C speed: 100 kHz
 
+---
+
 ## Examples table of contents
 
 | # | Title | Difficulty | Output | MQTT | DRDY | Multi-module | Bidirectional | Use case |
@@ -83,6 +91,8 @@ CubeMX pin setup used in every example unless noted:
 ## Common helpers (`rbamp_io.h` / `rbamp_io.c`)
 
 Place these files in `Core/Inc` and `Core/Src` of your CubeMX project. To save space, the `#include "rbamp_io.h"` line is omitted in each example below.
+
+---
 
 ### `rbamp_io.h`
 
@@ -193,6 +203,8 @@ HAL_StatusTypeDef RbAmpIO_WaitReady(uint8_t addr, uint32_t timeout_ms);
 #endif /* RBAMP_IO_H */
 ```
 
+---
+
 ### `rbamp_io.c`
 
 ```c
@@ -279,6 +291,8 @@ HAL_StatusTypeDef RbAmpIO_WaitReady(uint8_t addr, uint32_t timeout_ms) {
     return HAL_TIMEOUT;
 }
 ```
+
+---
 
 ### `printf` redirection
 
@@ -1394,6 +1408,8 @@ while (1) {
 | 9 | medium | — | yes | — | — | — | RTC BKP regs | off-grid / outdoor logger |
 | 10 | medium | UART printf | yes | — | — | optional | RAM + MQTT | TOU peak/off-peak with SNTP |
 
+---
+
 ## Best practices
 
 - **Always check HAL return codes.** I2C transactions can transiently fail on long buses; production code should retry rather than ignore. Wrap retries around `RbAmpIO_*` calls if needed.
@@ -1406,6 +1422,8 @@ while (1) {
 - **For battery applications**, enter STOP or STANDBY between samples and arm the RTC wake-up timer. STANDBY restarts execution at the reset vector — use backup registers for state that must survive.
 - **Persist Wh totals to internal flash** if you need them to survive a full power loss (battery removal with no VBAT). RTC backup registers only survive when VBAT or VDD is present.
 - **`printf` float support** requires `-u _printf_float` in CubeIDE linker flags (newlib-nano build).
+
+---
 
 ## What next
 

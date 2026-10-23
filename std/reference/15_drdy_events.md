@@ -4,6 +4,8 @@ Hosts that poll on a timer waste bus transactions and still lag the data. The ST
 hardware **DRDY (data-ready) line** plus a register-side event model, shared across the rbAmp
 family.
 
+---
+
 ## DRDY line contract
 
 - **Electrical:** open-drain output, idle **released HIGH** (master provides the pull-up).
@@ -27,6 +29,8 @@ family.
 
 Firmware support: from image `0x00010075` (earlier images did not drive the family contract).
 
+---
+
 ## EVENT_FLAGS (0x00C0) / EVENT_MASK (0x00C1)
 
 `EVENT_FLAGS` bits are **sticky** and cleared by writing 1 to the bit (write-1-to-clear).
@@ -49,6 +53,8 @@ At boot `EVENT_FLAGS` = 0x20 (RESET_OCCURRED only) and both thresholds re-initia
 Thresholds: `THRESH_I` (0x00C4, µA) triggers when **any** current channel goes above it;
 `THRESH_P` (0x00C8, mW) compares the magnitude of the grand active power (direction-agnostic).
 `0xFFFFFFFF` disables (default). Both RAM.
+
+---
 
 ## Recommended host patterns
 

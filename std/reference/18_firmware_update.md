@@ -9,6 +9,8 @@ image **rolls back automatically** to the previous working one.
 per ~250 ms); the few measurement frames lost to each flash write are gap-compensated in the energy
 counters.
 
+---
+
 ## Release files
 
 A release ships **prepared bank images** — signed and encrypted on the build host. The transport
@@ -21,6 +23,8 @@ host **streams the file as-is**; it never builds, edits or re-wraps an image:
 - A **strictly lower** version than the running one is refused (anti-downgrade, status 4); the same
   version is accepted. Returning to an older version is possible only through the device's own
   rollback path, not by pushing an old image.
+
+---
 
 ## Registers
 
@@ -45,6 +49,8 @@ Commands (COMMAND 0x0060 / holding 0x8113): `0x10` BEGIN · `0x11` BLOCK_WR · `
 `0x13` ACTIVATE · `0x14` FW_ABORT. Over Modbus, BEGIN/COMMIT/ACTIVATE/FW_ABORT are UNLOCK-gated;
 BLOCK_WR is not. After every command poll `CMD_STATE` (0x006A / 0x8116) until BUSY = 0, then read
 `OTA_STATUS` / `ERROR`.
+
+---
 
 ## Sequence
 
@@ -84,6 +90,8 @@ BLOCK_WR is not. After every command poll `CMD_STATE` (0x006A / 0x8116) until BU
    old `FW_VER` still running = it rolled back.
    **FW_ABORT (0x14)** instead of ACTIVATE drops the armed image and closes the session.
 
+---
+
 ## Failure diagnostics (OTA_DIAG 0x0180)
 
 Byte 0 = reason · byte 1 = internal status · then offset, page/length and check values.
@@ -101,6 +109,8 @@ Byte 0 = reason · byte 1 = internal status · then offset, page/length and chec
 All authentication failures report as `OTA_STATUS` 3 with the reason here — there are no separate
 status values to handle. Over Modbus only the reason and internal status are mirrored (holding
 0x8314); the offset/page/check details of `OTA_DIAG` are readable on I²C.
+
+---
 
 ## Safety properties (what the host may rely on)
 

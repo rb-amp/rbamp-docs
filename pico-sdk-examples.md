@@ -6,6 +6,8 @@ This chapter is the Raspberry Pi Pico equivalent of [10_arduino_examples.md](ard
 >
 > **No dedicated Pico SDK library is shipped** — the client libraries cover Arduino (incl. arduino-pico for RP2040 via the Wire API), MicroPython (runs on the RP2040 port), ESP-IDF and CPython on Linux SBC; see the [client-libraries table in the README](README.md#client-libraries-high-level-api-per-platform). For native Pico SDK firmware in C, follow the raw-API recipes below. If you want a higher-level API on RP2040, the easiest path is the arduino-pico core + the rbAmp Arduino library.
 
+---
+
 ## Supported targets and toolchain
 
 | Target | Validated | Wi-Fi | Notes |
@@ -16,6 +18,8 @@ This chapter is the Raspberry Pi Pico equivalent of [10_arduino_examples.md](ard
 | Raspberry Pi Pico 2 W (RP2350 + CYW43) | ✓ | yes | All examples |
 
 Toolchain: **`pico-sdk` 1.5.1+** (or **2.x** for RP2350), CMake 3.13+, `arm-none-eabi-gcc` 12+, the official VS Code "Raspberry Pi Pico" extension is recommended.
+
+---
 
 ## Project layout
 
@@ -81,6 +85,8 @@ make -j
 # Drag-and-drop the .uf2 onto the RPI-RP2 / RP2350 USB mass-storage device.
 ```
 
+---
+
 ## Examples table of contents
 
 | # | Title | Difficulty | Output | MQTT | DRDY | Multi-module | Bidirectional | Use case |
@@ -103,6 +109,8 @@ make -j
 ## Common helpers (`rbamp_io.h` / `rbamp_io.c`)
 
 Place these in your project's `src/` directory. To save space, the `#include "rbamp_io.h"` line is omitted in each example below.
+
+---
 
 ### `rbamp_io.h`
 
@@ -209,6 +217,8 @@ int rbamp_io_wait_ready(uint8_t addr, uint32_t timeout_ms);
 }
 #endif
 ```
+
+---
 
 ### `rbamp_io.c`
 
@@ -1495,6 +1505,8 @@ int main(void) {
 | 9 | medium | — | yes | — | — | — | NOINIT RAM | off-grid / outdoor logger |
 | 10 | medium | USB stdio | yes | — | — | optional | RAM + MQTT | TOU peak/off-peak with SNTP |
 
+---
+
 ## Best practices
 
 - **Always check return codes from `rbamp_io_*` calls.** I2C transactions can fail on long buses; production code should retry rather than ignore.
@@ -1507,6 +1519,8 @@ int main(void) {
 - **For battery applications on Pico W**, deinit CYW43 (`cyw43_arch_deinit()`) before sleep to drop several mA. RP2040 dormant sleep is ~180 µA, RP2350 even lower.
 - **Persist Wh totals to internal flash** with `flash_range_program()` if you need them to survive a full power loss. NOINIT RAM survives dormant sleep but not power cycling.
 - **`printf` float support** is enabled by default in `pico_stdlib`. For RP2040, the SDK's `pico_float` implementation is used; for RP2350, hardware FPU support is on by default.
+
+---
 
 ## What next
 

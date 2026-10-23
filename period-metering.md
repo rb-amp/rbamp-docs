@@ -6,9 +6,13 @@ This is the **production-grade** way to extract energy data. The alternative —
 
 **BASIC and STD periods.** BASIC keeps **one** period snapshot per channel: on the master's command the module freezes the average and peak power and the period length (next to the live 100 ms window, which is not a period), and the host integrates energy. STANDARD (STD) keeps the energy **on the module**: cumulative counters (import/export, active and reactive) that survive power loss, plus time-stamped **15-minute and hourly records** (the master sets the clock). The STD family contract also defines 8 independent snapshot banks; current firmware does not implement them, and the interval energy comes from differences of the counters. The rest of this chapter describes the BASIC period snapshot; STD is described in the [STD technical reference](std/reference/16_measurement_energy.md).
 
+---
+
 ## Why a period snapshot is needed
 
 ![Why a period snapshot is used on top of the measurement window.](images/window-period-latch-concept.png)
+
+---
 
 ### A single time base, owned by the master
 
@@ -17,6 +21,8 @@ In a multi-module system the time base must live on the master. The chip therefo
 - The chip exposes a **time-independent statistic** — the average P over the period.
 - The master multiplies it by its **own** wall-clock dt.
 - All modules share the **same** time reference → no drift accumulates in the system-wide energy total.
+
+---
 
 ### The formula
 
@@ -29,9 +35,13 @@ Where:
 - `avg_P_W` — the value of `PERIOD_AVG_P_W`, read after `CMD_LATCH_PERIOD`.
 - `master_dt_seconds` — the seconds elapsed between two successive snapshots, measured by the master.
 
+---
+
 ## Atomic period — concept
 
 ![How a single snapshot command freezes the period snapshot and opens the next period.](images/period-atomic-latch.png)
+
+---
 
 ### What the command does
 
@@ -48,9 +58,13 @@ These three steps are indivisible — no interrupt can interleave between them. 
 - **Atomicity**: every per-window P sample belongs to **exactly one** snapshot — either the previous one or the next one — never duplicated, never lost.
 - **No gap**: the new period begins at the same instant the previous one ended — there is no blind interval.
 
+---
+
 ### Where the snapshot lives
 
 After a snapshot, the period-snapshot registers (`0xBE..0xCD`, plus `0xDC..0xDF` for ch0 `avg_p`, plus `0xE0..0xE3` for `MAX_P`, plus `0xEC..0xEF` for the diagnostic `PERIOD_LATCH_MS`) return the just-closed period. Note that this range is not contiguous — `0xD0..0xDB` holds the Q block (live RT, not period snapshot) and `0xE4..0xEB` is reserved/factory. See chapter 11 §4.11–4.13 for the exact layout. The live accumulator already starts counting the next period; those snapshot registers update only on the next snapshot.
+
+---
 
 ### One write — closes and opens
 
@@ -69,6 +83,8 @@ The master needs **one write per measurement**, not two (as in a naive "start �
 > | ESP-IDF | [`rbamp_latch_period()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_latch_period) / [`rbamp_is_period_valid()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_is_period_valid) | send the snapshot command; check the validity flag |
 > | Python | [`dev.latch_period()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devlatch_period---none) / [`dev.is_period_valid()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devis_period_valid---bool) | send the snapshot command; check the validity flag |
 > | ESPHome | [`update_interval:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#update_interval) | each update closes the period; the snapshot command and settle are handled by the component |
+
+---
 
 ## Continuous polling cycle (recommended)
 
@@ -100,6 +116,8 @@ E2_Wh = avg_p × (t2 − t1) / 3600
 ...and so on. t1 is both the end of period 1 and the start of period 2.
 ```
 
+---
+
 ### The first snapshot is a primer (discard)
 
 The first snapshot after boot captures whatever the accumulator collected from power-on until the master's first call — an undefined-length window unsuitable for billing. **Discard its result**. From the second snapshot onward, data is clean and usable.
@@ -112,6 +130,8 @@ The first snapshot after boot captures whatever the accumulator collected from p
 > | ESP-IDF | [`rbamp_read_period_snapshot()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_period_snapshot) / [`rbamp_begin()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_begin) | snapshot, settle, validity check and read in one call; begin discards the first snapshot |
 > | Python | [`dev.read_period_snapshot(settle_ms=50, skip_latch=False)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_period_snapshotsettle_ms50-skip_latchfalse---rbampperiodsnapshot) / [`dev.begin()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devbegin) | snapshot, settle, validity check and read in one call; begin() discards the first snapshot |
 > | ESPHome | [`update_interval:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#update_interval) / [`latch_interval:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#latch_interval) | update cadence of the snapshot cycle; optional separate snapshot cadence |
+
+---
 
 ## Period snapshot registers
 
@@ -127,6 +147,8 @@ The first snapshot after boot captures whatever the accumulator collected from p
 | `0xE0..0xE3` | `PERIOD_MAX_P_W` | float32 LE | optional | Peak P_real during the period (for demand tariffs) |
 | `0xEC..0xEF` | `PERIOD_LATCH_MS` | u32 LE | diagnostic only | Chip's view of dt between snapshots — can read short under load; use `PERIOD_COMMIT_COUNT` × the commit length for the module-side window length |
 | `0xBE..0xC1` | `PERIOD_COMMIT_COUNT` | u32 LE | window measure | Number of RT commits in the closed period. One commit = **0.1 s** on current firmware; 0.2 s on older images — `count × 0.1 s` (or `× 0.2 s`) is the module's own measure of the window length. See the clock-drift section for how to tell which applies |
+
+---
 
 ### STANDARD (STD) additions for bidirectional accounting
 
@@ -144,6 +166,8 @@ The first snapshot after boot captures whatever the accumulator collected from p
 > | ESP-IDF | [`rbamp_read_period_avg_power()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_period_avg_power) / [`rbamp_read_period_max_power()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_period_max_power) | average and peak power of the closed period |
 > | Python | [`dev.read_period_avg_power(ch=0)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_period_avg_powerch0---float) / [`dev.read_period_max_power()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_period_max_power---float) | average and peak power of the closed period |
 > | ESPHome | [`update_interval:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#update_interval) | the component reads the period averages on each update |
+
+---
 
 ## Master-side algorithm
 
@@ -203,6 +227,8 @@ void loop() {
 }
 ```
 
+---
+
 ### What is essential in this code
 
 1. **First snapshot is a primer** — its result is discarded.
@@ -219,11 +245,15 @@ void loop() {
 > | Python | [`dev.energy.wh(ch)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devenergy--rbampenergy-instance) / [`dev.energy.reset(ch)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devenergy--rbampenergy-instance) | running Wh total kept on the host; zero the accumulator |
 > | ESPHome | [`energy`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#energy--energy_1--energy_6) | energy sensor integrated by the component |
 
+---
+
 ## Bidirectional accounting (STANDARD (STD))
 
 > This section applies to **the STANDARD (STD) product tier** only. On a BASIC module the `PERIOD_AVG_P_NEG_W` registers are not allocated (reads return `0x00`), and `PERIOD_AVG_P_W` is always ≥ 0 (negative samples are dropped from the accumulator).
 
 ![How energy is accounted on BASIC versus STANDARD (STD) modules.](images/energy-basic-vs-std.png)
+
+---
 
 ### What bidirectional accounting means
 
@@ -234,11 +264,15 @@ The chip integrates two separate accumulators per period:
 
 The sum of both gives the total energy that passed through the meter in absolute terms; the difference is the net consumption (what a mechanical disc meter would show).
 
+---
+
 ### Applications
 
 - Homes with solar panels: consumption and export are billed under different tariffs (feed-in tariff)
 - Systems with battery storage: tracking charge/discharge cycles
 - Wind turbines, regenerative loads, V2G EV chargers
+
+---
 
 ### Where bidirectional metering lives
 
@@ -272,6 +306,8 @@ void loop() {
 }
 ```
 
+---
+
 ### What is not available on BASIC
 
 If you own a BASIC-tier module and need bidirectional accounting, you have two options:
@@ -288,6 +324,8 @@ If you own a BASIC-tier module and need bidirectional accounting, you have two o
 > | Python | [`dev.read_std_energy()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_std_energy---rbampstdenergy) / [`dev.read_power(ch)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#methods-fully-equivalent-to-the-property-form) | STD: on-device import/export counters; BASIC: signed power, split on the host |
 > | ESPHome | [`bidirectional:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#bidirectional) / [`energy_exported`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#energy_exported--energy_exported_1--energy_exported_2) | enable export energy; export sensors (BASIC publishes 0) |
 
+---
+
 ## I-only variants — period metering returns zero
 
 On I1/I2/I3 (and higher I*-only variants) without a voltage sensor:
@@ -300,6 +338,8 @@ For I-only variants the on-chip period metering **does not deliver an energy rea
 
 - Use its own voltage sensor and integrate `I_rms × U_master × cos(φ)_master` (more complex; requires phase synchronisation), or
 - Use the I-only module only for current-presence monitoring, and pair it with a UI* module or an external meter for energy.
+
+---
 
 ## Event-driven vs periodic polling
 
@@ -316,6 +356,8 @@ setInterval(60 * 60 * 1000, [](){
 ```
 
 Suitable for classical billing (1-min, 15-min, 1-hour).
+
+---
 
 ### Event-driven
 
@@ -337,6 +379,8 @@ void on_tariff_change() {
 }
 ```
 
+---
+
 ## Restarting the period
 
 To discard the live accumulator and start fresh, issue an extra snapshot and ignore its result:
@@ -349,6 +393,8 @@ void restart_period() {
 ```
 
 After this, resume a normal snapshot cycle from scratch.
+
+---
 
 ## Detecting a module restart
 
@@ -384,9 +430,13 @@ and re-initialise any RAM-only configuration — see chapter 11 (`RESET_OCCURRED
 > | Python | — | not exposed — no dedicated call for restart detection on BASIC |
 > | ESPHome | — | not exposed — no restart-detection option in YAML |
 
+---
+
 ## Multi-module — simultaneous snapshot
 
 If the master wants **synchronous** snapshots from all modules (for an instantaneous house energy balance), there are two approaches.
+
+---
 
 ### Approach 1 — sequential snapshot (simple)
 
@@ -423,6 +473,8 @@ void loop() {
 ```
 
 **Downside**: snapshot instants differ by a few milliseconds. For a 60-second period this yields < 0.1 % error — negligible.
+
+---
 
 ### Approach 2 — broadcast snapshot via general call (precise, opt-in)
 
@@ -500,6 +552,8 @@ void loop() {
 > | Python | [`fleet.gc_latch(group, tick, settle_ms)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) / [`dev.read_period_snapshot(skip_latch=True)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/04_hardware.md#period-sync--synchronizing-the-periods) | broadcast snapshot frame to the fleet; read each module after an external snapshot |
 > | ESPHome | [`fleet_gc_enable:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#fleet_gc_enable-v13-new) / [`group_id:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#group_id-v13-new) | YAML options for General Call opt-in and group id |
 
+---
+
 ## Choosing the period length
 
 | Application | Recommended dt |
@@ -512,6 +566,8 @@ void loop() {
 
 > Periods longer than 1 hour are allowed and nothing overflows — the accumulator keeps averaging for as long as no snapshot arrives. What degrades over a very long window is **precision** of the average: worst case ≈ 0.2 % at 1 hour, 1.3 % at 6 hours, 5 % at 24 hours. Keep single periods at ≤ 1 hour for that reason, and accumulate longer totals on the master.
 
+---
+
 ## `PERIOD_MAX_P_W` — peak demand
 
 Register `0xE0` reports the **maximum power** observed in any RT window inside the period. Uses:
@@ -520,11 +576,15 @@ Register `0xE0` reports the **maximum power** observed in any RT window inside t
 - **Inrush detection**: motor starts produce a 5–10× nominal spike — `max_P >> avg_P` flags the event.
 - **Sanity check**: if `max_P` greatly exceeds `avg_P`, the load is bursty — normal for many household scenarios, but a flag worth investigating if the load is expected to be steady.
 
+---
+
 ## Atomicity is guaranteed
 
 `CMD_LATCH_PERIOD` runs with interrupts disabled during the snapshot copy (a few microseconds). The master can never read a half-updated snapshot — even if the master reads bytes immediately after the write, the firmware finishes updating the block before the next I2C transaction completes (at least 10+ µs elapse between write and read).
 
 The same atomicity ties **the accumulator reset to the snapshot copy** — every P sample is in exactly one snapshot (either the previous period or the next one), never both, never neither.
+
+---
 
 ## What the master must NOT do
 
@@ -532,6 +592,8 @@ The same atomicity ties **the accumulator reset to the snapshot copy** — every
 - ❌ **Do not infer direction from `I_rms`** — RMS is always ≥ 0. Direction lives in the sign of `P_real`.
 - ❌ **Do not use `PERIOD_LATCH_MS` for Wh** — that register is diagnostic and may drift with the chip clock. `master_dt` is authoritative.
 - ❌ **Do not snapshot faster than the RT-commit cycle.** The chip needs at least one mains period (~20 ms at 50 Hz) of accumulation plus settling — minimum **50 ms** between `CMD_LATCH_PERIOD` issues. Taking snapshots faster yields an empty snapshot (`PERIOD_VALID = 0`). 200 ms is a safe practical floor for steady-state polling; see chapter 11 §6.0 / §6.4.
+
+---
 
 ## Clock-drift diagnostics
 
@@ -555,6 +617,8 @@ When you want the **module's own measure of the closed window length**, use
 not read short under load the way `PERIOD_LATCH_MS` can. One commit is **0.1 s on current firmware**;
 images older than v1.2 used 0.2 s. No version table is needed to tell them apart: the ratio
 `PERIOD_LATCH_MS / PERIOD_COMMIT_COUNT` comes out close to 100 or close to 200.
+
+---
 
 ## Next
 

@@ -8,6 +8,8 @@ From the integrator's point of view, rbAmp behaves like a standard I2C slave: ap
 
 ![Block diagram of an rbAmp module connected to a master over I2C, from the mains-side sensors to the registers the master reads.](images/overview-architecture.png)
 
+---
+
 ## What it measures
 
 The two module lines report the same quantities in different formats. BASIC returns floating-point values in base units; STANDARD (STD) returns scaled integers and adds more quantities, on-module energy counters and time-stamped 15-minute and hourly records.
@@ -31,6 +33,8 @@ The two module lines report the same quantities in different formats. BASIC retu
 | Energy | not kept on the module — the host (library) integrates it | on the module: import/export in Wh / mWh / µWh, reactive in varh / µvarh; kept when the power is off |
 
 Accuracy is not part of this table: for BASIC with an SCT-013 sensor see the [SCT-013 characteristics table](#current-channel-accuracy-with-sct-013-sensors) below; specifications of individual modules are given with the model descriptions. The BASIC register map is in [03_realtime_polling.md](realtime-polling.md), [04_period_metering.md](period-metering.md) and [11_api_reference.md](api-reference.md); the STD register map is in the [STD technical reference](std/reference/README.md).
+
+---
 
 ### Current-channel accuracy with SCT-013 sensors
 
@@ -57,6 +61,8 @@ Accuracy is not part of this table: for BASIC with an SCT-013 sensor see the [SC
 - Clipping is a property of the SCT-013 sensor (its output level at rated current); stay below the rating for reliable readings.
 - Changing the sensor model is writing the model code to the module — no recalibration step.
 
+---
+
 ## Applications
 
 - **Tariff metering** — energy billing in 1-min, 15-min, 1-hour, daily, monthly, or yearly intervals
@@ -64,6 +70,8 @@ Accuracy is not part of this table: for BASIC with an SCT-013 sensor see the [SC
 - **Load control** — feedback signal for power-regulating devices (water heaters, resistive loads, inverters)
 - **Energy balancing** — separate accounting of consumption and generation in homes with solar
 - **Grid quality monitoring** — both on the consumer side and on the utility side
+
+---
 
 ## Module variants
 
@@ -83,11 +91,15 @@ Current BASIC product line: **SCT-UI1, SCT-UI2, SCT-UI3, SCT-UI5, SCT-UI7, SCT-I
 
 > On I-only variants, active power is not computed (`P_real = 0`), and `PERIOD_AVG_P_W` returns 0. The master must either provide its own voltage source for power calculation, or use the current data alone.
 
+---
+
 ## Product tiers
 
 rbAmp is offered in two product tiers. Each tier is a complete combination of **hardware revision and firmware** — not a firmware-only flag. Moving between tiers requires a physical SKU change, not a firmware update.
 
 ![The BASIC and STANDARD (STD) rbAmp module lines side by side.](images/module-lines.png)
+
+---
 
 ### BASIC — entry-level product line
 
@@ -95,6 +107,8 @@ rbAmp is offered in two product tiers. Each tier is a complete combination of **
 - **Firmware**: unidirectional consumption metering. The per-period accumulator clamps each per-window active-power sample to zero before integrating: only positive (consumed) energy is counted, mirroring a classical mechanical disc meter that only spins forward.
 - **`PERIOD_AVG_P_W` is always ≥ 0**; reverse-flow events are dropped from the period accumulator.
 - **Use cases**: households without on-site generation; sub-metering of pure consumers (heaters, motors, appliances).
+
+---
 
 ### STANDARD — bidirectional product line
 
@@ -107,6 +121,8 @@ rbAmp is offered in two product tiers. Each tier is a complete combination of **
 - **Firmware**: bidirectional metering with signed on-device energy. Bidirectional products belong to the **rbAmp STD line**, which uses a different, 16-bit register map — see the STD reference documentation.
 - **Use cases**: industrial and commercial installations; homes with rooftop solar, wind generators, battery storage, regenerative loads, V2G EV chargers.
 
+---
+
 ### Where the tier shows up in this documentation
 
 Throughout the chapters, features that depend on the tier are explicitly marked, for example:
@@ -114,6 +130,8 @@ Throughout the chapters, features that depend on the tier are explicitly marked,
 > **STANDARD (STD) only** — on a BASIC module this register is not available.
 
 The BASIC 8-bit register map (`0x00..0xCF`) is what this documentation describes. STANDARD (STD) modules use a **different, 16-bit register map** — see the STD reference documentation.
+
+---
 
 ## Key features
 
@@ -126,11 +144,15 @@ The BASIC 8-bit register map (`0x00..0xCF`) is what this documentation describes
 - **Calibration in flash**: factory calibration (gains, noise floor, phase compensation) is stored on-chip; **no user calibration is required** — the master only writes `SENSOR_CLASS` and `CT_MODEL` per channel.
 - **Auto-configuration**: the module starts measuring immediately after power-on (~250 ms to the first valid result, ~700 ms additional for first persistence write).
 
+---
+
 ## What rbAmp does not do
 
 - Does not integrate energy (Wh) internally — energy accumulation is the master's responsibility (see [04_period_metering.md](period-metering.md))
 - Does not drive loads, contain automation logic, or run programmable rules
 - Has no built-in display
+
+---
 
 ## Next
 
