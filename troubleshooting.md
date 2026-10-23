@@ -137,13 +137,13 @@ void i2c_scan() {
   - On **BASIC tier**: check the RT sign of `P_real`. If `P` is occasionally negative (a solar inverter is feeding back, for example), negative samples are excluded from `PERIOD_AVG_P_W`, dragging the average down. See [04_period_metering.md → BASIC tier](period-metering.md).
   - On **STANDARD (STD)**: compute `total_avg = avg_P_consume + avg_P_export` (export taken as magnitude) to see the channel's true activity.
 
-### 9. `PERIOD_VALID = 0` after a latch
+### 9. `PERIOD_VALID = 0` after a snapshot
 
 **Symptom**: the master issues `CMD_LATCH_PERIOD`, reads `0x07`, gets 0. Snapshot is not fresh.
 
 **Causes**:
 
-- ❌ **Latches too close together** — no RT window (~100 ms on current firmware; 200 ms before v1.2) completed between two latches. The accumulator is empty, the snapshot is discarded.
+- ❌ **Snapshots too close together** — no RT window (~100 ms on current firmware; 200 ms before v1.2) completed between two snapshots. The accumulator is empty, the snapshot is discarded.
 - ❌ **Race with an RT commit** — rare: the master wrote the command at the exact instant the firmware was committing the live accumulator. Possible on very fast masters.
 
 **Solution** — the retry pattern (see [04_period_metering.md → Basic cycle](period-metering.md)):
@@ -184,7 +184,7 @@ See [02_initialization.md → Recommended workflow](initialization.md).
 **This is normal.** Solutions:
 
 - Ignore "double" triggers: after the first trigger, read all modules; suppress further triggers within ~10 ms.
-- Use broadcast latch (see [04_period_metering.md → Approach 2](period-metering.md)) for precise synchronisation — but only for period snapshots, not for RT.
+- Use broadcast snapshot (see [04_period_metering.md → Approach 2](period-metering.md)) for precise synchronisation — but only for period snapshots, not for RT.
 - Move to DRDY-per-module — each module on its own GPIO.
 
 ### 12. I2C bus busy when DRDY fires

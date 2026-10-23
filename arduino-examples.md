@@ -160,7 +160,7 @@ U=229.9V  I=0.262A  P=+60.1W  PF=+0.998
 #define OLED_H 64
 Adafruit_SSD1306 oled(OLED_W, OLED_H, &Wire);
 
-uint32_t t_prev_ms = 0;                        // wall-clock at last latch
+uint32_t t_prev_ms = 0;                        // wall-clock at last snapshot
 double total_wh = 0;                           // accumulated energy, Wh
 
 void setup() {
@@ -169,7 +169,7 @@ void setup() {
   delay(300);
   oled.begin(SSD1306_SWITCHCAPVCC, 0x3C);
 
-  // Wait DATA_VALID, then issue a primer latch (its result is discarded).
+  // Wait DATA_VALID, then issue a primer snapshot (its result is discarded).
   while ((rb_read_u8(RB_ADDR, 0xCE) & 0x01) == 0) delay(50);
   rb_write_u8(RB_ADDR, 0x01, 0x27);            // CMD_LATCH_PERIOD — primer
   t_prev_ms = millis();
@@ -178,7 +178,7 @@ void setup() {
 void loop() {
   delay(60000);                                // 60-second period
 
-  // 1) Final latch — closes the period [t_prev_ms .. now].
+  // 1) Final snapshot — closes the period [t_prev_ms .. now].
   rb_write_u8(RB_ADDR, 0x01, 0x27);
   uint32_t t_now_ms = millis();
   delay(50);                                   // let firmware finalise the snapshot
@@ -289,7 +289,7 @@ double total_wh[3] = {0, 0, 0};                 // per-channel accumulated energ
 /**
  * @brief  Publish a single channel's data to MQTT.
  * @param  ch_name   Channel name (used in the topic).
- * @param  avg_p     Time-averaged power over the latched period, W.
+ * @param  avg_p     Time-averaged power over the closed period, W.
  * @param  e_wh      Accumulated channel energy, Wh.
  */
 void mqtt_publish(const char* ch_name, float avg_p, double e_wh) {
@@ -318,7 +318,7 @@ void setup() {
   Wire.begin();
   delay(300);
   while ((rb_read_u8(RB_ADDR, 0xCE) & 0x01) == 0) delay(50);
-  rb_write_u8(RB_ADDR, 0x01, 0x27);             // primer latch
+  rb_write_u8(RB_ADDR, 0x01, 0x27);             // primer snapshot
   t_prev_ms = millis();
 }
 
@@ -344,7 +344,7 @@ void loop() {
   }
   last_period_ms = millis();
 
-  // Latch + read three per-channel period averages.
+  // Snapshot + read three per-channel period averages.
   rb_write_u8(RB_ADDR, 0x01, 0x27);
   uint32_t t_now = millis();
   delay(50);
@@ -504,7 +504,7 @@ void setup() {
 
   static uint16_t gc_tick = 0;
   if (!rb_broadcast_latch(gc_tick++)) {
-    // GC NACK — no module has GC enabled. Fall back to per-module latch.
+    // GC NACK — no module has GC enabled. Fall back to per-module snapshot.
     for (uint8_t addr : {ADDR_MAINS, ADDR_SOLAR, ADDR_LOADS}) {
       rb_write_u8(addr, 0x01, 0x27);
     }
@@ -516,10 +516,10 @@ void setup() {
 void loop() {
   delay(60000);
 
-  // Synchronous latch — all three modules snapshot at the same instant.
+  // Synchronous snapshot — all three modules snapshot at the same instant.
   static uint16_t gc_tick = 1;
   if (!rb_broadcast_latch(gc_tick++)) {
-    // GC NACK — fall back to per-module sequential latch (skew ~1 ms/module).
+    // GC NACK — fall back to per-module sequential snapshot (skew ~1 ms/module).
     for (uint8_t addr : {ADDR_MAINS, ADDR_SOLAR, ADDR_LOADS}) {
       rb_write_u8(addr, 0x01, 0x27);
     }
@@ -829,7 +829,7 @@ void setup() {
   delay(300);
   while ((rb_read_u8(RB_ADDR, 0xCE) & 0x01) == 0) delay(50);
 
-  rb_write_u8(RB_ADDR, 0x01, 0x27);             // primer latch
+  rb_write_u8(RB_ADDR, 0x01, 0x27);             // primer snapshot
   t_prev_ms = millis();
 
   // 4) First MQTT attempt — failure is non-fatal, loop() will retry.
@@ -856,7 +856,7 @@ void loop() {
   }
   last_period = millis();
 
-  // ----- Latch + read period snapshot -----
+  // ----- Snapshot + read period snapshot -----
   rb_write_u8(RB_ADDR, 0x01, 0x27);
   uint32_t t_now = millis();
   delay(50);
@@ -918,7 +918,7 @@ void loop() {
 
 ## Example 9 — Battery-powered remote logger with deep sleep
 
-**Goal**: an outdoor / off-grid energy logger that wakes every 10 minutes, latches a period, publishes the data, and goes back to deep sleep. Average current consumption a couple of mA, so a single Li-ion cell lasts many months.
+**Goal**: an outdoor / off-grid energy logger that wakes every 10 minutes, snapshots a period, publishes the data, and goes back to deep sleep. Average current consumption a couple of mA, so a single Li-ion cell lasts many months.
 **Hardware**: ESP32 (or ESP32-S3) + one rbAmp UI1 + a small Li-ion battery + WiFi. The rbAmp is also kept under a low-quiescent LDO so its ~15 mA consumption only occurs during wake.
 **Accounting**: unidirectional. Energy is preserved across deep-sleep cycles via RTC slow-memory.
 
@@ -1022,14 +1022,14 @@ void setup() {
   Wire.setClock(50000);
   while ((rb_read_u8(RB_ADDR, 0xCE) & 0x01) == 0) delay(50);
 
-  // First wake-up after a cold boot: do a primer latch (its result is discarded).
+  // First wake-up after a cold boot: do a primer snapshot (its result is discarded).
   if (!rtc_primer_done) {
     rb_write_u8(RB_ADDR, 0x01, 0x27);
     rtc_t_prev_us = esp_timer_get_time();
     rtc_primer_done = true;
 
     // Go straight back to sleep — we need at least one full period to elapse
-    // before the next latch can produce a meaningful sample.
+    // before the next snapshot can produce a meaningful sample.
     Serial.println("Primer done — sleeping until first real period");
     rbamp_power(false);
     esp_sleep_enable_timer_wakeup(SLEEP_US);
@@ -1050,7 +1050,7 @@ void setup() {
   }
 
   float avg_p = rb_read_float_le(RB_ADDR, 0xDC);
-  // dt is wall-clock between latches; we measure it on the ESP32's RTC.
+  // dt is wall-clock between snapshots; we measure it on the ESP32's RTC.
   // SLEEP_US is the intent; esp_timer accounts for actual sleep + on-time.
   float dt_s = (float)(t_now_us - rtc_t_prev_us) / 1000000.0f;
   rtc_t_prev_us = t_now_us;
@@ -1094,14 +1094,14 @@ void loop() {
 **Notes**:
 
 - `rtc_total_wh` survives deep sleep via `RTC_DATA_ATTR`. It is **lost on full power loss** (battery removed). For ultimate persistence, periodically commit the value to MQTT or to NVS.
-- The primer-latch step is gated by `rtc_primer_done`, so the first sample after a cold boot is correctly discarded.
+- The primer-snapshot step is gated by `rtc_primer_done`, so the first sample after a cold boot is correctly discarded.
 - `wifi_connect()` has a hard timeout. If WiFi is unavailable, the sketch goes back to sleep — the energy total keeps accumulating internally and is published on the next successful connection.
 
 ---
 
 ## Example 10 — Time-of-use (TOU) tariff with NTP wall-clock
 
-**Goal**: bill energy under a time-of-use schedule (different rates during peak and off-peak hours). The ESP32 keeps a real wall-clock via NTP, splits each latched period into the right tariff bucket, resets daily totals at midnight, and publishes MQTT payloads with ISO timestamps.
+**Goal**: bill energy under a time-of-use schedule (different rates during peak and off-peak hours). The ESP32 keeps a real wall-clock via NTP, splits each closed period into the right tariff bucket, resets daily totals at midnight, and publishes MQTT payloads with ISO timestamps.
 **Hardware**: ESP32 + one rbAmp UI1 + WiFi.
 **Accounting**: unidirectional. The same bucket logic works for STANDARD (STD) tiers — just feed both the consumption and the export accumulators through it.
 
@@ -1211,10 +1211,10 @@ void format_iso_now(char* out, size_t out_len) {
 }
 
 /**
- * @brief  Add the latched energy of one period to the right tariff bucket,
+ * @brief  Add the snapshot energy of one period to the right tariff bucket,
  *         and roll the daily totals over at midnight.
  * @param  e_wh    Energy accumulated during the period, Wh.
- * @param  tm_now  Local time at the moment of the latch (NOT at period start).
+ * @param  tm_now  Local time at the moment of the snapshot (NOT at period start).
  */
 void accumulate_energy(double e_wh, const struct tm& tm_now) {
   // Daily roll-over: when the day changes, publish yesterday's totals
@@ -1234,7 +1234,7 @@ void accumulate_energy(double e_wh, const struct tm& tm_now) {
     today.day_of_year = tm_now.tm_yday;
   }
 
-  // Add to the right bucket. The choice is made on the latch instant —
+  // Add to the right bucket. The choice is made on the snapshot instant —
   // accurate enough at 60 s periods (boundary error < 60 s/day).
   if (is_peak_hour(tm_now.tm_hour)) {
     today.peak_wh    += e_wh;
@@ -1292,7 +1292,7 @@ void setup() {
   delay(300);
   while ((rb_read_u8(RB_ADDR, 0xCE) & 0x01) == 0) delay(50);
 
-  rb_write_u8(RB_ADDR, 0x01, 0x27);              // primer latch
+  rb_write_u8(RB_ADDR, 0x01, 0x27);              // primer snapshot
   t_prev_ms = millis();
 
   Serial.printf("TOU started: peak %02d:00..%02d:00 local\n",
@@ -1318,7 +1318,7 @@ void loop() {
   }
   last_period = millis();
 
-  // ----- Latch + period read -----
+  // ----- Snapshot + period read -----
   rb_write_u8(RB_ADDR, 0x01, 0x27);
   uint32_t t_now_ms = millis();
   delay(50);
@@ -1356,9 +1356,9 @@ void loop() {
 
 **Notes**:
 
-- The chip never sees the wall clock. The master attaches the timestamp at the moment of the latch — that is the right moment, because that is when the measurement window closed.
+- The chip never sees the wall clock. The master attaches the timestamp at the moment of the snapshot — that is the right moment, because that is when the measurement window closed.
 - `localtime_r()` automatically applies the POSIX `TZ` rule, so DST transitions are handled correctly without any extra code.
-- Boundary error: a 60 s period that crosses the 22:00 boundary is attributed entirely to off-peak (the timestamp is at the latch instant, after 22:00). For 60-second periods this is at most ~30 s of misattribution per day — negligible for residential billing. For 15-minute periods, prefer to align the latch to the schedule boundary, or split the period across both buckets.
+- Boundary error: a 60 s period that crosses the 22:00 boundary is attributed entirely to off-peak (the timestamp is at the snapshot instant, after 22:00). For 60-second periods this is at most ~30 s of misattribution per day — negligible for residential billing. For 15-minute periods, prefer to align the snapshot to the schedule boundary, or split the period across both buckets.
 - For STANDARD (STD) bidirectional metering, run a second `accumulate_energy()` call on the export side and publish both peak/off-peak consumption and peak/off-peak export.
 - The daily roll-over publishes a retained `rbamp/tou/day_close` payload at midnight; Home Assistant or a Grafana data source can subscribe to it to record daily totals.
 
@@ -1403,10 +1403,10 @@ void loop() {
 ## Best practices
 
 - Always check `DATA_VALID` after boot and `PERIOD_VALID` after `CMD_LATCH_PERIOD`.
-- Use `delay(50)` after a latch before reading the snapshot.
+- Use `delay(50)` after a snapshot before reading the snapshot.
 - The **master clock is authoritative** for Wh — do not use `PERIOD_LATCH_MS` from the chip.
 - DRDY helps at high polling rates (≥ 5 Hz); ordinary polling is fine at low rates (≤ 1 Hz).
-- For multi-module setups, **broadcast latch via general call** delivers precise synchronisation (firmware 1.0+).
+- For multi-module setups, **broadcast snapshot via general call** delivers precise synchronisation (firmware 1.0+).
 - **Master-side persistence is mandatory** for long-term accounting — rbAmp does not store Wh, only the current `avg_P`.
 - When swapping an rbAmp in a running system, save the accumulated `total_wh` master-side before the swap and restore it afterwards — the new module starts its counters from zero.
 

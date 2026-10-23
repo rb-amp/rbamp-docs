@@ -10,7 +10,7 @@ From the integrator's point of view, rbAmp behaves like a standard I2C slave: ap
 
 ## What it measures
 
-The two module lines report the same quantities in different formats. BASIC returns floating-point values in base units; STANDARD (STD) returns scaled integers and adds more quantities, 8 independent period latches and on-module energy counters.
+The two module lines report the same quantities in different formats. BASIC returns floating-point values in base units; STANDARD (STD) returns scaled integers and adds more quantities, 8 independent snapshot banks and on-module energy counters.
 
 | Quantity | BASIC | STANDARD (STD) |
 |---|---|---|
@@ -27,7 +27,7 @@ The two module lines report the same quantities in different formats. BASIC retu
 | Line frequency | u8, Hz: 50 or 60 (detected, not measured) | u16, 0.01 Hz steps, measured |
 | Voltage and current THD | — | u16, 0.01 % steps (option) |
 | Voltage phase angle | — | i16, 0.01° steps (modules with several voltage inputs) |
-| Average power over a period | float32, W; one latch (average and peak P) | 8 independent latches: import/export energy, average U/I/P/Q, peaks |
+| Average power over a period | float32, W; one snapshot (average and peak P) | 8 independent snapshot banks: import/export energy, average U/I/P/Q, peaks |
 | Energy | not kept on the module — the host (library) integrates it | on the module: import/export in Wh / mWh / µWh, reactive in varh / µvarh; kept when the power is off |
 
 Accuracy is not part of this table: for BASIC with an SCT-013 sensor see the [SCT-013 characteristics table](#current-channel-accuracy-with-sct-013-sensors) below; specifications of individual modules are given with the model descriptions. The BASIC register map is in [03_realtime_polling.md](realtime-polling.md), [04_period_metering.md](period-metering.md) and [11_api_reference.md](api-reference.md); the STD register map is in the [STD technical reference](std/reference/README.md).
@@ -101,7 +101,7 @@ rbAmp is offered in two product tiers. Each tier is a complete combination of **
 - **Hardware**: extended analog stack supporting accurate measurement of both consumption and reverse flow.
 - **Accuracy**: considerably more accurate than BASIC, especially at small currents.
 - **Small loads**: reads currents from 1 mA, so practically any load in the circuit is visible.
-- **Periods and energy**: 8 independent period latches — each master can latch on its own schedule (for example per hour, per day, or since a chosen moment); each latch keeps import and export energy, average U / I / P / Q, peaks and the number of windows. On top of that, continuous real-time energy counters on the module (import and export, active and reactive) that the master never has to reset.
+- **Periods and energy**: 8 independent snapshot banks — each master can snapshot on its own schedule (for example per hour, per day, or since a chosen moment); each snapshot keeps import and export energy, average U / I / P / Q, peaks and the number of windows. On top of that, continuous real-time energy counters on the module (import and export, active and reactive) that the master never has to reset.
 - **Data stays on the module**: the energy counters are kept in non-volatile memory and survive a restart or power loss. The module is a complete energy-accumulating device (Wh, with import and export); it is a measurement module, not a certified metering instrument.
 - **Interfaces**: I2C or Modbus RTU (selected by a jumper). Modbus uses UART levels; RS-485 needs an external transceiver.
 - **Firmware**: bidirectional metering with signed on-device energy. Bidirectional products belong to the **rbAmp STD line**, which uses a different, 16-bit register map — see the STD reference documentation.
@@ -120,8 +120,8 @@ The BASIC 8-bit register map (`0x00..0xCF`) is what this documentation describes
 - **I²C slave**: recommended 50 kHz; workable at 100 kHz with application-level retry. 400 kHz is **not** validated for v1.3.
 - **Address**: 7-bit `0x50` by default, reprovisionable to the `0x08..0x77` range via two-phase commit (see [02_initialization.md](initialization.md)).
 - **DATA_READY (DRDY)**: optional open-drain pin, ~10 µs LOW pulse every measurement window (~100 ms on current firmware; 200 ms before v1.2), marks the moment when RT registers are coherent.
-- **Atomic period latch**: command `0x27` freezes the per-period averaged power; *one write closes and opens* — no dropped or duplicated samples at the boundary.
-- **General-Call broadcast latch**: address `0x00` reserved for simultaneous LATCH on all modules sharing a bus. **Opt-in per module** via `FLEET_CONFIG.bit0` (default OFF). When OFF, GC frame NACKs at the bus level — masters detect this and fall back to per-module sequential latch (skew on 50 kHz bus is ~1 ms × N, ≪ 0.03% of 60 s period). See [04_period_metering.md](period-metering.md) for enable sequence and frame format.
+- **Atomic period snapshot**: command `0x27` freezes the per-period averaged power; *one write closes and opens* — no dropped or duplicated samples at the boundary.
+- **General-Call broadcast snapshot**: address `0x00` reserved for simultaneous snapshot on all modules sharing a bus. **Opt-in per module** via `FLEET_CONFIG.bit0` (default OFF). When OFF, GC frame NACKs at the bus level — masters detect this and fall back to per-module sequential snapshot (skew on 50 kHz bus is ~1 ms × N, ≪ 0.03% of 60 s period). See [04_period_metering.md](period-metering.md) for enable sequence and frame format.
 - **Master-side wall-clock**: energy is computed master-side as `avg_P × dt_master`; the chip-side period timestamp register (`0xEC`) is **diagnostic-only** (can undercount up to ~30% under load — by design). Eliminates per-module crystal drift in multi-module systems.
 - **Calibration in flash**: factory calibration (gains, noise floor, phase compensation) is stored on-chip; **no user calibration is required** — the master only writes `SENSOR_CLASS` and `CT_MODEL` per channel.
 - **Auto-configuration**: the module starts measuring immediately after power-on (~250 ms to the first valid result, ~700 ms additional for first persistence write).

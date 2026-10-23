@@ -307,7 +307,7 @@ def broadcast_latch(bus: SMBus, tick16: int, group: int = 0) -> bool:
     module (FLEET_CONFIG.bit0, default OFF). See chapter 11 §6.3.2.
 
     Returns True on ACK; False on NACK (caller must fall back to
-    per-module sequential latch).
+    per-module sequential snapshot).
     """
     msg = i2c_msg.write(0x00, [
         0xA5,                            # frame magic
@@ -411,7 +411,7 @@ with SMBus(I2C_BUS) as bus:
     meter = RbAmpIO(bus, RB_ADDR)
     meter.wait_ready()
 
-    # Primer latch — discard its snapshot.
+    # Primer snapshot — discard its snapshot.
     meter.write_u8(REG_COMMAND, CMD_LATCH_PERIOD)
     t_prev = time.monotonic()
     total_wh = 0.0
@@ -419,7 +419,7 @@ with SMBus(I2C_BUS) as bus:
     while True:
         time.sleep(60)
 
-        # 1) Final latch — closes the period [t_prev .. now].
+        # 1) Final snapshot — closes the period [t_prev .. now].
         meter.write_u8(REG_COMMAND, CMD_LATCH_PERIOD)
         t_now = time.monotonic()
         time.sleep(0.05)                              # let firmware finalise snapshot
@@ -651,7 +651,7 @@ Master uses `broadcast_latch()` for synchronous snapshots and publishes a retain
 
 ```python
 #!/usr/bin/env python3
-"""Home energy balance via synchronous broadcast latch."""
+"""Home energy balance via synchronous broadcast snapshot."""
 import json
 import time
 
@@ -706,7 +706,7 @@ with SMBus(I2C_BUS) as bus:
 
     gc_tick = 0
     if not broadcast_latch(bus, gc_tick):
-        # GC NACK → fall back to per-module sequential latch.
+        # GC NACK → fall back to per-module sequential snapshot.
         for m in (mains, solar, loads):
             m.write_u8(REG_COMMAND, CMD_LATCH_PERIOD)
     gc_tick += 1
@@ -716,7 +716,7 @@ with SMBus(I2C_BUS) as bus:
     while True:
         time.sleep(60)
 
-        # Synchronous latch — all modules snapshot at the same instant.
+        # Synchronous snapshot — all modules snapshot at the same instant.
         if not broadcast_latch(bus, gc_tick):
             for m in (mains, solar, loads):
                 m.write_u8(REG_COMMAND, CMD_LATCH_PERIOD)
@@ -987,14 +987,14 @@ After the first publish Home Assistant auto-creates a `Mains rbAmp` device with 
 
 > This example replaces the "battery-powered deep-sleep logger" from the microcontroller chapters. On Linux the SBC runs continuously, so the right pattern is a **systemd-managed daemon** with auto-restart on failure and a small **SQLite database** for persistence across power cycles.
 
-**Goal**: a long-running daemon that latches a period every minute, writes the result to SQLite, and publishes a state to MQTT. The process restarts cleanly after a reboot, picking up the accumulated total from the database.
+**Goal**: a long-running daemon that snapshots a period every minute, writes the result to SQLite, and publishes a state to MQTT. The process restarts cleanly after a reboot, picking up the accumulated total from the database.
 **Hardware**: any SBC + one rbAmp UI1.
 
 ### Daemon (`rbamp_daemon.py`)
 
 ```python
 #!/usr/bin/env python3
-"""rbAmp daemon — periodic latch + SQLite persistence + MQTT."""
+"""rbAmp daemon — periodic snapshot + SQLite persistence + MQTT."""
 import json
 import logging
 import signal
@@ -1341,7 +1341,7 @@ with SMBus(I2C_BUS) as bus:
 - **Always catch `OSError`** around I2C reads — a transient NACK or a temporarily disconnected slave shows up as `OSError(EREMOTEIO)`. Production code retries; smoke-test code lets it crash so the failure is loud.
 - **Use `time.monotonic()` for the master clock**. It is unaffected by `systemd-timesyncd` stepping the wall clock (e.g. on the first sync after boot). Use `time.time()` / `datetime` only for timestamps.
 - **`PERIOD_VALID` (`0x07`) must be checked after every `CMD_LATCH_PERIOD`.** Same rule as on a microcontroller — Linux doesn't change rbAmp's protocol.
-- **Wait ≥ 50 ms after a latch** (`time.sleep(0.05)`) before reading `0xDC..0xEF`.
+- **Wait ≥ 50 ms after a snapshot** (`time.sleep(0.05)`) before reading `0xDC..0xEF`.
 - **For multi-module setups**, `broadcast_latch(bus, tick)` via general call gives precise synchronisation. GC reception is **opt-in** per module (`FLEET_CONFIG.bit0`, default OFF). On NACK, fall back to per-module sequential `CMD_LATCH_PERIOD`.
 - **Persist totals to the filesystem** — JSON, SQLite, InfluxDB. Filesystem is the SBC equivalent of "RTC backup registers + NVM". Cheap and reliable.
 - **Wrap the main loop with signal handlers** (`SIGTERM`, `SIGINT`) so `systemctl stop` shuts the daemon down cleanly with a final state write.

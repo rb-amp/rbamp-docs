@@ -1,12 +1,12 @@
 # 04 · Period Metering and Tariff Accounting
 
-For tariff energy accounting (Wh per 1 min / 15 min / 1 hour / day / month / year) rbAmp provides an **atomic period latch** mechanism: a single I2C command freezes the time-averaged power over a period, and the master multiplies it by its own wall-clock dt to get Wh.
+For tariff energy accounting (Wh per 1 min / 15 min / 1 hour / day / month / year) rbAmp provides an **atomic period snapshot** mechanism: a single I2C command freezes the time-averaged power over a period, and the master multiplies it by its own wall-clock dt to get Wh.
 
 This is the **production-grade** way to extract energy data. The alternative — integrating RT `P_real` on the master side every measurement window (~100 ms on current firmware) — yields nearly the same result on BASIC (slightly lower accuracy due to sampling discretisation) and keeps the master continuously active.
 
-## Why period latch is needed
+## Why a period snapshot is needed
 
-![Why a period latch is used on top of the measurement window.](images/window-period-latch-concept.png)
+![Why a period snapshot is used on top of the measurement window.](images/window-period-latch-concept.png)
 
 ### A single time base, owned by the master
 
@@ -25,11 +25,11 @@ E_Wh = avg_P_W × master_dt_seconds / 3600
 Where:
 
 - `avg_P_W` — the value of `PERIOD_AVG_P_W`, read after `CMD_LATCH_PERIOD`.
-- `master_dt_seconds` — the seconds elapsed between two successive latches, measured by the master.
+- `master_dt_seconds` — the seconds elapsed between two successive snapshots, measured by the master.
 
-## Atomic period latch — concept
+## Atomic period — concept
 
-![How a single latch command freezes the period snapshot and opens the next period.](images/period-atomic-latch.png)
+![How a single snapshot command freezes the period snapshot and opens the next period.](images/period-atomic-latch.png)
 
 ### What the command does
 
@@ -48,11 +48,11 @@ These three steps are indivisible — no interrupt can interleave between them. 
 
 ### Where the snapshot lives
 
-After a latch, the period-snapshot registers (`0xBE..0xCD`, plus `0xDC..0xDF` for ch0 `avg_p`, plus `0xE0..0xE3` for `MAX_P`, plus `0xEC..0xEF` for the diagnostic `PERIOD_LATCH_MS`) return the just-closed period. Note that this range is not contiguous — `0xD0..0xDB` holds the Q block (live RT, not period snapshot) and `0xE4..0xEB` is reserved/factory. See chapter 11 §4.11–4.13 for the exact layout. The live accumulator already starts counting the next period; those snapshot registers update only on the next latch.
+After a snapshot, the period-snapshot registers (`0xBE..0xCD`, plus `0xDC..0xDF` for ch0 `avg_p`, plus `0xE0..0xE3` for `MAX_P`, plus `0xEC..0xEF` for the diagnostic `PERIOD_LATCH_MS`) return the just-closed period. Note that this range is not contiguous — `0xD0..0xDB` holds the Q block (live RT, not period snapshot) and `0xE4..0xEB` is reserved/factory. See chapter 11 §4.11–4.13 for the exact layout. The live accumulator already starts counting the next period; those snapshot registers update only on the next snapshot.
 
 ### One write — closes and opens
 
-This is the defining property of the rbAmp latch. **A single LATCH command simultaneously**:
+This is the defining property of the rbAmp snapshot. **A single snapshot command simultaneously**:
 
 - Closes the period that just ended (its data → snapshot)
 - Opens the next period (live ← 0)
@@ -68,7 +68,7 @@ master                          chip
 
 write CMD_LATCH (0x27)   ────►  snapshot ← live (since-boot — DISCARD)
                                 live ← 0, period_start = T0
-t0 = master.clock()      ◄──── first latch — primer (discard)
+t0 = master.clock()      ◄──── first snapshot — primer (discard)
 
   [wait 60 seconds]
 
@@ -89,24 +89,24 @@ E2_Wh = avg_p × (t2 − t1) / 3600
 ...and so on. t1 is both the end of period 1 and the start of period 2.
 ```
 
-### The first latch is a primer (discard)
+### The first snapshot is a primer (discard)
 
-The first latch after boot captures whatever the accumulator collected from power-on until the master's first call — an undefined-length window unsuitable for billing. **Discard its result**. From the second latch onward, data is clean and usable.
+The first snapshot after boot captures whatever the accumulator collected from power-on until the master's first call — an undefined-length window unsuitable for billing. **Discard its result**. From the second snapshot onward, data is clean and usable.
 
 ## Period snapshot registers
 
 | Address | Name | Type | When to read | Description |
 |---:|---|---|---|---|
-| `0x07` | `PERIOD_VALID` | u8 | **read first** | bit0 = 1 if snapshot is fresh and valid, 0 if stale (race or premature latch) |
+| `0x07` | `PERIOD_VALID` | u8 | **read first** | bit0 = 1 if snapshot is fresh and valid, 0 if stale (race or premature snapshot) |
 | `0xDC..0xDF` | **`PERIOD_AVG_P_W[0]`** | float32 LE | primary | **PRODUCTION** — mean P_real of channel I0 over the period (W) |
 | `0xC2..0xC5` | `PERIOD_AVG_P_W[1]` | float32 LE | UI2/UI3 | Mean P_real of channel I1 |
 | `0xC6..0xC9` | `PERIOD_AVG_P_W[2]` | float32 LE | UI3 | Mean P_real of channel I2 |
 
-> **Per-channel energy (UI2/UI3)**: the same latch freezes the per-channel averages too — read `0xC2`
+> **Per-channel energy (UI2/UI3)**: the same snapshot freezes the per-channel averages too — read `0xC2`
 > (ch1) / `0xC6` (ch2) in the same pass and multiply by the same `dt`: `e1_wh = avg_p1 * dt_s / 3600`.
 | `0xE0..0xE3` | `PERIOD_MAX_P_W` | float32 LE | optional | Peak P_real during the period (for demand tariffs) |
-| `0xEC..0xEF` | `PERIOD_LATCH_MS` | u32 LE | diagnostic only | Chip's view of dt between latches — can read short under load; use `PERIOD_COMMIT_COUNT` × the commit length for the module-side window length |
-| `0xBE..0xC1` | `PERIOD_COMMIT_COUNT` | u32 LE | window measure | Number of RT commits in the latched period. One commit = **0.1 s** on current firmware; 0.2 s on older images — `count × 0.1 s` (or `× 0.2 s`) is the module's own measure of the window length. See the clock-drift section for how to tell which applies |
+| `0xEC..0xEF` | `PERIOD_LATCH_MS` | u32 LE | diagnostic only | Chip's view of dt between snapshots — can read short under load; use `PERIOD_COMMIT_COUNT` × the commit length for the module-side window length |
+| `0xBE..0xC1` | `PERIOD_COMMIT_COUNT` | u32 LE | window measure | Number of RT commits in the closed period. One commit = **0.1 s** on current firmware; 0.2 s on older images — `count × 0.1 s` (or `× 0.2 s`) is the module's own measure of the window length. See the clock-drift section for how to tell which applies |
 
 ### STANDARD (STD) additions for bidirectional accounting
 
@@ -130,7 +130,7 @@ void setup() {
   Wire.begin();
   delay(300);
 
-  // 1. Primer latch (discard result)
+  // 1. Primer snapshot (discard result)
   rb_write_u8(RB_ADDR, 0x01, 0x27);
 }
 
@@ -138,7 +138,7 @@ void loop() {
   static uint32_t t_prev = millis();
   delay(60000);                                    // wait 60 seconds
 
-  // 2. Final latch — closes [t_prev, now]
+  // 2. Final snapshot — closes [t_prev, now]
   rb_write_u8(RB_ADDR, 0x01, 0x27);
   uint32_t t_now = millis();
   delay(50);                                       // firmware finishes in ~5 ms; allow margin
@@ -146,14 +146,14 @@ void loop() {
   // 3. Check PERIOD_VALID
   uint8_t valid = rb_read_u8(RB_ADDR, 0x07);
   if ((valid & 0x01) == 0) {
-    // Race or premature latch — retry
+    // Race or premature snapshot — retry
     delay(250);
     rb_write_u8(RB_ADDR, 0x01, 0x27);
     t_now = millis();
     delay(50);
     valid = rb_read_u8(RB_ADDR, 0x07);
     if ((valid & 0x01) == 0) {
-      Serial.println("WARN: two stale latches in a row");
+      Serial.println("WARN: two stale snapshots in a row");
       t_prev = millis();
       return;
     }
@@ -176,10 +176,10 @@ void loop() {
 
 ### What is essential in this code
 
-1. **First latch is a primer** — its result is discarded.
+1. **First snapshot is a primer** — its result is discarded.
 2. **`PERIOD_VALID` is read BEFORE using the snapshot** — otherwise stale data can leak through on a race.
 3. **dt is measured on the master**, not derived from `PERIOD_LATCH_MS` — the chip register is only for drift diagnostics.
-4. **`t_prev` updates to the t_now of a successful latch**, not to the original period start — this keeps the chain seamless without gaps.
+4. **`t_prev` updates to the t_now of a successful snapshot**, not to the original period start — this keeps the chain seamless without gaps.
 
 ## Bidirectional accounting (STANDARD (STD))
 
@@ -272,7 +272,7 @@ Suitable for classical billing (1-min, 15-min, 1-hour).
 
 ### Event-driven
 
-The master issues a latch when an external event occurs:
+The master issues a snapshot when an external event occurs:
 
 - A pulse from the utility's electronic meter (cross-check)
 - A tariff change (peak / off-peak)
@@ -292,7 +292,7 @@ void on_tariff_change() {
 
 ## Restarting the period
 
-To discard the live accumulator and start fresh, issue an extra latch and ignore its result:
+To discard the live accumulator and start fresh, issue an extra snapshot and ignore its result:
 
 ```cpp
 void restart_period() {
@@ -301,40 +301,40 @@ void restart_period() {
 }
 ```
 
-After this, resume a normal latch cycle from scratch.
+After this, resume a normal snapshot cycle from scratch.
 
 ## Detecting a module restart
 
-A module restart (power dip, watchdog) silently resets the live accumulator, so the next latch
-covers an undefined window — exactly like the first latch after boot. The module exposes:
+A module restart (power dip, watchdog) silently resets the live accumulator, so the next snapshot
+covers an undefined window — exactly like the first snapshot after boot. The module exposes:
 
 | Address | Name | Type | Description |
 |---:|---|---|---|
 | `0x46..0x49` | `UPTIME_S` | u32 LE | Module's own uptime counter (nominally seconds since boot). **Restart detector only** — on current firmware it can run noticeably slower than wall time under bus load; never use it as a clock or for time maths |
 | `0x4A` | `RESET_CAUSE` | u8 | Reset reason flags: bit0 external pin, bit1 power-on/brown-out, bit2 software, bit3/bit4 watchdogs. For logging only |
 
-Check at every latch — the module restarted inside the period if either:
+Check at every snapshot — the module restarted inside the period if either:
 
-- `UPTIME_S` **decreased** since your previous latch, or
-- `UPTIME_S` is **smaller than the time elapsed since your previous latch** (on the master clock).
+- `UPTIME_S` **decreased** since your previous snapshot, or
+- `UPTIME_S` is **smaller than the time elapsed since your previous snapshot** (on the master clock).
 
 Because the counter may run slow, the second check can occasionally flag a restart that didn't
 happen (shortly after a genuine boot) — that is harmless: you discard one extra period as a primer.
 Treat `UPTIME_S` strictly as this restart discriminator, not as a time source.
 
-On a detected restart, **discard that period's snapshot** (treat the latch as a new primer),
+On a detected restart, **discard that period's snapshot** (treat the snapshot as a new primer),
 re-commit the CT model if you run a non-factory model on firmware before 1.4.20 (`CAPABILITY` bit 12 clear)
 ([02_initialization.md → What persists across a restart](initialization.md#what-persists-across-a-restart)),
 and re-initialise any RAM-only configuration — see chapter 11 (`RESET_OCCURRED` event bit).
 `RESET_CAUSE` does not change the handling; log it and move on.
 
-## Multi-module — simultaneous latch
+## Multi-module — simultaneous snapshot
 
 If the master wants **synchronous** snapshots from all modules (for an instantaneous house energy balance), there are two approaches.
 
-### Approach 1 — sequential latch (simple)
+### Approach 1 — sequential snapshot (simple)
 
-The master latches each module in turn:
+The master snapshots each module in turn:
 
 ```cpp
 const uint8_t modules[] = {0x50, 0x51, 0x52};
@@ -366,13 +366,13 @@ void loop() {
 }
 ```
 
-**Downside**: latch instants differ by a few milliseconds. For a 60-second period this yields < 0.1 % error — negligible.
+**Downside**: snapshot instants differ by a few milliseconds. For a 60-second period this yields < 0.1 % error — negligible.
 
-### Approach 2 — broadcast latch via general call (precise, opt-in)
+### Approach 2 — broadcast snapshot via general call (precise, opt-in)
 
 The I²C **general-call address `0x00`** is a packet that all slaves receive simultaneously. rbAmp accepts a canonical 5-byte frame on the general-call address that triggers `CMD_LATCH_PERIOD` on every module that has GC reception **enabled**. GC is **opt-in per module** via `FLEET_CONFIG.bit0` (default OFF) — see [02_initialization.md](initialization.md) for the enable sequence and frame format.
 
-![A broadcast latch reaching all modules at the same moment through the general-call address.](images/period-broadcast-latch.png)
+![A broadcast snapshot reaching all modules at the same moment through the general-call address.](images/period-broadcast-latch.png)
 
 ```cpp
 // Canonical 5-byte GC frame: A5 27 group tick_lo tick_hi.
@@ -390,7 +390,7 @@ bool broadcast_latch(uint16_t tick16, uint8_t group = 0) {
 
 The master keeps a 16-bit `tick` counter that increments on every broadcast. Each module mirrors the last accepted tick at `GC_TICK (0x59)`, so the master can detect a missed broadcast on a specific module.
 
-After the broadcast latch the master reads each module's snapshot by its individual address. **Always check the return value** — on NACK the GC frame did not land (no module has GC enabled), and the master must fall back to per-module sequential latch:
+After the broadcast snapshot the master reads each module's snapshot by its individual address. **Always check the return value** — on NACK the GC frame did not land (no module has GC enabled), and the master must fall back to per-module sequential snapshot:
 
 ```cpp
 const uint8_t modules[] = {0x50, 0x51, 0x52};
@@ -400,7 +400,7 @@ uint16_t gc_tick = 0;
 void setup() {
   Wire.begin();
   if (!broadcast_latch(gc_tick++)) {
-    // Fall back: per-module sequential latch.
+    // Fall back: per-module sequential snapshot.
     for (uint8_t m : modules) rb_write_u8(m, 0x01, 0x27);
   }
   t_prev = millis();
@@ -431,9 +431,9 @@ void loop() {
 
 **Use case**: critical for instantaneous balancing (for example `house_consume − solar_export` at one moment in time).
 
-> **Broadcast latch is opt-in** per module via `FLEET_CONFIG.bit0` (default OFF on a fresh module). When OFF, the slave NACKs the general-call frame and the master falls back to per-module sequential latch automatically. See [02_initialization.md](initialization.md) — *General Call (broadcast at address 0x00)* — for the enable sequence and frame format.
+> **Broadcast snapshot is opt-in** per module via `FLEET_CONFIG.bit0` (default OFF on a fresh module). When OFF, the slave NACKs the general-call frame and the master falls back to per-module sequential snapshot automatically. See [02_initialization.md](initialization.md) — *General Call (broadcast at address 0x00)* — for the enable sequence and frame format.
 
-> **One accumulator, two triggers.** The addressed latch (`0x27` at the module's own address) and the broadcast latch reset the **same** period accumulator — there is only one per module. Pick one method per module for the regular cycle; an extra latch by the other method cuts the running period short. The fallback patterns above are safe because they fire only when the broadcast did not land on that module.
+> **One accumulator, two triggers.** The addressed snapshot (`0x27` at the module's own address) and the broadcast snapshot reset the **same** period accumulator — there is only one per module. Pick one method per module for the regular cycle; an extra snapshot by the other method cuts the running period short. The fallback patterns above are safe because they fire only when the broadcast did not land on that module.
 
 ## Choosing the period length
 
@@ -443,9 +443,9 @@ void loop() {
 | Trend chart, 1-minute resolution | 60 s |
 | 15-minute peak-demand metering | 900 s |
 | Hourly billing | 3600 s |
-| Daily totals | Accumulate hourly latches on the master; do not let a single period exceed 1 hour |
+| Daily totals | Accumulate hourly snapshots on the master; do not let a single period exceed 1 hour |
 
-> Periods longer than 1 hour are allowed and nothing overflows — the accumulator keeps averaging for as long as no latch arrives. What degrades over a very long window is **precision** of the average: worst case ≈ 0.2 % at 1 hour, 1.3 % at 6 hours, 5 % at 24 hours. Keep single periods at ≤ 1 hour for that reason, and accumulate longer totals on the master.
+> Periods longer than 1 hour are allowed and nothing overflows — the accumulator keeps averaging for as long as no snapshot arrives. What degrades over a very long window is **precision** of the average: worst case ≈ 0.2 % at 1 hour, 1.3 % at 6 hours, 5 % at 24 hours. Keep single periods at ≤ 1 hour for that reason, and accumulate longer totals on the master.
 
 ## `PERIOD_MAX_P_W` — peak demand
 
@@ -466,7 +466,7 @@ The same atomicity ties **the accumulator reset to the snapshot copy** — every
 - ❌ **Do not compute `U_rms × I_rms × dt`** — that is apparent energy (VAh), not Wh. Apparent power includes reactive content and overcharges any inductive load. Use `PERIOD_AVG_P_W`.
 - ❌ **Do not infer direction from `I_rms`** — RMS is always ≥ 0. Direction lives in the sign of `P_real`.
 - ❌ **Do not use `PERIOD_LATCH_MS` for Wh** — that register is diagnostic and may drift with the chip clock. `master_dt` is authoritative.
-- ❌ **Do not latch faster than the RT-commit cycle.** The chip needs at least one mains period (~20 ms at 50 Hz) of accumulation plus settling — minimum **50 ms** between `CMD_LATCH_PERIOD` issues. Latching faster yields an empty snapshot (`PERIOD_VALID = 0`). 200 ms is a safe practical floor for steady-state polling; see chapter 11 §6.0 / §6.4.
+- ❌ **Do not snapshot faster than the RT-commit cycle.** The chip needs at least one mains period (~20 ms at 50 Hz) of accumulation plus settling — minimum **50 ms** between `CMD_LATCH_PERIOD` issues. Taking snapshots faster yields an empty snapshot (`PERIOD_VALID = 0`). 200 ms is a safe practical floor for steady-state polling; see chapter 11 §6.0 / §6.4.
 
 ## Clock-drift diagnostics
 
@@ -485,7 +485,7 @@ if (ratio < 0.70f || ratio > 1.05f) {
 
 This drift **does not** affect Wh accuracy (Wh uses the master clock); `PERIOD_LATCH_MS` is for surfacing severe chip-side anomalies only.
 
-When you want the **module's own measure of the latched window length**, use
+When you want the **module's own measure of the closed window length**, use
 `PERIOD_COMMIT_COUNT` (register `0xBE`) times the commit length: it counts whole RT commits and does
 not read short under load the way `PERIOD_LATCH_MS` can. One commit is **0.1 s on current firmware**;
 images older than v1.2 used 0.2 s. No version table is needed to tell them apart: the ratio

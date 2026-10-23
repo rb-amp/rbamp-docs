@@ -97,7 +97,7 @@ response on broadcast, per the Modbus standard):
 - time set — **two frames**: FC16 to 0x8100–0x8101 (epoch, high word first), then FC06
   `COMMAND` 0x8113 = 0x0006 — bus-wide clock sync;
 - `LATCH_BANK` / `PERIOD_ARM` 0x8110–11 and `COMMAND` 0x03 — synchronized snapshot across modules
-  (on builds with latch banks);
+  (on builds with snapshot banks);
 - address-by-UID staging 0x8118–0x811E + `COMMAND` 0x16 — commissioning on a shared bus.
 
 A broadcast FC16 must stay within the whitelisted registers — a frame that touches anything else is

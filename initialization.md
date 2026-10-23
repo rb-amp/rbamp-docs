@@ -482,11 +482,11 @@ void setup() {
 
 ## General Call (broadcast at address 0x00)
 
-The I²C protocol reserves address **`0x00` (general call)** — frames sent to this address are received by all slaves on the bus simultaneously. rbAmp can latch its per-period snapshot on a general-call frame, but only **after the feature has been explicitly enabled** on the module.
+The I²C protocol reserves address **`0x00` (general call)** — frames sent to this address are received by all slaves on the bus simultaneously. rbAmp can take its period snapshot on a general-call frame, but only **after the feature has been explicitly enabled** on the module.
 
 ### Opt-in enable (default OFF)
 
-GC latch reception is disabled by default — a fresh module will **NACK** the general-call frame, which the master detects as a hard error and falls back to per-module sequential latch automatically. To enable GC on a module:
+GC snapshot reception is disabled by default — a fresh module will **NACK** the general-call frame, which the master detects as a hard error and falls back to per-module sequential snapshot automatically. To enable GC on a module:
 
 1. Set bit 0 of `FLEET_CONFIG`:
    ```cpp
@@ -513,9 +513,9 @@ GC latch reception is disabled by default — a fresh module will **NACK** the g
 
 ### GC frame format
 
-GC latch frames have a fixed magic-and-opcode layout:
+GC snapshot frames have a fixed magic-and-opcode layout:
 
-![Byte layout of the general-call latch frame.](images/init-gc-frame.png)
+![Byte layout of the general-call snapshot frame.](images/init-gc-frame.png)
 
 ```
 addr 0x00 | A5 27 <group_id> <tick_lo> <tick_hi>
@@ -526,12 +526,12 @@ addr 0x00 | A5 27 <group_id> <tick_lo> <tick_hi>
 - `<group_id>` — target group (`0x00` = all-call; otherwise must match the module's `GROUP_ID`).
 - `<tick_lo/hi>` — master-side 16-bit tick counter, mirrored into each module's `GC_TICK (0x59)` register for missed-frame detection.
 
-By design GC frames carry **only latch** — destructive opcodes (`SAVE_*`, `COMMIT_ADDR`, `FACTORY_RESET`) are not honoured over general-call.
+By design GC frames carry **only the snapshot command** — destructive opcodes (`SAVE_*`, `COMMIT_ADDR`, `FACTORY_RESET`) are not honoured over general-call.
 
-### Broadcast LATCH example (after enable)
+### Broadcast snapshot example (after enable)
 
 ```cpp
-// All modules with GC enabled latch their snapshot at once.
+// All modules with GC enabled take their snapshots at once.
 Wire.beginTransmission(0x00);
 Wire.write(0xA5);                       // frame magic
 Wire.write(0x27);                       // CMD_LATCH_PERIOD opcode
@@ -541,13 +541,13 @@ Wire.write((tick >> 8) & 0xFF);         // tick_hi
 uint8_t rc = Wire.endTransmission();
 if (rc != 0) {
   // NACK at GC level → no module on the bus has GC enabled.
-  // Fall back to per-module sequential LATCH.
+  // Fall back to per-module sequential snapshot.
 }
 ```
 
-After the broadcast, each module updates its snapshot independently. The master then reads each module by its individual address. **Witness check** (recommended): after `~50 ms` settle, read `V03_PERIOD_VALID (0x07)` on each expected module — `1` confirms the latch landed; `0` falls back to per-module latch on that module only.
+After the broadcast, each module updates its snapshot independently. The master then reads each module by its individual address. **Witness check** (recommended): after `~50 ms` settle, read `V03_PERIOD_VALID (0x07)` on each expected module — `1` confirms the snapshot landed; `0` falls back to per-module snapshot on that module only.
 
-Application: precise period synchronisation for multi-module energy balancing (e.g. `mains_input − solar_output`), where the latch instant must be identical across modules.
+Application: precise period synchronisation for multi-module energy balancing (e.g. `mains_input − solar_output`), where the snapshot instant must be identical across modules.
 
 ## Recommended multi-module deployment workflow
 

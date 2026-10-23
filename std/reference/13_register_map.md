@@ -29,9 +29,9 @@ after SAVE_CONFIG / SAVE_CAL; *RAM* regs reset to defaults at every boot.
 | 0x0020 | FRAME_CNT | u32 | r | measurement frames since boot (liveness) |
 | 0x0024 | CRC_ERR | u32 | r | frame CRC errors (reads 0 on builds that report a per-frame flag instead) |
 | 0x0060 | COMMAND | u8 | w | command opcode ([Commands](14_commands.md)) |
-| 0x0062 | LATCH_BANK | u8 | rw | target bank for LATCH_PERIOD (builds with latch banks) |
-| 0x0063 | PERIOD_ARM | u8 | rw | latch-bank arm mask (RAM) |
-| 0x0066 | PD_VALID | u8 | r | latch-bank valid mask (sticky) |
+| 0x0062 | LATCH_BANK | u8 | rw | target bank for LATCH_PERIOD (builds with snapshot banks) |
+| 0x0063 | PERIOD_ARM | u8 | rw | snapshot-bank arm mask (RAM) |
+| 0x0066 | PD_VALID | u8 | r | snapshot-bank valid mask (sticky) |
 | 0x0067 | CMD_SEQ | u16 | r | completed-command counter |
 | 0x006A | CMD_STATE | u8 | r | bit0 BUSY · bit1 OVERRUN |
 | 0x0090 | SCRATCH | 16 B | w | master scratch window |
@@ -152,7 +152,7 @@ Over Modbus the totals P/Q/S are i64.
 | CHMAP_ASSOC | 0x0640 | 1, c=0..63 | reserved — current channel → voltage channel index (reads 0 on current builds) |
 | CHMAP_MODEL | 0x0680 | 1, c=0..63 | reserved — per-channel CT model metadata (reads 0 on current builds) |
 
-### LATCH banks — base 0x2000, **stride 0x800**, b = 0..7 *(capability-gated: bit 8)*
+### Snapshot banks — base 0x2000, **stride 0x800**, b = 0..7 *(capability-gated: bit 8)*
 
 Period snapshots armed by `PERIOD_ARM` and taken by command 0x03; banks are read **directly** at
 `0x2000 + b·0x800` (LATCH_BANK selects the command target only, it is not a read multiplexer).

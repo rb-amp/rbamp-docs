@@ -148,7 +148,7 @@ def cp_write_u8(dev, reg, val):
         dev.write(bytes([reg, val & 0xFF]))
 
 def cp_broadcast_latch(i2c_bus, tick16, group=0):
-    """General-call latch via raw bus access (CircuitPython).
+    """General-call snapshot via raw bus access (CircuitPython).
 
     Canonical 5-byte GC frame: A5 27 group tick_lo tick_hi. Returns True
     on ACK; False on NACK (no module on the bus has GC enabled).
@@ -246,7 +246,7 @@ oled = ssd1306.SSD1306_I2C(128, 64, i2c)        # OLED typically at 0x3C
 
 rb_wait_ready(i2c, RB_ADDR)
 
-# Primer latch — discard its result.
+# Primer snapshot — discard its result.
 rb_write_u8(i2c, RB_ADDR, 0x01, 0x27)
 t_prev_ms = time.ticks_ms()
 total_wh = 0.0
@@ -254,7 +254,7 @@ total_wh = 0.0
 while True:
     time.sleep(60)
 
-    # 1) Final latch — closes the period [t_prev_ms .. now].
+    # 1) Final snapshot — closes the period [t_prev_ms .. now].
     rb_write_u8(i2c, RB_ADDR, 0x01, 0x27)
     t_now_ms = time.ticks_ms()
     time.sleep_ms(50)                            # let firmware finalise the snapshot
@@ -359,7 +359,7 @@ def mqtt_publish(ch_name, avg_p, e_wh):
     mqtt.publish(topic, payload)
 
 rb_wait_ready(i2c, RB_ADDR)
-rb_write_u8(i2c, RB_ADDR, 0x01, 0x27)            # primer latch
+rb_write_u8(i2c, RB_ADDR, 0x01, 0x27)            # primer snapshot
 t_prev_ms = time.ticks_ms()
 total_wh = [0.0, 0.0, 0.0]
 
@@ -495,7 +495,7 @@ totals = {
 
 gc_tick = 0
 if not rb_broadcast_latch(i2c, gc_tick):
-    # GC NACK → fall back to per-module sequential latch.
+    # GC NACK → fall back to per-module sequential snapshot.
     for addr in (ADDR_MAINS, ADDR_SOLAR, ADDR_LOADS):
         rb_write_u8(i2c, addr, 0x01, 0x27)
 gc_tick += 1
@@ -561,7 +561,7 @@ while True:
 
 **Notes**:
 
-- `rb_broadcast_latch(i2c, tick)` ensures all three modules snapshot at the same instant — critical for an accurate balance. GC reception is **opt-in** (`FLEET_CONFIG.bit0`, default OFF, see chapter 02). On NACK, fall back to per-module sequential latch (skew ~1 ms/module on 50 kHz).
+- `rb_broadcast_latch(i2c, tick)` ensures all three modules snapshot at the same instant — critical for an accurate balance. GC reception is **opt-in** (`FLEET_CONFIG.bit0`, default OFF, see chapter 02). On NACK, fall back to per-module sequential snapshot (skew ~1 ms/module on 50 kHz).
 - `solar_self_used = solar_total − grid_exported`; clamp to zero to absorb measurement noise.
 
 ---
@@ -698,14 +698,14 @@ def publish_discovery_all():
 publish_discovery_all()
 
 rb_wait_ready(i2c, RB_ADDR)
-rb_write_u8(i2c, RB_ADDR, 0x01, 0x27)            # primer latch
+rb_write_u8(i2c, RB_ADDR, 0x01, 0x27)            # primer snapshot
 t_prev_ms = time.ticks_ms()
 total_wh = 0.0
 
 while True:
     time.sleep(60)
 
-    # Latch + read period snapshot.
+    # Snapshot + read period snapshot.
     rb_write_u8(i2c, RB_ADDR, 0x01, 0x27)
     t_now_ms = time.ticks_ms()
     time.sleep_ms(50)
@@ -744,7 +744,7 @@ while True:
 
 ## Example 9 — Battery-powered remote logger with deep sleep
 
-**Goal**: an outdoor / off-grid logger that wakes every 10 minutes, latches a period, publishes via MQTT, then goes back to deep sleep. Average current a few mA — a single Li-ion cell lasts months.
+**Goal**: an outdoor / off-grid logger that wakes every 10 minutes, snapshots a period, publishes via MQTT, then goes back to deep sleep. Average current a few mA — a single Li-ion cell lasts months.
 **Hardware**: ESP32 (or ESP32-S3) + one rbAmp UI1 + small Li-ion + WiFi.
 **Accounting**: unidirectional. Energy survives deep-sleep via RTC memory.
 
@@ -825,7 +825,7 @@ wake_count += 1
 
 rb_wait_ready(i2c, RB_ADDR)
 
-# First wake-up after a cold boot: primer latch only.
+# First wake-up after a cold boot: primer snapshot only.
 if not primer_done:
     rb_write_u8(i2c, RB_ADDR, 0x01, 0x27)
     _rtc_save(total_wh, wake_count, 1)
@@ -875,7 +875,7 @@ deepsleep(SLEEP_MS)
 
 ## Example 10 — Time-of-use (TOU) tariff with NTP wall-clock
 
-**Goal**: bill energy under a time-of-use schedule (different rates for peak and off-peak hours). The ESP32 keeps a real wall-clock via NTP, splits each latched period into the right tariff bucket, resets daily totals at midnight, and publishes payloads with ISO timestamps.
+**Goal**: bill energy under a time-of-use schedule (different rates for peak and off-peak hours). The ESP32 keeps a real wall-clock via NTP, splits each closed period into the right tariff bucket, resets daily totals at midnight, and publishes payloads with ISO timestamps.
 **Hardware**: ESP32 + one rbAmp UI1 + WiFi.
 **Accounting**: unidirectional. The bucket logic works on STANDARD (STD) — just feed both accumulators through it.
 
@@ -951,7 +951,7 @@ ntp_sync()
 mqtt = MQTTClient("rbamp-tou", MQTT_HOST); mqtt.connect()
 
 rb_wait_ready(i2c, RB_ADDR)
-rb_write_u8(i2c, RB_ADDR, 0x01, 0x27)            # primer latch
+rb_write_u8(i2c, RB_ADDR, 0x01, 0x27)            # primer snapshot
 t_prev_ms = time.ticks_ms()
 print("TOU started: peak {:02d}:00..{:02d}:00 local".format(PEAK_START_HOUR, PEAK_END_HOUR))
 
@@ -963,7 +963,7 @@ def accumulate(e_wh, tm):
     """Add one period's energy to the right bucket; roll over the day at midnight.
 
     :param e_wh: Wh in this period.
-    :param tm:   local struct_time at the latch instant.
+    :param tm:   local struct_time at the snapshot instant.
     """
     yday = tm[7]                                  # struct_time.tm_yday is index 7
     if today["yday"] != yday:
@@ -1023,7 +1023,7 @@ while True:
 **Notes**:
 
 - MicroPython's `time` module is UTC-based on most ports — convert with `time.gmtime(time.time() + offset_seconds)`. For full DST handling, a small TZ table or the `utimezone` library can replace `TZ_OFFSET_HOURS`.
-- Boundary error: a 60 s period that crosses 22:00 is attributed entirely to off-peak (timestamp at the latch instant). At most ~30 s of misattribution per day — negligible for residential billing.
+- Boundary error: a 60 s period that crosses 22:00 is attributed entirely to off-peak (timestamp at the snapshot instant). At most ~30 s of misattribution per day — negligible for residential billing.
 - For STANDARD (STD) bidirectional metering, call `accumulate()` twice — once on the consumption side and once on the export side — and publish both sets of peak/off-peak totals.
 
 > **CircuitPython delta**: use `adafruit_ntp.NTP(socketpool, server="pool.ntp.org", tz_offset=2)` + `rtc.RTC().datetime = ntp.datetime` to set the system clock, then read it via `time.localtime()`. The bucket logic is identical.
@@ -1048,7 +1048,7 @@ while True:
 ## Best practices
 
 - Always check `DATA_VALID` (bit 0 of register `0xCE`) after boot and `PERIOD_VALID` (bit 0 of `0x07`) after each `CMD_LATCH_PERIOD`.
-- Allow at least 50 ms after a latch before reading the snapshot.
+- Allow at least 50 ms after a snapshot before reading the snapshot.
 - The **master clock is authoritative** for Wh — do not use `PERIOD_LATCH_MS` (`0xEC`) for energy computation.
 - For multi-module setups, `rb_broadcast_latch(i2c, tick)` via general call gives precise synchronisation. GC reception is **opt-in** per module (`FLEET_CONFIG.bit0`, default OFF). Fall back to per-module sequential `CMD_LATCH_PERIOD` on NACK.
 - **Master-side persistence is mandatory** for long-term accounting — rbAmp does not store Wh internally. Use RTC memory (Example 9), SD card (Example 7), or MQTT-retained payloads (Example 6).

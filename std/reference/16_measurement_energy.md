@@ -110,12 +110,12 @@ floor(net µWh / 1000) by 1). Rules:
   (`NVM_REJ_CNT`). (Rollback-anchor detection — `SEC_ROLLBACK`, events 10/11 — is reserved, not
   implemented on current firmware.)
 
-### Latch banks (capability bit 8)
+### Snapshot banks (capability bit 8)
 
-The family contract also defines 8 independent latch banks (master-timed period snapshots with
-per-channel energy). **Current firmware does not provide them** (capability bit 8 = 0; the latch
+The family contract also defines 8 independent snapshot banks (master-timed period snapshots with
+per-channel energy). **Current firmware does not provide them** (capability bit 8 = 0; the snapshot
 command answers "unknown command") — interval energy comes from cumulative-counter deltas as above.
-Gate any latch usage on the capability bit.
+Gate any snapshot usage on the capability bit.
 
 ## Time
 

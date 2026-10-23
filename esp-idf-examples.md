@@ -151,7 +151,7 @@ esp_err_t rbamp_io_write_u8(i2c_master_dev_handle_t dev,
  * @param  tick16  Caller's 16-bit window counter (mirrored at GC_TICK 0x59).
  * @param  group   GROUP_ID filter (0 = all-call).
  * @return ESP_OK on ACK (at least one slave accepted).
- *         ESP_ERR_NOT_FOUND on bus-level NACK — fall back to per-module latch.
+ *         ESP_ERR_NOT_FOUND on bus-level NACK — fall back to per-module snapshot.
  */
 esp_err_t rbamp_io_broadcast_latch(i2c_master_bus_handle_t bus,
                                    uint16_t tick16, uint8_t group);
@@ -294,7 +294,7 @@ esp_err_t rbamp_io_broadcast_latch(i2c_master_bus_handle_t bus,
     i2c_master_bus_rm_device(gc);
     /* On bus-level NACK i2c_master_transmit returns ESP_ERR_INVALID_RESPONSE
      * or ESP_FAIL — translate to ESP_ERR_NOT_FOUND so the caller falls back
-     * to per-module sequential latch. */
+     * to per-module sequential snapshot. */
     return (err == ESP_OK) ? ESP_OK : ESP_ERR_NOT_FOUND;
 }
 
@@ -426,7 +426,7 @@ void app_main(void) {
 
     ESP_ERROR_CHECK(rbamp_io_wait_ready(dev, 2000));
 
-    // Primer latch — the snapshot it produces is discarded.
+    // Primer snapshot — the snapshot it produces is discarded.
     ESP_ERROR_CHECK(rbamp_io_write_u8(dev, RB_REG_COMMAND, RB_CMD_LATCH_PERIOD));
     int64_t t_prev_us = esp_timer_get_time();
     double total_wh = 0.0;
@@ -434,7 +434,7 @@ void app_main(void) {
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(60 * 1000));
 
-        // 1) Final latch — closes the just-elapsed period.
+        // 1) Final snapshot — closes the just-elapsed period.
         ESP_ERROR_CHECK(rbamp_io_write_u8(dev, RB_REG_COMMAND, RB_CMD_LATCH_PERIOD));
         int64_t t_now_us = esp_timer_get_time();
         vTaskDelay(pdMS_TO_TICKS(50));  // let firmware finalise the snapshot
@@ -856,7 +856,7 @@ void app_main(void) {
     ESP_ERROR_CHECK(rbamp_io_wait_ready(solar, 2000));
     ESP_ERROR_CHECK(rbamp_io_wait_ready(loads, 2000));
 
-    // Primer latch on all modules (general call). GC reception is opt-in
+    // Primer snapshot on all modules (general call). GC reception is opt-in
     // (FLEET_CONFIG.bit0, default OFF) — fall back to per-module on NACK.
     uint16_t gc_tick = 0;
     if (rbamp_io_broadcast_latch(bus, gc_tick++, 0) != ESP_OK) {
@@ -876,7 +876,7 @@ void app_main(void) {
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(60 * 1000));
 
-        // Synchronous latch — all three modules snapshot at the same instant.
+        // Synchronous snapshot — all three modules snapshot at the same instant.
         if (rbamp_io_broadcast_latch(bus, gc_tick++, 0) != ESP_OK) {
             rbamp_io_write_u8(mains, RB_REG_COMMAND, RB_CMD_LATCH_PERIOD);
             rbamp_io_write_u8(solar, RB_REG_COMMAND, RB_CMD_LATCH_PERIOD);
@@ -1232,7 +1232,7 @@ void app_main(void) {
 
 ## Example 9 — Battery-powered remote logger with deep sleep
 
-**Goal**: an outdoor / off-grid logger that wakes every 10 minutes, latches a period, publishes via MQTT, then re-enters deep sleep. Average current draw a few mA — a single Li-ion cell lasts months.
+**Goal**: an outdoor / off-grid logger that wakes every 10 minutes, snapshots a period, publishes via MQTT, then re-enters deep sleep. Average current draw a few mA — a single Li-ion cell lasts months.
 **Hardware**: ESP32 (or ESP32-S3) + one rbAmp UI1 + Li-ion. The rbAmp can be power-gated through a MOSFET on GPIO 4.
 **Persistence**: `RTC_DATA_ATTR` survives deep sleep; `nvs_flash` survives full power loss.
 
@@ -1309,7 +1309,7 @@ void app_main(void) {
         esp_deep_sleep_start();
     }
 
-    // ----- First wake after cold boot: primer latch only -----
+    // ----- First wake after cold boot: primer snapshot only -----
     if (!s_primer_done) {
         rbamp_io_write_u8(dev, RB_REG_COMMAND, RB_CMD_LATCH_PERIOD);
         s_t_prev_us  = esp_timer_get_time();
@@ -1377,14 +1377,14 @@ void app_main(void) {
 **Notes**:
 
 - `RTC_DATA_ATTR` survives **deep sleep** but is **lost on full power loss** (battery disconnect). For absolute persistence, store the running total to NVS at every wake.
-- The primer-latch step is gated by `s_primer_done` — the first sample after a cold boot is correctly discarded.
+- The primer-snapshot step is gated by `s_primer_done` — the first sample after a cold boot is correctly discarded.
 - `mqtt_start_with_timeout()` is a thin helper that calls `esp_mqtt_client_start()` and waits for `MQTT_EVENT_CONNECTED` with a deadline. Implement as a tiny wrapper around an event handler; not shown here for brevity.
 
 ---
 
 ## Example 10 — Time-of-use (TOU) tariff with SNTP wall-clock
 
-**Goal**: bill energy under a time-of-use schedule (different rates for peak and off-peak hours). The ESP32 keeps a real wall-clock via SNTP, splits each latched period into the right tariff bucket, resets daily totals at midnight, and publishes payloads with ISO timestamps.
+**Goal**: bill energy under a time-of-use schedule (different rates for peak and off-peak hours). The ESP32 keeps a real wall-clock via SNTP, splits each closed period into the right tariff bucket, resets daily totals at midnight, and publishes payloads with ISO timestamps.
 **Hardware**: ESP32 + one rbAmp UI1 + Wi-Fi.
 
 ```c
@@ -1603,7 +1603,7 @@ void app_main(void) {
 - **Share one I2C driver per port.** Multiple slaves (rbAmp + OLED + EEPROM) attach to the same `i2c_master_bus_handle_t` — never install two drivers on the same port.
 - **Use `esp_timer_get_time()` for the master clock.** Microsecond precision, monotonic, survives `vTaskDelay` jitter.
 - **`PERIOD_VALID` (`0x07`) must be checked after every `CMD_LATCH_PERIOD`.** Stale snapshots happen if the master polls faster than the firmware integrates.
-- **Wait ≥ 50 ms after a latch** before reading `0xDC..0xEF` — the firmware finalises the snapshot inside its main loop.
+- **Wait ≥ 50 ms after a snapshot** before reading `0xDC..0xEF` — the firmware finalises the snapshot inside its main loop.
 - **Use `i2c_master_probe()` for bus scans** — it is the IDF 5.x equivalent of the Arduino `endTransmission()` ping.
 - **For battery applications, gate the rbAmp power** through a MOSFET and call `esp_sleep_enable_timer_wakeup()` + `esp_deep_sleep_start()` between samples. Use `RTC_DATA_ATTR` for state that must survive sleep.
 - **Persist Wh totals to NVS** if you need them to survive a full power loss (battery removal). RTC slow memory only survives deep sleep.

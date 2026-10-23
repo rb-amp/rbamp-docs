@@ -7,7 +7,7 @@ to check. The command-polling rules used everywhere here are defined once in
 ## D1 — Power-up / discovery
 
 1. Read **12 bytes at 0x0000 in one transaction**: `ID` = 'S','T' · `VERSION` ≥ 0x36 ·
-   `CAPABILITIES` (expect bit 9 set; on current builds THD bit 2 = 0, latch bit 8 = 0, on-device
+   `CAPABILITIES` (expect bit 9 set; on current builds THD bit 2 = 0, snapshot-bank bit 8 = 0, on-device
    energy bit 13 = 1) · `STATUS` · `N_VOLTAGE` / `N_CURRENT` · `VARIANT` (UI1 0x11 = 1/1,
    0x63 = 3/3, reserved code) · `HW_REV` / `FW_VERSION`.
 2. Read `UID` 0x00F4 (12 B) — the device identity for your database; `FW_VER` 0x0114 (u32 image

@@ -146,7 +146,7 @@ HAL_StatusTypeDef RbAmpIO_WriteU8(uint8_t addr, uint8_t reg, uint8_t val);
  *          Slaves reject any first byte != 0xA5. See chapter 11 §6.3.2.
  * @param  tick16  Caller's 16-bit window counter (mirrored at GC_TICK 0x59).
  * @param  group   GROUP_ID filter (0 = all-call).
- * @return HAL_OK on ACK; HAL_ERROR on NACK — fall back to per-module latch.
+ * @return HAL_OK on ACK; HAL_ERROR on NACK — fall back to per-module snapshot.
  */
 HAL_StatusTypeDef RbAmpIO_BroadcastLatch(uint16_t tick16, uint8_t group);
 
@@ -406,7 +406,7 @@ RbAmpIO_Bind(&hi2c1);
 ssd1306_Init();
 RbAmpIO_WaitReady(RB_ADDR, 2000);
 
-/* Primer latch — discard the snapshot it produces. */
+/* Primer snapshot — discard the snapshot it produces. */
 RbAmpIO_WriteU8(RB_ADDR, RB_REG_COMMAND, RB_CMD_LATCH_PERIOD);
 uint32_t t_prev_ms = HAL_GetTick();
 double total_wh = 0.0;
@@ -415,7 +415,7 @@ double total_wh = 0.0;
 while (1) {
     HAL_Delay(60UL * 1000UL);
 
-    /* 1) Final latch — closes the period [t_prev_ms .. now]. */
+    /* 1) Final snapshot — closes the period [t_prev_ms .. now]. */
     RbAmpIO_WriteU8(RB_ADDR, RB_REG_COMMAND, RB_CMD_LATCH_PERIOD);
     uint32_t t_now_ms = HAL_GetTick();
     HAL_Delay(50);                              /* let firmware finalise snapshot */
@@ -727,7 +727,7 @@ RbAmpIO_WaitReady(ADDR_LOADS, 2000);
 
 static uint16_t gc_tick = 0;
 if (RbAmpIO_BroadcastLatch(gc_tick++, 0) != HAL_OK) {
-    /* GC NACK — fall back to per-module sequential latch. */
+    /* GC NACK — fall back to per-module sequential snapshot. */
     RbAmpIO_WriteU8(ADDR_MAINS, RB_REG_COMMAND, RB_CMD_LATCH_PERIOD);
     RbAmpIO_WriteU8(ADDR_SOLAR, RB_REG_COMMAND, RB_CMD_LATCH_PERIOD);
     RbAmpIO_WriteU8(ADDR_LOADS, RB_REG_COMMAND, RB_CMD_LATCH_PERIOD);
@@ -741,9 +741,9 @@ printf("Home balance started\r\n");
 while (1) {
     HAL_Delay(60UL * 1000UL);
 
-    /* Synchronous latch — all modules snapshot at the same instant. */
+    /* Synchronous snapshot — all modules snapshot at the same instant. */
     if (RbAmpIO_BroadcastLatch(gc_tick++, 0) != HAL_OK) {
-        /* GC NACK — fall back to per-module latch (skew ~1 ms/module). */
+        /* GC NACK — fall back to per-module snapshot (skew ~1 ms/module). */
         RbAmpIO_WriteU8(ADDR_MAINS, RB_REG_COMMAND, RB_CMD_LATCH_PERIOD);
         RbAmpIO_WriteU8(ADDR_SOLAR, RB_REG_COMMAND, RB_CMD_LATCH_PERIOD);
         RbAmpIO_WriteU8(ADDR_LOADS, RB_REG_COMMAND, RB_CMD_LATCH_PERIOD);
@@ -1032,7 +1032,7 @@ while (1) {
 
 ## Example 9 — Battery-powered logger with STANDBY mode
 
-**Goal**: an outdoor / off-grid logger that wakes from STANDBY every 10 minutes via the RTC alarm, latches a period, publishes via MQTT, then re-enters STANDBY. Current draw is dominated by the rare wake — STANDBY is single-digit µA on most STM32 families.
+**Goal**: an outdoor / off-grid logger that wakes from STANDBY every 10 minutes via the RTC alarm, snapshots a period, publishes via MQTT, then re-enters STANDBY. Current draw is dominated by the rare wake — STANDBY is single-digit µA on most STM32 families.
 **Hardware**: STM32L4 / L5 (best low-power), or F4/F7 with reduced features. rbAmp may be powered through a high-side switch on a GPIO so it consumes nothing during STANDBY.
 **Persistence**: RTC backup registers `RTC->BKP0R..BKPxR` (varies by family) survive STANDBY and VBAT.
 
@@ -1122,7 +1122,7 @@ if (RbAmpIO_WaitReady(RB_ADDR, 2000) != HAL_OK) {
     enter_standby(WAKE_SECONDS);
 }
 
-/* First wake-up after a cold boot: primer latch only. */
+/* First wake-up after a cold boot: primer snapshot only. */
 if (!primer_done) {
     RbAmpIO_WriteU8(RB_ADDR, RB_REG_COMMAND, RB_CMD_LATCH_PERIOD);
     primer_done = 1;
@@ -1179,7 +1179,7 @@ enter_standby(WAKE_SECONDS);
 
 ## Example 10 — Time-of-use (TOU) tariff with SNTP wall-clock
 
-**Goal**: bill energy under a time-of-use schedule. The STM32 keeps a real wall-clock via SNTP (LwIP `lwip/apps/sntp.h`), splits each latched period into the right tariff bucket, resets daily totals at midnight, and publishes payloads with ISO timestamps.
+**Goal**: bill energy under a time-of-use schedule. The STM32 keeps a real wall-clock via SNTP (LwIP `lwip/apps/sntp.h`), splits each closed period into the right tariff bucket, resets daily totals at midnight, and publishes payloads with ISO timestamps.
 **Hardware**: STM32 with Ethernet (STM32H7 / F7 / F4 + LAN8742) or any STM32 + Ethernet bridge.
 
 ```c
@@ -1401,7 +1401,7 @@ while (1) {
 - **One HAL I2C driver per peripheral.** Both rbAmp and OLED share `hi2c1` — never re-initialise the peripheral, just use the shared handle.
 - **Use `HAL_GetTick()` for the master clock.** Millisecond precision, monotonic, survives most HAL operations.
 - **`PERIOD_VALID` (`0x07`) must be checked after every `CMD_LATCH_PERIOD`.** Stale snapshots happen if the master polls faster than the firmware integrates.
-- **Wait ≥ 50 ms after a latch** before reading `0xDC..0xEF` — the firmware finalises the snapshot inside its main loop.
+- **Wait ≥ 50 ms after a snapshot** before reading `0xDC..0xEF` — the firmware finalises the snapshot inside its main loop.
 - **Use `HAL_I2C_IsDeviceReady()` for bus scans** — STM32 equivalent of the Arduino `endTransmission()` ping.
 - **For battery applications**, enter STOP or STANDBY between samples and arm the RTC wake-up timer. STANDBY restarts execution at the reset vector — use backup registers for state that must survive.
 - **Persist Wh totals to internal flash** if you need them to survive a full power loss (battery removal with no VBAT). RTC backup registers only survive when VBAT or VDD is present.

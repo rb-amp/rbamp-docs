@@ -48,7 +48,7 @@ All device actions go through the **COMMAND register (`0x0060`, u8)** — on Mod
 |---|---|---|
 | 0x01 | SAVE_CAL | persist calibration registers (service/factory; UNLOCK-gated on Modbus; rate-limited → 0xF9) |
 | 0x02 | RESET | warm reset (UNLOCK-gated on Modbus; expect no/truncated Modbus reply) |
-| 0x03 | LATCH_PERIOD | snapshot + reset latch bank `LATCH_BANK` — only on builds with latch banks (capability bit 8); otherwise 0xFE |
+| 0x03 | LATCH_PERIOD | snapshot + reset the bank selected by `LATCH_BANK` — only on builds with snapshot banks (capability bit 8); otherwise 0xFE |
 | 0x04 | SAVE_CONFIG | persist configuration (read-modify-write; calibration untouched; **not** UNLOCK-gated). Values validated against the legal table; illegal → 0xFD, nothing saved; rate-limited → 0xF9; an unchanged save is an OK no-op (still raises CONFIG_CHANGED) |
 | 0x05 | CAL_THD_FLOOR | capture the no-load THD floor (service; builds with THD) — otherwise 0xFE |
 | 0x06 | SET_TIME | apply the epoch written to TIME_SET/RTC_EPOCH; epoch < 1 600 000 000 → 0xFC; STATUS bit 4 sets immediately |
@@ -88,7 +88,7 @@ they cannot happen silently.
 |---|---|---|
 | Modbus **UNLOCK** | 0x01 · 0x02 · 0x07 · 0x10 · 0x12 · 0x13 · 0x14 · 0x15 | key 0xA5C3 → holding 0x8112; 10-s window, one command; may share one FC16 with the opcode ([Modbus](12_transport_modbus.md#unlock-gated-commands)) |
 | **LT_KEY** | 0x0A–0x0D, both transports | per-command magic, single-shot |
-| Broadcast whitelist | Modbus unit 0 | only time-set, latch, address-by-UID ([Modbus](12_transport_modbus.md#broadcast-unit-id-0)) |
+| Broadcast whitelist | Modbus unit 0 | only time-set, snapshot, address-by-UID ([Modbus](12_transport_modbus.md#broadcast-unit-id-0)) |
 
 Not gated on either transport: 0x04, 0x06, 0x08, 0x09, 0x0E, 0x0F, 0x11, 0x16.
 I²C has no UNLOCK step: physical access to the board's I²C bus is the installation's trust boundary;

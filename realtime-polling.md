@@ -8,7 +8,7 @@ Real-time polling — reading instantaneous values of U, I, P, PF, flow directio
 - Mains-quality monitoring (frequency, PF)
 - **Determining current direction — consumption or export** (from the sign of P_real)
 
-For **tariff energy accumulation** (Wh over a period) use the period-latch mechanism described in [04_period_metering.md](period-metering.md).
+For **tariff energy accumulation** (Wh over a period) use the period-snapshot mechanism described in [04_period_metering.md](period-metering.md).
 
 ## The measurement window (100 ms)
 
@@ -35,13 +35,13 @@ The window is **hard-coded to 100 ms** on current firmware, independent of mains
 
 At 50 Hz mains a 100 ms window covers exactly 5 cycles; at 60 Hz, 6 cycles (10 and 12 on the older 200 ms window). In both cases the integer number of mains cycles keeps RMS and P accurate.
 
-> The register `V03_PERIOD_MS` (`0xCA..0xCD`, u32 LE) reports the duration of the **current latch period** so far (ms since the last `CMD_LATCH_PERIOD` — see chapter 04). It is diagnostic only; it does not affect measurement accuracy or the energy calculation.
+> The register `V03_PERIOD_MS` (`0xCA..0xCD`, u32 LE) reports the duration of the **current snapshot period** so far (ms since the last `CMD_LATCH_PERIOD` — see chapter 04). It is diagnostic only; it does not affect measurement accuracy or the energy calculation.
 
 ### When the next window starts
 
 Immediately after the previous one is published. There is no gap between windows — measurement is continuous.
 
-![How the measurement window relates to the period latch.](images/window-period-latch-concept.png)
+![How the measurement window relates to the period snapshot.](images/window-period-latch-concept.png)
 
 ## DATA_READY (DRDY) — the ready pin
 
@@ -174,7 +174,7 @@ All values are float32 little-endian (4 bytes). READ supports auto-increment —
 | `0x03` | VERSION | u8 | Firmware version |
 | `0x20` | AC_FREQ | u8 | Mains frequency (Hz), 0 if no zero-cross detected |
 | `0xCE` | DATA_VALID | u8 | bit0 = valid result available since boot |
-| `0xCA` | V03_PERIOD_MS | u32 LE | Duration of the current latch period so far (ms, diagnostic — see ch. 04) |
+| `0xCA` | V03_PERIOD_MS | u32 LE | Duration of the current snapshot period so far (ms, diagnostic — see ch. 04) |
 
 ## Polling — single module
 
@@ -415,7 +415,7 @@ On I1/I2/I3 (and higher-channel I*-only variants), without a voltage sensor:
 | `P*_real` (`0xA6`, `0xAA`, `0xAE`) | `0.0f` (no U → no P) |
 | `PF*`, `Q*` | `0.0f` |
 | `AC_FREQ` (`0x20`) | Real value (50 or 60). Zero-cross detection comes from a dedicated mains-ZC pin independent of the voltage front-end and is available on **all** variants, including I-only. |
-| `ZC_OFFSET` (`0x4E`) | `0xFFFF`. This register is the phase offset between the GC latch instant and the next voltage zero-cross, used for U/I phase compensation — meaningful only when a voltage signal is being measured. On I-only variants it is firmware-gated to `0xFFFF` (no voltage measurement). |
+| `ZC_OFFSET` (`0x4E`) | `0xFFFF`. This register is the phase offset between the GC snapshot instant and the next voltage zero-cross, used for U/I phase compensation — meaningful only when a voltage signal is being measured. On I-only variants it is firmware-gated to `0xFFFF` (no voltage measurement). |
 
 Without P there is no information about current direction — `I_rms` is always ≥ 0 and does not show which way current flows.
 
@@ -449,7 +449,7 @@ I-only variants are intended for:
 0xB6 PF1 (f32, ±)        — −1..+1
 0xBA PF2 (f32, ±)        — −1..+1
 
-0xCA V03_PERIOD_MS (u32) — diagnostic, current latch-period duration
+0xCA V03_PERIOD_MS (u32) — diagnostic, current snapshot-period duration
 0xCE DATA_VALID (u8)     — bit0 = valid after boot
 
 0xD0 Q0_reac (f32, ≥0)   — VAr, √(S²−P²), includes distortion
@@ -459,5 +459,5 @@ I-only variants are intended for:
 
 ## Next
 
-- [04_period_metering.md](period-metering.md) — atomic period latch for tariff accumulation
+- [04_period_metering.md](period-metering.md) — atomic period snapshot for tariff accumulation
 - [05_troubleshooting.md](troubleshooting.md) — what to do if values look wrong

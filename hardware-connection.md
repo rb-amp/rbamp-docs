@@ -201,7 +201,7 @@ The falling edge of DRDY guarantees that **all RT registers are coherent and fre
 ### Applicability
 
 - DRDY fires only on **RT updates** (every measurement window, ~100 ms on current firmware).
-- DRDY does **not** fire on period snapshots (period snapshots are updated by the latch command which the master triggers — so the master already knows when to read).
+- DRDY does **not** fire on period snapshots (period snapshots are updated by the snapshot command which the master triggers — so the master already knows when to read).
 - For slow-polling masters (every 1 s or 60 s), DRDY can be ignored.
 
 ## Reference wiring example (ESP32, single module)

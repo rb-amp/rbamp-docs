@@ -393,7 +393,7 @@ int main(void) {
 
     rbamp_io_wait_ready(RB_ADDR, 2000);
 
-    /* Primer latch — discard its snapshot. */
+    /* Primer snapshot — discard its snapshot. */
     rbamp_io_write_u8(RB_ADDR, RB_REG_COMMAND, RB_CMD_LATCH_PERIOD);
     uint32_t t_prev_ms = to_ms_since_boot(get_absolute_time());
     double total_wh = 0.0;
@@ -401,7 +401,7 @@ int main(void) {
     while (true) {
         sleep_ms(60 * 1000);
 
-        /* 1) Final latch. */
+        /* 1) Final snapshot. */
         rbamp_io_write_u8(RB_ADDR, RB_REG_COMMAND, RB_CMD_LATCH_PERIOD);
         uint32_t t_now_ms = to_ms_since_boot(get_absolute_time());
         sleep_ms(50);                       /* let firmware finalise snapshot */
@@ -770,7 +770,7 @@ int main(void) {
     rbamp_io_wait_ready(ADDR_SOLAR, 2000);
     rbamp_io_wait_ready(ADDR_LOADS, 2000);
 
-    /* Primer latch on all modules (general call). GC is opt-in
+    /* Primer snapshot on all modules (general call). GC is opt-in
      * (FLEET_CONFIG.bit0, default OFF) — fall back to per-module on NACK. */
     uint16_t gc_tick = 0;
     if (rbamp_io_broadcast_latch(gc_tick++, 0) != PICO_OK) {
@@ -786,7 +786,7 @@ int main(void) {
     while (true) {
         sleep_ms(60 * 1000);
 
-        /* Synchronous latch on all modules. */
+        /* Synchronous snapshot on all modules. */
         if (rbamp_io_broadcast_latch(gc_tick++, 0) != PICO_OK) {
             rbamp_io_write_u8(ADDR_MAINS, RB_REG_COMMAND, RB_CMD_LATCH_PERIOD);
             rbamp_io_write_u8(ADDR_SOLAR, RB_REG_COMMAND, RB_CMD_LATCH_PERIOD);
@@ -1101,7 +1101,7 @@ int main(void) {
 
 ## Example 9 — Battery-powered logger with dormant sleep
 
-**Goal**: an outdoor / off-grid logger that wakes from dormant mode every 10 minutes via the RTC alarm, latches a period, publishes via MQTT, then re-enters dormant. Pico W reaches a few hundred µA in dormant sleep — good enough for many months on a Li-ion cell.
+**Goal**: an outdoor / off-grid logger that wakes from dormant mode every 10 minutes via the RTC alarm, snapshots a period, publishes via MQTT, then re-enters dormant. Pico W reaches a few hundred µA in dormant sleep — good enough for many months on a Li-ion cell.
 **Hardware**: Pico W + one rbAmp UI1 + Li-ion. The rbAmp can be power-gated through a high-side switch on GPIO 16.
 **Persistence**: `pico/sleep.h` + the on-chip RTC + a small NOINIT region (or external NVM) for state that must survive sleep.
 
@@ -1219,7 +1219,7 @@ int main(void) {
         enter_dormant(WAKE_SECONDS);
     }
 
-    /* First wake-up after a cold boot: primer latch only. */
+    /* First wake-up after a cold boot: primer snapshot only. */
     if (!s_primer_done) {
         rbamp_io_write_u8(RB_ADDR, RB_REG_COMMAND, RB_CMD_LATCH_PERIOD);
         s_primer_done = true;
@@ -1284,7 +1284,7 @@ int main(void) {
 
 ## Example 10 — Time-of-use (TOU) tariff with SNTP wall-clock
 
-**Goal**: bill energy under a time-of-use schedule. The Pico W keeps a real wall-clock via SNTP, splits each latched period into the right tariff bucket, resets daily totals at midnight, and publishes payloads with ISO timestamps.
+**Goal**: bill energy under a time-of-use schedule. The Pico W keeps a real wall-clock via SNTP, splits each closed period into the right tariff bucket, resets daily totals at midnight, and publishes payloads with ISO timestamps.
 **Hardware**: Pico W + one rbAmp UI1 + Wi-Fi.
 
 `CMakeLists.txt` additions:
@@ -1502,8 +1502,8 @@ int main(void) {
 - **Use `i2c0` and `i2c1` independently.** rbAmp on `i2c0`, OLED on `i2c0`, SD card on SPI — keep peripherals on the bus they were initialised for.
 - **Use `to_ms_since_boot(get_absolute_time())` for the master clock.** Microsecond precision via `to_us_since_boot()`. Monotonic, survives `sleep_ms()`.
 - **`PERIOD_VALID` (`0x07`) must be checked after every `CMD_LATCH_PERIOD`.** Stale snapshots happen if the master polls faster than the firmware integrates.
-- **Wait ≥ 50 ms after a latch** before reading `0xDC..0xEF`.
-- **For multi-module setups**, `rbamp_io_broadcast_latch(tick, group)` via general call gives precise synchronisation. GC reception is **opt-in** per module (`FLEET_CONFIG.bit0`, default OFF). On NACK, fall back to per-module sequential latch.
+- **Wait ≥ 50 ms after a snapshot** before reading `0xDC..0xEF`.
+- **For multi-module setups**, `rbamp_io_broadcast_latch(tick, group)` via general call gives precise synchronisation. GC reception is **opt-in** per module (`FLEET_CONFIG.bit0`, default OFF). On NACK, fall back to per-module sequential snapshot.
 - **For battery applications on Pico W**, deinit CYW43 (`cyw43_arch_deinit()`) before sleep to drop several mA. RP2040 dormant sleep is ~180 µA, RP2350 even lower.
 - **Persist Wh totals to internal flash** with `flash_range_program()` if you need them to survive a full power loss. NOINIT RAM survives dormant sleep but not power cycling.
 - **`printf` float support** is enabled by default in `pico_stdlib`. For RP2040, the SDK's `pico_float` implementation is used; for RP2350, hardware FPU support is on by default.

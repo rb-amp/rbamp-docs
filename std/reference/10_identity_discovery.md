@@ -62,7 +62,7 @@ sending an update.**
 | 5 | HUB_IFACE | hub-side interface |
 | 6 | OTA | firmware update over the bus |
 | 7 | ENERGY | per-window energy accumulators |
-| 8 | MULTI_LATCH | latch banks present (0 on current firmware — see [Measurement](16_measurement_energy.md)) |
+| 8 | MULTI_LATCH | snapshot banks present (0 on current firmware — see [Measurement](16_measurement_energy.md)) |
 | 9 | ADDR16 | 16-bit register addressing (always 1 on STD) |
 | 10 | MULTI_CHANNEL | more than one current channel |
 | 11 | MODBUS_IFACE | Modbus RTU transport present |
@@ -75,7 +75,7 @@ A master treats unknown bits as "feature absent" and never relies on reserved fi
 
 **Honest-capabilities rule:** a module reports only what the running build actually provides. For
 example, current three-phase firmware reports THD = 0,
-MULTI_LATCH = 0 (no latch banks; energy is read from cumulative counters) and RTC = 0 (the master
+MULTI_LATCH = 0 (no snapshot banks; energy is read from cumulative counters) and RTC = 0 (the master
 feeds the clock).
 
 ## VARIANT codes (0x0009)
