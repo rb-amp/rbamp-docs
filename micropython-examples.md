@@ -4,7 +4,7 @@ This chapter is the Python equivalent of [10_arduino_examples.md](arduino-exampl
 
 > **These examples talk to rbAmp directly through the raw I2C register API.** They are intended for native, embedded, or otherwise resource-constrained integrations where direct control is required and every byte on the bus matters.
 >
-> **For a more convenient, structured interface — use the `rbamp` MicroPython library** (see [chapter 18 · MicroPython Library](micropython-examples.md)). The library wraps the register-level details behind a high-level `RbAmp` class with named methods (`dev.voltage`, `dev.latch_period()`, `dev.read_period_snapshot()`, etc.), sync and `uasyncio` APIs, an automatic per-channel Wh accumulator, multi-module helpers, and application-level NACK retry + sanity-check discipline for ESP32 ports via `MachineI2CBackend(retry_attempts=…)` (see the bus-timing and retry guidance in [chapter 3 · API Reference](api-reference.md)). The same package runs unmodified on CPython — see [chapter 20 · Python SBC Library](python-overview.md). Most user-facing projects should start from the library and fall back to the raw API only when needed.
+> **For a more convenient, structured interface — use the `rbamp` MicroPython library** (see the [client-libraries table in the README](README.md#client-libraries-high-level-api-per-platform)). The library wraps the register-level details behind a high-level `RbAmp` class with named methods (`dev.voltage`, `dev.latch_period()`, `dev.read_period_snapshot()`, etc.), sync and `uasyncio` APIs, an automatic per-channel Wh accumulator, multi-module helpers, and SPEC §B.5 retry+sanity discipline for ESP32 ports via `MachineI2CBackend(retry_attempts=…)`. The same package runs unmodified on CPython — see the README client-libraries table. Most user-facing projects should start from the library and fall back to the raw API only when needed.
 
 ## MicroPython vs CircuitPython — quick reference
 
@@ -456,7 +456,7 @@ while True:
 ## Example 6 — Home energy balance
 
 **Goal**: a full balance dashboard. Three modules:
-- rbAmp #1 on the main feed (STANDARD / PRO — bidirectional)
+- rbAmp #1 on the main feed (STANDARD (STD) — bidirectional)
 - rbAmp #2 on the solar inverter output
 - rbAmp #3 UI3 on three large loads (HP, AC, EV)
 
@@ -469,12 +469,12 @@ import network, time, ujson as json
 from umqtt.simple import MQTTClient
 
 i2c = I2C(0, scl=Pin(22), sda=Pin(21), freq=50000)
-ADDR_MAINS = 0x50        # bidirectional (STANDARD / PRO)
+ADDR_MAINS = 0x50        # bidirectional (STANDARD (STD))
 ADDR_SOLAR = 0x51        # generation only
 ADDR_LOADS = 0x52        # UI3
 
 # PERIOD_AVG_P_NEG address for the mains module — see the SKU datasheet
-# of the STANDARD / PRO product. Set to None on BASIC modules.
+# of the STANDARD (STD) product. Set to None on BASIC modules.
 REG_PERIOD_AVG_P_NEG_MAINS = None
 
 wlan = network.WLAN(network.STA_IF); wlan.active(True); wlan.connect("ssid", "password")
@@ -515,7 +515,7 @@ while True:
     dt_s = time.ticks_diff(t_now_ms, t_prev_ms) / 1000.0
     t_prev_ms = t_now_ms
 
-    # --- MAINS (bidirectional, STANDARD / PRO) ---
+    # --- MAINS (bidirectional, STANDARD (STD)) ---
     if rb_read_u8(i2c, ADDR_MAINS, 0x07) & 0x01:
         avg_p_consume = rb_read_float_le(i2c, ADDR_MAINS, 0xDC)
         avg_p_export  = (rb_read_float_le(i2c, ADDR_MAINS, REG_PERIOD_AVG_P_NEG_MAINS)
@@ -585,7 +585,7 @@ spi = SPI(1, baudrate=1_000_000, sck=Pin(18), mosi=Pin(23), miso=Pin(19))
 sd  = sdcard.SDCard(spi, Pin(5))
 os.mount(sd, "/sd")
 
-EMA_ALPHA = 0.05                                  # ~4 s time constant at 5 Hz
+EMA_ALPHA = 0.05                                  # ~2 s time constant at 10 Hz
 EVENT_THRESHOLD_W = 200.0
 
 _data_ready = False
@@ -877,7 +877,7 @@ deepsleep(SLEEP_MS)
 
 **Goal**: bill energy under a time-of-use schedule (different rates for peak and off-peak hours). The ESP32 keeps a real wall-clock via NTP, splits each latched period into the right tariff bucket, resets daily totals at midnight, and publishes payloads with ISO timestamps.
 **Hardware**: ESP32 + one rbAmp UI1 + WiFi.
-**Accounting**: unidirectional. The bucket logic works on STANDARD / PRO — just feed both accumulators through it.
+**Accounting**: unidirectional. The bucket logic works on STANDARD (STD) — just feed both accumulators through it.
 
 ```python
 from machine import I2C, Pin
@@ -1024,7 +1024,7 @@ while True:
 
 - MicroPython's `time` module is UTC-based on most ports — convert with `time.gmtime(time.time() + offset_seconds)`. For full DST handling, a small TZ table or the `utimezone` library can replace `TZ_OFFSET_HOURS`.
 - Boundary error: a 60 s period that crosses 22:00 is attributed entirely to off-peak (timestamp at the latch instant). At most ~30 s of misattribution per day — negligible for residential billing.
-- For STANDARD / PRO bidirectional metering, call `accumulate()` twice — once on the consumption side and once on the export side — and publish both sets of peak/off-peak totals.
+- For STANDARD (STD) bidirectional metering, call `accumulate()` twice — once on the consumption side and once on the export side — and publish both sets of peak/off-peak totals.
 
 > **CircuitPython delta**: use `adafruit_ntp.NTP(socketpool, server="pool.ntp.org", tz_offset=2)` + `rtc.RTC().datetime = ntp.datetime` to set the system clock, then read it via `time.localtime()`. The bucket logic is identical.
 
@@ -1059,8 +1059,8 @@ while True:
 
 After working through these ten examples:
 
-- For the high-level `rbamp` package (MicroPython + CircuitPython), see [18_micropython_library.md](micropython-examples.md).
-- For ESPHome integration (declarative YAML), see [`tools/esphome-rbamp/docs/en/`](esphome-overview.md).
-- For a richer SBC environment (Raspberry Pi, full CPython), see [20_python_sbc_library.md](python-overview.md).
+- For the high-level `rbamp` package, see the [client-libraries table in the README](README.md#client-libraries-high-level-api-per-platform).
+- For ESPHome integration (declarative YAML), see [`tools/esphome-rbamp/docs/en/`](https://rbamp.com/docs/modules-basic-standard-esphome-overview).
+- For a richer SBC environment (Raspberry Pi, full CPython), see the README client-libraries table.
 - Tasmota Berry driver — deferred (no library shipped).
 - The formal I2C register specification used here lives in [11_api_reference.md](api-reference.md).

@@ -4,7 +4,7 @@ This chapter is the STM32 equivalent of [10_arduino_examples.md](arduino-example
 
 > **These examples talk to rbAmp directly through the raw I2C register API.** They are intended for production embedded firmware on STM32 — direct control over the HAL, predictable RAM/flash footprint, integration with LwIP, FATFS, FreeRTOS and CubeMX HAL generation.
 >
-> **For a more convenient, structured interface — use the `rbamp` STM32 HAL library** (chapter 21 *coming soon* — pending closure of bench validation). The library will wrap the register-level details behind a single `RbAmp_HandleTypeDef` with named functions (`RbAmp_ReadVoltage()`, `RbAmp_LatchPeriod()`, `RbAmp_ReadPeriodSnapshot()`, etc.), a per-channel Wh accumulator, a multi-module manager, and bare-HAL ergonomics that need no application-level NACK retry layer (STM32 HAL does not share the ESP-IDF v5 NACK pattern; see the bus-timing and retry guidance in [chapter 3 · API Reference](api-reference.md)). Until chapter 21 lands, the raw-API recipes below are the recommended path on STM32.
+> Configure the I²C peripheral in CubeMX for **50 kHz** (recommended — see chapter 11 §2.2) and wrap register reads in a short retry.
 
 ## Supported families and toolchain
 
@@ -184,7 +184,6 @@ HAL_StatusTypeDef RbAmpIO_WaitReady(uint8_t addr, uint32_t timeout_ms);
 
 /* ===== Commands ===== */
 #define RB_CMD_RESET            0x01U
-#define RB_CMD_SAVE_GAINS       0x26U
 #define RB_CMD_LATCH_PERIOD     0x27U
 
 #ifdef __cplusplus
@@ -687,7 +686,7 @@ while (1) {
 ## Example 6 — Home energy balance
 
 **Goal**: full balance dashboard. Three modules:
-- rbAmp #1 on the main feed (STANDARD / PRO — bidirectional)
+- rbAmp #1 on the main feed (STANDARD (STD) — bidirectional)
 - rbAmp #2 on the solar inverter output (BASIC OK)
 - rbAmp #3 UI3 on three large loads (HP, AC, EV)
 
@@ -704,12 +703,12 @@ extern HAL_StatusTypeDef Net_MqttPublish(const char *topic,
                                           const uint8_t *payload, uint32_t len,
                                           uint8_t qos, uint8_t retain);
 
-#define ADDR_MAINS  0x50U   /* bidirectional (STANDARD/PRO) */
+#define ADDR_MAINS  0x50U   /* bidirectional (STANDARD (STD)) */
 #define ADDR_SOLAR  0x51U   /* generation only */
 #define ADDR_LOADS  0x52U   /* UI3 */
 
 /* PERIOD_AVG_P_NEG address for the mains module — see the SKU datasheet
- * of the STANDARD/PRO product. Set to 0xFF for BASIC modules. */
+ * of the STANDARD (STD) product. Set to 0xFF for BASIC modules. */
 #define REG_PERIOD_AVG_P_NEG_MAINS  0xFFU
 
 typedef struct {
@@ -755,7 +754,7 @@ while (1) {
     float dt_s = (float)(t_now_ms - t_prev_ms) / 1000.0f;
     t_prev_ms = t_now_ms;
 
-    /* ----- MAINS (bidirectional, STANDARD/PRO) ----- */
+    /* ----- MAINS (bidirectional, STANDARD (STD)) ----- */
     uint8_t valid;
     if (RbAmpIO_ReadU8(ADDR_MAINS, RB_REG_PERIOD_VALID, &valid) == HAL_OK
         && (valid & 0x01U)) {
@@ -1376,7 +1375,7 @@ while (1) {
 
 - LwIP's SNTP client populates the C library `time(NULL)` source via the LwIP `SYS_ARCH_RAND` / `sys_now` hooks; on STM32 ports `gmtime_r()` then returns sensible values.
 - For full DST handling, store the TZ offset in a small lookup table and recompute on the daily roll-over, or pipe the time through `tzset()` with a POSIX TZ string if your newlib build supports it (most do).
-- For STANDARD / PRO bidirectional metering, call `accumulate()` twice — once for the consumption side and once for the export side — and publish both peak/off-peak buckets.
+- For STANDARD (STD) bidirectional metering, call `accumulate()` twice — once for the consumption side and once for the export side — and publish both peak/off-peak buckets.
 
 ---
 
@@ -1412,9 +1411,9 @@ while (1) {
 
 After working through these ten examples:
 
-- For Arduino-style ESP32 development, see [10_arduino_examples.md](arduino-examples.md) (raw) or [17_arduino_library.md](library-arduino-overview.md) (library).
-- For MicroPython / CircuitPython, see [12_micropython_examples.md](micropython-examples.md) (raw) or [18_micropython_library.md](micropython-examples.md) (library).
-- For native ESP-IDF, see [13_esp_idf_examples.md](esp-idf-examples.md) (raw) or [19_esp_idf_library.md](esp-idf-overview.md) (library).
+- For Arduino-style ESP32 development, see [10_arduino_examples.md](arduino-examples.md) (raw).
+- For MicroPython / CircuitPython, see [12_micropython_examples.md](micropython-examples.md) (raw).
+- For native ESP-IDF, see [13_esp_idf_examples.md](esp-idf-examples.md) (raw).
 - For Raspberry Pi Pico C SDK, see [15_pico_sdk_examples.md](pico-sdk-examples.md).
-- For ESPHome integration (declarative YAML), see [`tools/esphome-rbamp/docs/en/`](esphome-overview.md).
+- For ESPHome integration (declarative YAML), see [`tools/esphome-rbamp/docs/en/`](https://rbamp.com/docs/modules-basic-standard-esphome-overview).
 - The formal I2C register specification used here lives in [11_api_reference.md](api-reference.md).

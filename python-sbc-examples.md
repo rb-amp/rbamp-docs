@@ -4,7 +4,7 @@ This chapter is the SBC equivalent of [10_arduino_examples.md](arduino-examples.
 
 > **These examples talk to rbAmp directly through the raw I2C register API.** They are intended for service-style integrations on Linux — Home Assistant gateways, OpenWrt routers, Docker / k3s containers, custom IoT bridges — where Python is the right tool for the job and direct register access is fine.
 >
-> **For a more convenient, structured interface — use the `rbamp` Python package** (see [chapter 20 · Python SBC Library](python-overview.md)). The package wraps the register-level details behind a `RbAmp` class with named methods (`dev.voltage`, `dev.latch_period()`, `dev.read_period_snapshot()`, etc.), a per-channel `RbAmpEnergy` accumulator, an `asyncio` variant via `async for`, multi-module helpers, HA MQTT auto-discovery and systemd service templates in the bundled examples, and a `rbamp` CLI (`rbamp scan` / `read --watch` / `period`). The same package runs unmodified on MicroPython — see [chapter 18](micropython-examples.md). Most projects should start from the package and fall back to the raw API only when needed.
+> **For a more convenient, structured interface — use the `rbamp` Python package** (see the [client-libraries table in the README](README.md#client-libraries-high-level-api-per-platform)). The package wraps the register-level details behind a `RbAmp` class with named methods (`dev.voltage`, `dev.latch_period()`, `dev.read_period_snapshot()`, etc.), a per-channel `RbAmpEnergy` accumulator, an `asyncio` variant via `async for`, multi-module helpers, HA MQTT auto-discovery and systemd service templates in the bundled examples, and a `rbamp` CLI (`rbamp scan` / `read --watch` / `period`). The same package runs unmodified on MicroPython — see the README client-libraries table. Most projects should start from the package and fall back to the raw API only when needed.
 
 ## How Linux differs from a microcontroller
 
@@ -231,7 +231,6 @@ REG_PERIOD_MAX_P   = 0xE0
 REG_PERIOD_LATCH_MS= 0xEC
 
 CMD_RESET          = 0x01
-CMD_SAVE_GAINS     = 0x26
 CMD_LATCH_PERIOD   = 0x27
 
 
@@ -636,7 +635,7 @@ with SMBus(I2C_BUS) as bus:
 
 **Notes**:
 
-- `threading.Event` is the natural synchronisation primitive — `set()` from the callback, `wait()` from the main loop. Linux scheduling latency is well below the 200 ms RT-window cadence, so no edge is lost.
+- `threading.Event` is the natural synchronisation primitive — `set()` from the callback, `wait()` from the main loop. Linux scheduling latency is well below the ~100 ms RT-window cadence, so no edge is lost.
 - For older Pi OS releases without `gpiozero`, swap in `RPi.GPIO.add_event_detect(15, GPIO.FALLING, callback=on_drdy)`. For non-Pi SBCs use `gpiod.LineRequest` (libgpiod 2.x) — the rest of the script is unchanged.
 
 ---
@@ -644,7 +643,7 @@ with SMBus(I2C_BUS) as bus:
 ## Example 6 — Home energy balance
 
 **Goal**: full balance dashboard. Three modules:
-- rbAmp #1 on the main feed (STANDARD / PRO — bidirectional)
+- rbAmp #1 on the main feed (STANDARD (STD) — bidirectional)
 - rbAmp #2 on the solar inverter output (BASIC OK)
 - rbAmp #3 UI3 on three large loads (HP, AC, EV)
 
@@ -665,13 +664,13 @@ from rbamp_io import (
 )
 
 I2C_BUS    = 1
-ADDR_MAINS = 0x50                # bidirectional (STANDARD/PRO)
+ADDR_MAINS = 0x50                # bidirectional (STANDARD (STD))
 ADDR_SOLAR = 0x51                # generation only (BASIC ok)
 ADDR_LOADS = 0x52                # UI3
 MQTT_HOST  = "192.168.1.10"
 
 # PERIOD_AVG_P_NEG register for the mains module — see the SKU datasheet
-# of the STANDARD/PRO product. Set to None on BASIC modules.
+# of the STANDARD (STD) product. Set to None on BASIC modules.
 from typing import Optional
 REG_PERIOD_AVG_P_NEG_MAINS: Optional[int] = None     # Optional[int] for Py 3.9+ compat
 
@@ -1316,7 +1315,7 @@ with SMBus(I2C_BUS) as bus:
 - `zoneinfo` is the modern Python 3.9+ stdlib timezone API. On Debian / Raspberry Pi OS it pulls IANA data from the system `tzdata` package — DST transitions are handled correctly.
 - For older Pythons (3.8 and earlier) substitute `pytz`: `import pytz; TZ = pytz.timezone("Europe/Berlin")`.
 - ISO 8601 timestamps with offset are produced by `datetime.isoformat(timespec="seconds")` — for example, `2026-05-22T18:30:00+02:00`.
-- For STANDARD / PRO bidirectional metering, call `accumulate()` twice — once for consumption and once for export — and publish both peak/off-peak buckets.
+- For STANDARD (STD) bidirectional metering, call `accumulate()` twice — once for consumption and once for export — and publish both peak/off-peak buckets.
 
 ---
 
@@ -1357,6 +1356,6 @@ After working through these ten examples:
 - For native ESP-IDF firmware, see [13_esp_idf_examples.md](esp-idf-examples.md).
 - For STM32 HAL, see [14_stm32_hal_examples.md](stm32-hal-examples.md).
 - For Raspberry Pi Pico SDK (C, not the Linux-on-Pi case), see [15_pico_sdk_examples.md](pico-sdk-examples.md).
-- For the high-level `rbamp` Python package (CPython on Linux SBC), see [20_python_sbc_library.md](python-overview.md).
-- For ESPHome integration (declarative YAML), see [`tools/esphome-rbamp/docs/en/`](esphome-overview.md).
+- For the high-level `rbamp` Python package, see the [client-libraries table in the README](README.md#client-libraries-high-level-api-per-platform).
+- For ESPHome integration (declarative YAML), see [`tools/esphome-rbamp/docs/en/`](https://rbamp.com/docs/modules-basic-standard-esphome-overview).
 - The formal I2C register specification used here lives in [11_api_reference.md](api-reference.md).

@@ -9,13 +9,13 @@ Hosted version: <https://www.rbamp.com/docs/modules-basic-standard-overview>
 ## Contents
 
 - [Overview](overview.md)
-- [Quick Start](quickstart.md)
 - [Hardware Connection](hardware-connection.md)
 - [Initialization](initialization.md)
 - [Real-time Polling](realtime-polling.md)
 - [Period Metering](period-metering.md)
 - [API Reference](api-reference.md)
 - [Troubleshooting](troubleshooting.md)
+- [STD technical reference](std/reference/README.md)
 - [Safety — Safe by Design](safety.md)
 
 ## Raw-register examples

@@ -4,7 +4,7 @@ This chapter is the Raspberry Pi Pico equivalent of [10_arduino_examples.md](ard
 
 > **These examples talk to rbAmp directly through the raw I2C register API.** They are intended for production embedded firmware on RP2040 / RP2350 — direct control of the dual-core Cortex-M0+ / M33, integration with the LwIP MQTT client, FATFS, and the SDK's sleep / persistence primitives.
 >
-> **No dedicated Pico SDK library is shipped in v1** — the five v1 client libraries cover Arduino (chapter 17, supports STM32duino + arduino-pico for RP2040 via the Arduino Wire API), MicroPython (chapter 18, runs on the RP2040 MicroPython port), ESP-IDF (chapter 19), CPython on Linux SBC (chapter 20), and STM32 HAL (chapter 21, deferred). For native Pico SDK firmware in C, follow the raw-API recipes below. If you want a higher-level API on RP2040, the easiest path is the arduino-pico core + the rbAmp Arduino library — see [chapter 17 · Arduino Library](library-arduino-overview.md). A native Pico SDK port may land in v2 if there is pilot demand.
+> **No dedicated Pico SDK library is shipped** — the client libraries cover Arduino (incl. arduino-pico for RP2040 via the Wire API), MicroPython (runs on the RP2040 port), ESP-IDF and CPython on Linux SBC; see the [client-libraries table in the README](README.md#client-libraries-high-level-api-per-platform). For native Pico SDK firmware in C, follow the raw-API recipes below. If you want a higher-level API on RP2040, the easiest path is the arduino-pico core + the rbAmp Arduino library.
 
 ## Supported targets and toolchain
 
@@ -129,7 +129,7 @@ extern "C" {
  * @param  i2c_inst   i2c0 or i2c1.
  * @param  sda_gpio   SDA GPIO number (e.g. 4 for default i2c0).
  * @param  scl_gpio   SCL GPIO number (e.g. 5 for default i2c0).
- * @param  baudrate   Bus speed (use 100000 for 100 kHz).
+ * @param  baudrate   Bus speed (use 50000 — the recommended 50 kHz; wrap reads in a short retry, see ch. 11 §2.2).
  */
 void rbamp_io_init(i2c_inst_t *i2c_inst, uint sda_gpio, uint scl_gpio,
                    uint baudrate);
@@ -203,7 +203,6 @@ int rbamp_io_wait_ready(uint8_t addr, uint32_t timeout_ms);
 
 /* ===== Commands ===== */
 #define RB_CMD_RESET            0x01U
-#define RB_CMD_SAVE_GAINS       0x26U
 #define RB_CMD_LATCH_PERIOD     0x27U
 
 #ifdef __cplusplus
@@ -330,8 +329,8 @@ int main(void) {
     stdio_init_all();                       /* USB CDC stdio */
     sleep_ms(2000);                         /* let the USB host enumerate */
 
-    /* I2C0 on GPIO 4 / 5 at 100 kHz. */
-    rbamp_io_init(i2c0, 4, 5, 100000);
+    /* I2C0 on GPIO 4 / 5 at the recommended 50 kHz. */
+    rbamp_io_init(i2c0, 4, 5, 50000);
 
     /* Wait until the first RT window has been computed. */
     if (rbamp_io_wait_ready(RB_ADDR, 2000) != PICO_OK) {
@@ -386,7 +385,7 @@ U=229.9V  I=0.262A  P=+60.1W  PF=+0.998
 int main(void) {
     stdio_init_all();
     sleep_ms(2000);
-    rbamp_io_init(i2c0, 4, 5, 100000);
+    rbamp_io_init(i2c0, 4, 5, 50000);
 
     /* OLED shares the same i2c0. */
     ssd1306_t oled;
@@ -472,7 +471,7 @@ static const module_t modules[] = {
 int main(void) {
     stdio_init_all();
     sleep_ms(2000);
-    rbamp_io_init(i2c0, 4, 5, 100000);
+    rbamp_io_init(i2c0, 4, 5, 50000);
 
     /* Probe every module before entering the read loop. */
     for (size_t i = 0; i < N_MODULES; i++) {
@@ -600,7 +599,7 @@ int main(void) {
     stdio_init_all();
     sleep_ms(2000);
     net_init();
-    rbamp_io_init(i2c0, 4, 5, 100000);
+    rbamp_io_init(i2c0, 4, 5, 50000);
     rbamp_io_wait_ready(RB_ADDR, 2000);
 
     rbamp_io_write_u8(RB_ADDR, RB_REG_COMMAND, RB_CMD_LATCH_PERIOD);  /* primer */
@@ -675,7 +674,7 @@ static void gpio_callback(uint gpio, uint32_t events) {
 int main(void) {
     stdio_init_all();
     sleep_ms(2000);
-    rbamp_io_init(i2c0, 4, 5, 100000);
+    rbamp_io_init(i2c0, 4, 5, 50000);
     rbamp_io_wait_ready(RB_ADDR, 2000);
 
     /* DRDY input with internal pull-up; falling-edge IRQ. */
@@ -733,7 +732,7 @@ int main(void) {
 ## Example 6 — Home energy balance
 
 **Goal**: full balance dashboard. Three modules:
-- rbAmp #1 on the main feed (STANDARD / PRO — bidirectional)
+- rbAmp #1 on the main feed (STANDARD (STD) — bidirectional)
 - rbAmp #2 on the solar inverter output (BASIC OK)
 - rbAmp #3 UI3 on three large loads (HP, AC, EV)
 
@@ -750,7 +749,7 @@ Master uses `rbamp_io_broadcast_latch()` for synchronous snapshots and publishes
 #define ADDR_MAINS  0x50U
 #define ADDR_SOLAR  0x51U
 #define ADDR_LOADS  0x52U
-#define REG_PERIOD_AVG_P_NEG_MAINS  0xFFU   /* set per SKU datasheet on STANDARD/PRO */
+#define REG_PERIOD_AVG_P_NEG_MAINS  0xFFU   /* set per SKU datasheet on STANDARD (STD) */
 
 extern void net_init(void);                  /* same boilerplate as Ex. 4 */
 extern mqtt_client_t *s_mqtt;
@@ -766,7 +765,7 @@ int main(void) {
     stdio_init_all();
     sleep_ms(2000);
     net_init();
-    rbamp_io_init(i2c0, 4, 5, 100000);
+    rbamp_io_init(i2c0, 4, 5, 50000);
     rbamp_io_wait_ready(ADDR_MAINS, 2000);
     rbamp_io_wait_ready(ADDR_SOLAR, 2000);
     rbamp_io_wait_ready(ADDR_LOADS, 2000);
@@ -799,7 +798,7 @@ int main(void) {
         float dt_s = (float)(t_now_ms - t_prev_ms) / 1000.0f;
         t_prev_ms = t_now_ms;
 
-        /* ----- MAINS (bidirectional, STANDARD/PRO) ----- */
+        /* ----- MAINS (bidirectional, STANDARD (STD)) ----- */
         uint8_t valid;
         if (rbamp_io_read_u8(ADDR_MAINS, RB_REG_PERIOD_VALID, &valid) == PICO_OK
             && (valid & 0x01U)) {
@@ -905,7 +904,7 @@ static bool sd_setup(void) {
 int main(void) {
     stdio_init_all();
     sleep_ms(2000);
-    rbamp_io_init(i2c0, 4, 5, 100000);
+    rbamp_io_init(i2c0, 4, 5, 50000);
     rbamp_io_wait_ready(RB_ADDR, 2000);
 
     if (sd_setup()) printf("SD mounted; logging to events.log\n");
@@ -1042,7 +1041,7 @@ int main(void) {
     }
     if (s_mqtt_connected) publish_discovery_all();
 
-    rbamp_io_init(i2c0, 4, 5, 100000);
+    rbamp_io_init(i2c0, 4, 5, 50000);
     rbamp_io_wait_ready(RB_ADDR, 2000);
 
     rbamp_io_write_u8(RB_ADDR, RB_REG_COMMAND, RB_CMD_LATCH_PERIOD);  /* primer */
@@ -1213,7 +1212,7 @@ int main(void) {
 
     /* Power up rbAmp + I2C. */
     rbamp_power(true);
-    rbamp_io_init(i2c0, 4, 5, 100000);
+    rbamp_io_init(i2c0, 4, 5, 50000);
     if (rbamp_io_wait_ready(RB_ADDR, 2000) != PICO_OK) {
         printf("rbAmp not ready — sleeping\n");
         rbamp_power(false);
@@ -1412,7 +1411,7 @@ int main(void) {
     net_init();
     sntp_sync(15000);
 
-    rbamp_io_init(i2c0, 4, 5, 100000);
+    rbamp_io_init(i2c0, 4, 5, 50000);
     rbamp_io_wait_ready(RB_ADDR, 2000);
     rbamp_io_write_u8(RB_ADDR, RB_REG_COMMAND, RB_CMD_LATCH_PERIOD);  /* primer */
     uint32_t t_prev_ms = to_ms_since_boot(get_absolute_time());
@@ -1477,7 +1476,7 @@ int main(void) {
 
 - `pico_lwip_sntp` plugs into the LwIP SNTP client; the SDK wires it to the C library `time(NULL)` so `gmtime_r()` works out of the box.
 - For full DST handling, store the TZ offset in a small lookup, or compile-in a POSIX TZ string via the newlib `tzset()` mechanism if your build includes it.
-- For STANDARD / PRO bidirectional metering, call `accumulate()` twice — once for consumption and once for export — and publish both peak/off-peak buckets.
+- For STANDARD (STD) bidirectional metering, call `accumulate()` twice — once for consumption and once for export — and publish both peak/off-peak buckets.
 
 ---
 
@@ -1513,9 +1512,9 @@ int main(void) {
 
 After working through these ten examples:
 
-- For Arduino-style ESP32 development, see [10_arduino_examples.md](arduino-examples.md) (raw) or [17_arduino_library.md](library-arduino-overview.md) (library).
-- For MicroPython / CircuitPython (including on the Pico itself), see [12_micropython_examples.md](micropython-examples.md) (raw) or [18_micropython_library.md](micropython-examples.md) (library).
-- For native ESP-IDF, see [13_esp_idf_examples.md](esp-idf-examples.md) (raw) or [19_esp_idf_library.md](esp-idf-overview.md) (library).
+- For Arduino-style ESP32 development, see [10_arduino_examples.md](arduino-examples.md) (raw).
+- For MicroPython / CircuitPython (including on the Pico itself), see [12_micropython_examples.md](micropython-examples.md) (raw).
+- For native ESP-IDF, see [13_esp_idf_examples.md](esp-idf-examples.md) (raw).
 - For STM32 HAL, see [14_stm32_hal_examples.md](stm32-hal-examples.md).
-- For ESPHome integration (declarative YAML), see [`tools/esphome-rbamp/docs/en/`](esphome-overview.md).
+- For ESPHome integration (declarative YAML), see [`tools/esphome-rbamp/docs/en/`](https://rbamp.com/docs/modules-basic-standard-esphome-overview).
 - The formal I2C register specification used here lives in [11_api_reference.md](api-reference.md).

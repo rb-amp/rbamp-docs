@@ -5,8 +5,6 @@
 > **Scope**: canonical wire protocol of the rbAmp module at version v1.3 — register map, protocol sequences, behavioral guarantees. This is the complete wire-contract-level reference documentation.
 >
 > **NOT in scope**: integration with any specific library / OS / framework — read the library documentation for that.
->
-> **Document status**: DRAFT, 2026-06-16. Source of truth: `registers_v2.yaml` v1.3 + canonical wire-contract + bench-validated firmware behavior.
 
 ---
 
@@ -20,7 +18,7 @@
 |---|---|---|---|
 | **UI1** | 1 | yes | P, PF, Q |
 | **UI2** | 2 | yes | P, PF, Q per channel |
-| UI3 | 3 | yes | **roadmap** — not shipping on the current MCU package |
+| UI3 | 3 | yes | not yet available |
 | **I1** | 1 | no | I only (no P/PF/Q) |
 | **I2** | 2 | no | I only per channel |
 | **I3** | 3 | no | I only per channel |
@@ -86,11 +84,11 @@ At 50 kHz a single register-read transaction takes ≈ 200–400 µs. The full R
 
 | Configuration | Bus per cycle | Max polling rate |
 |---|---|---|
-| 1× UI1, RT block | ~5 ms | 100+ Hz (but the module updates at 5 Hz) |
-| 5× UI1, RT block | ~25 ms | 5 Hz |
-| 16× I3, RT + period | ~400 ms | **cannot keep up** with the module |
+| 1× UI1, RT block | ~5 ms | 100+ Hz (but the module updates at 10 Hz) |
+| 5× UI1, RT block | ~25 ms | 10 Hz |
+| 16× I3, RT + period | ~400 ms | **cannot keep up** — reads every ~4th 100 ms window |
 
-**Rule of thumb**: at 50 kHz the comfortable limits are **8–10× I3** or **15–16× UI1** at 5 Hz polling.
+**Rule of thumb**: at 50 kHz the comfortable limits are **8–10× I3** or **15–16× UI1** when polling every other window (5 Hz); halve the module counts to poll every window (10 Hz).
 
 ---
 
@@ -104,16 +102,18 @@ Authoritative SKU byte:
 |---|---|---|---|
 | `0x01` | UI1 | 1 | yes |
 | `0x02` | UI2 | 2 | yes |
-| `0x03` | UI3 | 3 | yes (roadmap, not buildable) |
+| `0x03` | UI3 | 3 | yes (not yet available) |
 | `0x04` | I1 | 1 | no |
 | `0x05` | I2 | 2 | no |
 | `0x06` | I3 | 3 | no |
+| `0x07` | UI5 | 5 | yes (not yet available) |
+| `0x08` | UI7 | 7 | yes (not yet available) |
 
 Any other value → the device is not identified as rbAmp.
 
 ### 3.2 `CAPABILITY` (regs `0x57/0x58`, u16 LE, read-only)
 
-12-bit feature-detection map. This is the canonical way to detect supported features — **without** numeric version comparison.
+Feature-detection bitmap. This is the canonical way to detect supported features — **without** numeric version comparison.
 
 | bit | Flag | Meaning |
 |---|---|---|
@@ -122,25 +122,20 @@ Any other value → the device is not identified as rbAmp.
 | 2 | GC_GROUP_FILTER | `GROUP_ID` filter is active |
 | 3 | DIGEST | digest block (0x70..0x85) is exposed |
 | 4 | EVENTS | `EVENT_FLAGS` is supported |
-| 5 | UID_ARBITRATION | UID-based address arbitration |
-| 6 | SEAL | UID seal verification (anti-clone) — **⚠ declared for forward-compatibility; the `CMD_SEAL` (0x33) handler and boot-time UID-seal verification are NOT implemented in v1.4.x firmware. The cap bit may be exposed, but the mechanism is inert. A firmware cycle enabling it is planned.** |
+| 5 | UID_ARBITRATION | UID-based address arbitration (no public commands on current firmware) |
+| 6 | SEAL | reserved — not implemented on current firmware |
 | 7 | TWO_PHASE_ADDR | two-phase commit address change |
 | 8 | **ZC_PHASE_OFFSET = voltage-HW** | the module has a U channel |
 | 9 | SAVE_USER_CONFIG | `CMD_SAVE_USER_CONFIG` is available |
 | 10 | CLEAR_ERROR | `CMD_CLEAR_ERROR` is available |
 | 11 | IAP | in-application programming (F4 tiers only) |
+| 12 | SCT_RATING_SELF | fw 1.4.20+: an SCT model switch keeps the unit calibration and survives a restart; libraries skip their own rating correction |
 
-#### 3.2.1 Canonical CAPABILITY values
+#### 3.2.1 Detecting features
 
-| Variant group | CAPABILITY value (u16 LE) |
-|---|---|
-| Current-only (`I1`/`I2`/`I3`) | `0x069E` |
-| U-variants (`UI1`/`UI2`) | `0x079E` |
-
-`0x079E` = `0x069E | 0x0100` (bit 8 voltage-HW added).
-
-Decomposition of `0x069E` (binary `0000 0110 1001 1110`):
-bit 1 GC_LATCH, bit 2 GC_GROUP_FILTER, bit 3 DIGEST, bit 4 EVENTS, bit 7 TWO_PHASE_ADDR, bit 9 SAVE_USER_CONFIG, bit 10 CLEAR_ERROR.
+Detect each feature by its **individual bit** — never compare the whole register against an expected
+constant: the bitmap grows with firmware (e.g. bit 12 appeared in fw 1.4.20), so full-value
+comparison breaks on newer modules.
 
 #### 3.2.2 Byte layout of CAPABILITY u16 LE
 
@@ -161,7 +156,7 @@ register layout (byte-addressed):
 
 Bit mapping:
 - byte `0x57` (LO) contains bits 0..7: EXT_ADDRESSING, GC_LATCH, GC_GROUP_FILTER, DIGEST, EVENTS, UID_ARBITRATION, SEAL, TWO_PHASE_ADDR.
-- byte `0x58` (HI) contains bits 8..15: ZC_PHASE_OFFSET (= voltage-HW), SAVE_USER_CONFIG, CLEAR_ERROR, IAP, bits 12-15 reserved.
+- byte `0x58` (HI) contains bits 8..15: ZC_PHASE_OFFSET (= voltage-HW), SAVE_USER_CONFIG, CLEAR_ERROR, IAP, SCT_RATING_SELF (bit 12, fw 1.4.20+), bits 13-15 reserved.
 
 #### 3.2.3 Canonical `has_voltage` recipe
 
@@ -172,16 +167,18 @@ has_voltage = bool(cap_hi & 0x01)  # bit 8 of the u16 = bit 0 of byte 0x58
 
 ### 3.3 Variant profile table — invariant
 
-| SKU | HW_VARIANT (0x55) | N_I | voltage-HW | CAPABILITY (0x57/0x58) |
+| SKU | HW_VARIANT (0x55) | N_I | voltage-HW | CAPABILITY bit 8 (voltage-HW) |
 |---|---|---|---|---|
-| **UI1** | 1 | 1 | yes | `0x079E` |
-| **UI2** | 2 | 2 | yes | `0x079E` |
-| UI3 | 3 | 3 | yes | `0x079E` (roadmap) |
-| **I1** | 4 | 1 | no | `0x069E` |
-| **I2** | 5 | 2 | no | `0x069E` |
-| **I3** | 6 | 3 | no | `0x069E` |
+| **UI1** | 1 | 1 | yes | bit 8 set |
+| **UI2** | 2 | 2 | yes | bit 8 set |
+| UI3 | 3 | 3 | yes | bit 8 set (not yet available) |
+| **I1** | 4 | 1 | no | bit 8 clear |
+| **I2** | 5 | 2 | no | bit 8 clear |
+| **I3** | 6 | 3 | no | bit 8 clear |
+| UI5 | 7 | 5 | yes | bit 8 set (not yet available) |
+| UI7 | 8 | 7 | yes | bit 8 set (not yet available) |
 
-**HW_VARIANT ⟷ CAPABILITY coherence**: `HW_VARIANT` 1..3 (UI*) → bit 8 set; `HW_VARIANT` 4..6 (I*) → bit 8 clear. A mismatch indicates a hardware or firmware anomaly (broken device or misflash).
+**HW_VARIANT ⟷ CAPABILITY coherence**: `HW_VARIANT` 1..3 and 7..8 (UI*) → bit 8 set; `HW_VARIANT` 4..6 (I*) → bit 8 clear. A mismatch indicates a hardware or firmware anomaly (broken device or misflash).
 
 ### 3.4 `SENSOR_CLASS` ≠ variant discriminator
 
@@ -207,7 +204,7 @@ product = read_u8(addr, 0x54)
 if product != 0x01:
     return NOT_RBAMP_SENSOR
 hw = read_u8(addr, 0x55)
-if 1 <= hw <= 6:
+if 1 <= hw <= 8:
     cap_hi = read_u8(addr, 0x58)
     has_voltage = bool(cap_hi & 0x01)
     return {sku: SKU[hw], N_I: N_I_TABLE[hw], has_voltage: has_voltage}
@@ -218,9 +215,9 @@ return UNKNOWN_DEVICE
 
 ## 4 · Register map (production v1.3)
 
-![Register memory-map visual of the 0x00..0xFF page-0 space, colour-coded by block: RT (0x86..0xBD) / period / config / reserved-factory. Machine-contract at a glance.](images/api-register-map.png)
-
 **Filter applied**: `build: production` (cal-build registers excluded). Factory-calibration registers (NF, GAIN, PHASE) are **not documented** — they belong to the factory bench, not the consumer surface.
+
+![Overview of the rbAmp register map and its address blocks.](images/api-register-map.png)
 
 ### 4.0 Reserved ranges (internal)
 
@@ -230,9 +227,9 @@ The following ranges are reserved for internal/factory use and are **not describ
 - `0x06`, `0x26` — internal calibration parameters (factory bench).
 - `0x08..0x0F` — LUT debug view (factory diagnostic).
 - `0x1B..0x1F` — reserved page-0 (`0x18..0x1A` are production diag, see §4.2).
-- `0x36..0x45` — reserved page-0.
+- `0x36..0x3B`, `0x40..0x45` — reserved page-0 (`0x32` + `0x3C..0x3F` are the channel access window, see §4.14).
 - `0x4F`, `0x50` — reserved (identity-block pre-reserve).
-- `0xE4..0xEB`, `0xF0..0xFF` — factory calibration (NF, GAIN); factory-gated writes.
+- `0xE4..0xEB`, `0xF0..0xFF` — factory calibration (NF, GAIN); develop-gated writes.
 
 > **Note on `0xD0..0xE3`**: in the **production** build this range is occupied by the `V03 Q` block (see §4.12). In the separate **cal firmware** (not shipped to the consumer) the same range is overlaid with the calibration block (build:cal). The consumer master sees only the production overlay — the Q block.
 
@@ -249,18 +246,17 @@ The following ranges are reserved for internal/factory use and are **not describ
 | `0x05` | `CT_MODEL` | 1 | u8 | rw | user_config | SCT-013 SKU code (v1.3 pure staging — see §6.2) |
 | `0x07` | `V03_PERIOD_VALID` | 1 | u8 | r | ram | Set by `CMD_LATCH_PERIOD`: 1 = fresh, 0 = empty/stale. **NOT cleared-on-read**. See §6.3.3 (witness) + §7.5 (failed-latch preservation) |
 
-### 4.2 ADC diagnostics (0x10..0x1C)
+### 4.2 Diagnostics — raw input means and capture window (0x10..0x1C)
 
 | Addr | Name | Size | Type | Access | Persistence | Notes |
 |---|---|---|---|---|---|---|
-| `0x10` | `ADC_MEAN_U` | 2 | u16 LE | r | ram | Raw ADC mean U channel (~2048 centered) |
-| `0x12` | `ADC_MEAN_I0` | 2 | u16 LE | r | ram | Raw ADC mean I0 |
-| `0x14` | `ADC_MEAN_I1` | 2 | u16 LE | r | ram | Raw ADC mean I1 (UI2/I2/I3/UI3) |
-| `0x16` | `ADC_MEAN_I2` | 2 | u16 LE | r | ram | Raw ADC mean I2 (UI3/I3) |
+| `0x10` | `ADC_MEAN_U` | 2 | u16 LE | r | ram | Raw input mean, U channel (~2048 centered) |
+| `0x12` | `ADC_MEAN_I0` | 2 | u16 LE | r | ram | Raw input mean, I0 |
+| `0x14` | `ADC_MEAN_I1` | 2 | u16 LE | r | ram | Raw input mean, I1 (UI2/I2/I3/UI3) |
+| `0x16` | `ADC_MEAN_I2` | 2 | u16 LE | r | ram | Raw input mean, I2 (UI3/I3) |
 | `0x18` | `CAPTURE_STATUS` | 1 | u8 | r | ram | Raw-sample capture: bit0=ready |
 | `0x19` | `CAPTURE_PAGE` | 1 | u8 | rw | ram | Page 0..15 → 16 raw I0 samples into `CAPTURE_WINDOW` |
-| `0x1A` | `CAPTURE_WINDOW` | 32 | bytes | r | ram | 16×u16 LE pre-LUT I0 codes of the selected page. **Burst-read 32 bytes** (sized to the 32-byte-max I2C bridge read; no second-half gap). Sweep pages 0..15 for 256 samples total (~1.3 mains periods). Window virtually spans `0x1A..0x39` but only burst-reads from `0x1A` are supported. |
-| `0x1D` | `LUT_BYPASS` | 1 | u8 | rw | ram | Diagnostic: `1` = bypass ADC-INL LUT (identity), `0` = active. For LUT-on/off slope tests. |
+| `0x1A` | `CAPTURE_WINDOW` | 32 | bytes | r | ram | 16×u16 LE pre-LUT I0 codes. Burst-read 32 bytes. |
 
 ### 4.3 System (0x20..0x25)
 
@@ -269,8 +265,8 @@ The following ranges are reserved for internal/factory use and are **not describ
 | `0x20` | `AC_FREQ` | 1 | u8 | r | ram | ZC-sourced. 50 or 60 Hz integer. ZC is active **on all variants** (including I*) |
 | `0x21` | `AC_PERIOD` | 2 | u16 LE | r | ram | Mains half-period, µs |
 | `0x23` | `CALIBRATION` | 1 | u8 | r | ram | Legacy calibration status byte |
-| `0x24` | `TOPOLOGY` | 1 | u8 | r | rom | `1 = SINGLE`, `2 = SPLIT_PHASE`, `3 = THREE_PHASE` (= N_I) |
-| `0x25` | `SENSOR_CLASS` | 1 | u8 | rw | user_config | `0 = UNSET`, `1 = SCT_013`, `2 = WIRED_CT` (resv), `3 = BUILTIN_CT` (resv). A class change resets `CT_MODEL = 0`. **Not a variant discriminator** (see §3.4) |
+| `0x24` | `TOPOLOGY` | 1 | u8 | r | rom | Number of current channels (= `V03_N_I`): 1, 2 or 3; 5 = UI5, 7 = UI7 |
+| `0x25` | `SENSOR_CLASS` | 1 | u8 | rw | user_config | `0 = UNSET`, `1 = SCT_013`, `2 = WIRED_CT` (CT clamp series, models 1..13: 1..5 legacy, 11 and 13 reserved → `ERR_PARAM`; factory-paired on CT- SKUs), `3 = BUILTIN_CT` (per-unit factory cal, model code unused). A class change resets `CT_MODEL = 0`. **Not a variant discriminator** (see §3.4) |
 
 ### 4.4 Fleet config (0x27..0x2F)
 
@@ -278,7 +274,7 @@ The following ranges are reserved for internal/factory use and are **not describ
 |---|---|---|---|---|---|---|
 | `0x27` | `FLEET_CONFIG` | 1 | u8 | rw | user_config | bit0 = `GC_ENABLE` (General-Call latch reception; effective after reset). bits 1-7 reserved |
 | `0x28` | `GROUP_ID` | 1 | u8 | rw | user_config | GC latch group filter. `0` = respond to all-call. The GC frame group byte must match or be `0x00` |
-| `0x29` | `DIGEST_CONFIG` | 1 | u8 | rw | ram | Digest window composition bitmask (see §4.9). Defaults to `0x00` (digest disabled) after reset; rewrite on every initialization |
+| `0x29` | `DIGEST_CONFIG` | 1 | u8 | rw | ram | Digest window composition bitmask (see §4.9); writing an unsupported bit → `ERR_PARAM`. Defaults to `0x00` (digest disabled) after reset; rewrite on every initialization |
 | `0x2A` | `EVENT_FLAGS` | 1 | u8 | **w1c** | ram | Sticky event bits (see §5.3 error model). Defaults to `0x00` after reset (but bit5 `RESET_OCCURRED` is set at boot) |
 | `0x2B` | `EVENT_MASK` | 1 | u8 | rw | ram | Which `EVENT_FLAGS` bits drive DRDY solid-LOW |
 | `0x2C` | `THRESH_I_HI` | 2 | u16 LE | rw | ram | Current threshold → `EVENT_FLAGS.THRESH_I`. Units: 0.01 A. `0xFFFF` = disabled |
@@ -297,8 +293,8 @@ See §6.1 for the sequence.
 
 | Addr | Name | Size | Type | Access | Persistence | Notes |
 |---|---|---|---|---|---|---|
-| `0x46` | `UPTIME_S` | 4 | u32 LE | r | ram | Seconds since boot |
-| `0x4A` | `RESET_CAUSE` | 1 | u8 | r | ram | Reset reason flags (bit0=PIN, bit1=POR/BOR, bit2=SW, bit3=IWDG, bit4=WWDG, bit5=LPWR) |
+| `0x46` | `UPTIME_S` | 4 | u32 LE | r | ram | Module's own uptime counter (nominally seconds since boot) — **restart detector only**: on current firmware it can run noticeably slower than wall time under bus load, so never use it as a clock. Restart detection for a master: the value decreased, or is smaller than the time elapsed since the master's previous latch |
+| `0x4A` | `RESET_CAUSE` | 1 | u8 | r | ram | Reset reason flags (bit0=PIN, bit1=POR/BOR, bit2=SW, bit3=IWDG, bit4=WWDG, bit5=LPWR). For logging only — restart handling is the same whatever the cause |
 | `0x4B` | `I2C_ERR_COUNT` | 2 | u16 LE | r | ram | Bus errors (BERR+OVR) since boot, saturating |
 | `0x4D` | `I2C_REINIT_COUNT` | 1 | u8 | r | ram | I²C peripheral BUSY-recovery reinit count, saturating |
 | `0x4E` | `ZC_OFFSET` | 2 | u16 LE | r | ram | µs from the last GC-latch STOP edge to the next **voltage** zero-cross — used for U/I phase compensation in power computation. Firmware-gated to `0xFFFF` on I-only variants (no voltage front-end → no voltage ZC). This is **not** the mains-frequency ZC source — `AC_FREQ (0x20)` is derived from a dedicated mains-ZC pin and is available on all variants. |
@@ -319,7 +315,7 @@ Read-only mirrors of the **applied** CT model preset per channel. The write wire
 |---|---|---|---|---|---|---|
 | `0x54` | `PRODUCT_ID` | 1 | u8 | r | rom | Family: `0x01 = rbAmp sensor`. The master reads this **before** any family-specific register |
 | `0x55` | `HW_VARIANT` | 1 | u8 | r | rom | See §3.1 |
-| `0x56` | `FW_TIER` | 1 | u8 | r | rom | bits 0-1: 0=BASIC, 1=STANDARD, 2=PRO; bit 2=bidirectional; bit 3=LUT-calibrated |
+| `0x56` | `FW_TIER` | 1 | u8 | r | rom | bits 0-1: 0=BASIC, 1=STANDARD (2 = not implemented); bit 2=bidirectional; bit 3=LUT-calibrated |
 | `0x57` | `CAPABILITY` | 2 | u16 LE | r | rom | See §3.2 |
 | `0x59` | `GC_TICK` | 2 | u16 LE | r | ram | Master tick from the last accepted GC frame; `0xFFFF` = never received |
 | `0x5C` | `UID` | 12 | bytes | r | rom | 96-bit chip UID. One burst-read. |
@@ -327,7 +323,7 @@ Read-only mirrors of the **applied** CT model preset per channel. The write wire
 
 ### 4.9 Digest window (0x70..0x85)
 
-`DIGEST` is a compact poll window, served by a single burst-read. Its composition is selected by `DIGEST_CONFIG (0x29)`:
+`DIGEST` is a compact poll window, served by a single burst-read. Its composition is selected by `DIGEST_CONFIG (0x29)`; a write that sets an unsupported bit is rejected with `ERR_PARAM`:
 
 | `DIGEST_CONFIG` bit | Content | Format |
 |---|---|---|
@@ -353,7 +349,6 @@ Read-only mirrors of the **applied** CT model preset per channel. The write wire
 | `0x8E` | `V03_I0_RMS` | 4 | float32 LE | r | ram | A | |
 | `0x92` | `V03_I1_RMS` | 4 | float32 LE | r | ram | A | `0.0` if the variant lacks ch1 |
 | `0x96` | `V03_I2_RMS` | 4 | float32 LE | r | ram | A | `0.0` if the variant lacks ch2 |
-| ⛔ | **STOP — flat per-channel RMS ends at channel 2.** | | | | | | **The next row (`0x9A`) is `V03_I0_PEAK`, NOT `V03_I3_RMS`. Do NOT extrapolate the step-4 pattern past channel 2 — you will read plausible but silently wrong numbers (peak, not RMS; ch0, not ch3). Channels 3+ (UI5/UI7) are accessed only through the [Channel access window](#414-channel-access-window-0x32--0x3c0x3f) — see §4.14.** |
 | `0x9A` | `V03_I0_PEAK` | 4 | float32 LE | r | ram | A | |
 | `0x9E` | `V03_I1_PEAK` | 4 | float32 LE | r | ram | A | |
 | `0xA2` | `V03_I2_PEAK` | 4 | float32 LE | r | ram | A | |
@@ -370,9 +365,9 @@ A period snapshot latched on `CMD_LATCH_PERIOD`. **Ragged layout** (historical l
 
 | Addr | Name | Size | Type | Access | Persistence | Units | Notes |
 |---|---|---|---|---|---|---|---|
-| `0xBE` | `V03_PERIOD_COMMIT_CNT` | 4 | u32 LE | r | ram | – | RT commits in the current period (diagnostic) |
-| `0xC2` | `V03_PERIOD_AVG_P_CH1` | 4 | float32 LE | r | ram | W | Latched avg P ch1 (UI2 only; UI3 — roadmap) |
-| `0xC6` | `V03_PERIOD_AVG_P_CH2` | 4 | float32 LE | r | ram | W | Latched avg P ch2 (UI3 only — roadmap) |
+| `0xBE` | `V03_PERIOD_COMMIT_CNT` | 4 | u32 LE | r | ram | – | RT commits in the latched period. One commit = 0.1 s on current firmware (0.2 s before v1.2) — `count ×` commit length is the module-side measure of the window length (see §7.4) |
+| `0xC2` | `V03_PERIOD_AVG_P_CH1` | 4 | float32 LE | r | ram | W | Latched avg P ch1 (UI2 only; UI3 — not yet available) |
+| `0xC6` | `V03_PERIOD_AVG_P_CH2` | 4 | float32 LE | r | ram | W | Latched avg P ch2 (UI3 only — not yet available) |
 | `0xCA` | `V03_PERIOD_MS` | 4 | u32 LE | r | ram | ms | Current period duration |
 | `0xCE` | `V03_STATUS` | 1 | u8 | r | ram | – | bit 0 = valid (RT commit outcome). **NOT cleared-on-read**. The master polls `STATUS (0x00)` for ready-wait. *Alias `DATA_VALID` is sometimes used for this register in tutorial chapters — same address, same semantics.* |
 
@@ -380,7 +375,7 @@ A period snapshot latched on `CMD_LATCH_PERIOD`. **Ragged layout** (historical l
 
 | Addr | Name | Size | Type | Access | Persistence | Units | Notes |
 |---|---|---|---|---|---|---|---|
-| `0xD0` | `V03_Q0_REAC` | 4 | float32 LE | r | ram | VAr | Reactive power ch0 (IEEE 1459 quadrature) |
+| `0xD0` | `V03_Q0_REAC` | 4 | float32 LE | r | ram | VAr | Reactive power ch0 = `√(S² − P²)`, `S = U_rms × I_rms` — unsigned (≥ 0), includes distortion power; 0 on I-only variants; noisy near PF ≈ 1. Accuracy not specified |
 | `0xD4` | `V03_Q1_REAC` | 4 | float32 LE | r | ram | VAr | |
 | `0xD8` | `V03_Q2_REAC` | 4 | float32 LE | r | ram | VAr | |
 | `0xDC` | `V03_PERIOD_AVG_P` | 4 | float32 LE | r | ram | W | **PRODUCTION energy primitive**: latched avg P ch0, ≥ 0 (BASIC unidirectional clamp). Logically grouped with `V03_PERIOD_AVG_P_CH1/CH2` (§4.11); the legacy layout is preserved for compatibility |
@@ -390,92 +385,15 @@ A period snapshot latched on `CMD_LATCH_PERIOD`. **Ragged layout** (historical l
 
 | Addr | Name | Size | Type | Access | Persistence | Units | Notes |
 |---|---|---|---|---|---|---|---|
-| `0xEC` | `V03_PERIOD_LATCH_MS` | 4 | u32 LE | r | ram | ms | Chip-side dt between the two most recent latches. **DIAGNOSTIC-ONLY** — undercounts by 25–30% under load (SysTick starvation, by design). **DO NOT use for billing** — the master keeps its own wall-clock. See §7.4 |
-
-### 4.14 Channel access window (`0x32` + `0x3C..0x3F`)
-
-**Applies to UI5 (5-channel) and UI7 (7-channel) modules. On UI1/UI2/UI3 and I1/I2/I3 it is available too — a single unified path if you prefer it over §4.10 flat registers.**
-
-Channels **3..6** have **no flat per-channel registers** (there was room for 8 bytes in the 8-bit address space, and a flat layout would need ~88). Instead a **select-and-read** window is exposed:
-
-| Addr | Name | Size | Type | Access | Persistence | Notes |
-|---|---|---|---|---|---|---|
-| `0x32` | `REG_CHANNEL_SELECT` | 1 | u8 | rw | ram | **This is a register address, NOT the command opcode `CMD_SAVE_USER_CONFIG` — they collide numerically. Always cite `0x32` with the register-vs-command space you mean.** Encoded as `(field << 4) \| channel`. `channel` nibble range is **0..15** (reserved for up to 16 channels); the physical maximum per SKU is `channels()` (7 on UI7). Writes to a channel index `>= channels()` are silently discarded (no `ERR_PARAM`). `field` per table below. Writing the selector snapshots the requested value into `REG_CHANNEL_DATA`. |
-| `0x3C..0x3F` | `REG_CHANNEL_DATA` | 4 | float32 LE (u16 LE for NF) | r | ram | Data buffer for the selection. `float32 LE` for all public fields; `NF` returns `u16 LE` zero-padded to 4 bytes. |
-
-**Field codes** (nibble high in `0x32`):
-
-| Code | Field | Type | Access | Meaning |
-|---|---|---|---|---|
-| `0` | `CHFIELD_I_RMS` | float32 LE | r | Live RMS current for the selected channel (units A) |
-| `1` | `CHFIELD_I_PEAK` | float32 LE | r | Live peak current (units A) |
-| `2` | `CHFIELD_P_REAL` | float32 LE | r | Live real power (units W) |
-| `3` | `CHFIELD_PF` | float32 LE | r | Live power factor (−1..+1) |
-| `4` | `CHFIELD_NF` | u16 LE (zero-padded to 4) | rw | Noise floor (calibration) |
-| `5` | `CHFIELD_GAIN` | float32 LE | rw | Channel gain (calibration) |
-| `6..12` | *(reserved — private diagnostics)* | – | – | Not documented for user code; do not depend on values or codes. |
-| `13` | `CHFIELD_PERIOD_AVG_P` | float32 LE | r | Latched period-average real power (W). **For channels 3+ this is the ONLY period/energy field — flat `V03_PERIOD_AVG_P*` (§4.11/§4.12) only covers ch0..ch2.** |
-| `14` | *(reserved)* | – | – | Reserved for future firmware; do not depend on. |
-| `15` | `CHFIELD_CT_MODEL` | u8 in `0x3C` (bytes `0x3D..0x3F` read as zero-padding) | rw | **Firmware ≥ v1.4.18-24M.** Per-channel CT model code for the selected channel (0..N-1). **Read** returns the applied model on the channel. **Write is RAM-only and applies immediately**: GAIN/NF for that channel are switched to the preset values in the same transaction; no separate commit command, no `CMD_SET_CT_MODEL_CH*` needed. Writes are byte-at-a-time per the wire-protocol rule (§5.1). An **unknown `(SENSOR_CLASS, code)` pair returns `ERR_PARAM` (0xFE) and the channel keeps its previous model** — no partial state. **Senior-SKU channels (ch3+) NO LONGER inherit the global model** — each channel must be configured explicitly via field 15. **Persistence**: `CMD_SAVE_USER_CONFIG` (opcode `0x32` on `REG_COMMAND`, **ungated**) persists all channels' models to the user-config flash page in one command. A write without a subsequent `CMD_SAVE_USER_CONFIG` reverts on reboot. The set of accepted `(class, code)` pairs is defined by the canonical model registry (`sensor_models.yaml`); a code that shipped in your firmware version is authoritatively confirmed by the module — write it, read it back, and check `REG_ERROR`. On modules running v1.4.0 (BATCH001/BATCH002 shipped) writing this field returns `ERR_PARAM`; use per-channel commands + flat `REG_CT_MODEL` staging instead. |
-
-#### The four traps — read this before writing code
-
-1. **⛔ Flat per-channel RMS ends at channel 2.** The rows `V03_I0_RMS` (`0x8E`) → `V03_I1_RMS` (`0x92`) → `V03_I2_RMS` (`0x96`) are step-4, and `0x9A` continues the step — but `0x9A` is `V03_I0_PEAK`, **not** `V03_I3_RMS`. Extrapolating the pattern silently returns peak-of-ch0 instead of RMS-of-ch3. Firmware cannot detect the mistake; the value looks plausible. **Channels 3+ live only in the channel access window.**
-2. **Re-select before every read.** `REG_CHANNEL_DATA` is a **snapshot** taken at the moment of the selector write, not a live view. Polling `0x3C..0x3F` in a loop without re-writing `0x32` returns a frozen value forever. Every fresh reading requires a fresh write to `0x32`.
-3. **`0x32` register address ≠ `0x32` command opcode.** `CMD_SAVE_USER_CONFIG` uses opcode `0x32` written to `REG_COMMAND` (`0x30`) — that is a different address space than `REG_CHANNEL_SELECT` (which sits at register address `0x32`). Never quote `0x32` without saying which space.
-4. **For channels 3+ period/energy comes only from field `13` (`CHFIELD_PERIOD_AVG_P`).** Registers `V03_PERIOD_AVG_P*` (`0xC2/0xC6/0xDC`) only cover ch0/ch1/ch2. There is no flat `V03_PERIOD_AVG_P_CH3` — read field 13 via the window instead.
-
-#### Wire-level example — read RMS current for channel 3
-
-```text
-# select field=0 (I_RMS), channel=3  →  (0 << 4) | 3  =  0x03
-write_u8(REG_CHANNEL_SELECT=0x32, 0x03)
-
-# read 4 bytes at REG_CHANNEL_DATA — float32 LE
-bytes = read(0x3C, 4)
-i3_rms = unpack_float32_le(bytes)   # amperes
-```
-
-For channel 4 peak current: selector = `(1 << 4) | 4` = `0x14`, then read `0x3C..0x3F`. For channel 5 period-average power: selector = `(13 << 4) | 5` = `0xD5`, then read `0x3C..0x3F`.
-
-#### Wire-level example — read RMS current on ALL channels of a UI7 module
-
-Combines both paths in one loop: flat RT block for ch 0..2, channel access window for ch 3..6.
-
-```text
-# --- Discover physical channel count -----------------------------
-N = read_u8(TOPOLOGY=0x24)      # 5 on UI5, 7 on UI7
-
-# --- ch 0..2 via flat block (single 12-byte burst) ---------------
-bytes = read(V03_I0_RMS=0x8E, 12)
-i0 = unpack_float32_le(bytes[0:4])
-i1 = unpack_float32_le(bytes[4:8])
-i2 = unpack_float32_le(bytes[8:12])
-
-# --- ch 3..N-1 via channel access window (re-select per read) ----
-i_rms = [i0, i1, i2]
-for ch in range(3, N):
-    write_u8(REG_CHANNEL_SELECT=0x32, (0 << 4) | ch)   # field 0 = I_RMS
-    i_rms.append(unpack_float32_le(read(REG_CHANNEL_DATA=0x3C, 4)))
-
-# i_rms is now length-N: RMS current for every physical channel of the module.
-```
-
-The same pattern extends to `I_PEAK` (field 1), `P_REAL` (field 2), `PF` (field 3), and the latched `PERIOD_AVG_P` (field 13) — flat block for ch0..ch2, window for ch3+. **Field 13 is the ONLY period/energy source for ch3+** — the flat block has no `V03_PERIOD_AVG_P_CH3..6`.
-
-For per-channel CT model configuration on any channel (0..N-1), use window field 15 (`CHFIELD_CT_MODEL`): write `(15 << 4) | ch` to `0x32`, then write the model code as one byte to `0x3C`. Persist all channels' models with a single `CMD_SAVE_USER_CONFIG` (opcode `0x32` on `REG_COMMAND (0x30)` — ungated).
-
-#### Recommendation for new integrations
-
-The window covers channels **0..6** — you can use it as a **single unified path** for all channels instead of branching between flat registers (ch0..ch2) and window (ch3..ch6). For fleets that mix junior (UI1/UI2/UI3) and senior (UI5/UI7) SKUs this eliminates a code split. Latency is one extra small write per reading (compared to a straight burst-read of the flat block).
+| `0xEC` | `V03_PERIOD_LATCH_MS` | 4 | u32 LE | r | ram | ms | Chip-side dt between the two most recent latches. **Module diagnostic timer** — it may read short under load; use the master clock for energy. See §7.4 |
 
 ---
 
 ## 5 · Wire protocol
 
-![READ auto-increment (burst-read OK, incl. 56-byte atomic RT block) vs WRITE byte-at-a-time (every byte needs its address) — the protocol asymmetry, side by side.](images/api-rw-asymmetry.png)
-
 ### 5.1 READ / WRITE asymmetry
+
+![Burst reads auto-increment, while multi-byte writes go one byte at a time.](images/api-rw-asymmetry.png)
 
 **Canonical by-design behavior**:
 
@@ -532,12 +450,12 @@ The GC broadcast frame (`0x00` general-call address + 5-byte payload) is a **sep
 | Code | Name | Severity |
 |---|---|---|
 | `0x00` | OK | – |
-| `0xF9` | `CLONE` | reserved (anti-clone sentinel — **⚠ NOT raised by v1.4.x firmware; the anti-clone verification is not implemented in shipped modules. Code is reserved for a future firmware cycle**) |
+| `0xF9` | `CLONE` | reserved — **not raised on current firmware** |
 | `0xFA` | `LUT_BAD` | error |
 | `0xFB` | `FLASH_PARAMS_BAD` | error (see §6.5 fresh-flash) |
 | `0xFC` | `NOT_READY` | error |
 | `0xFD` | `SENSOR_OVERFLOW` | error |
-| `0xFE` | `PARAM` | error (rejected write — invalid arg / unknown opcode / out-of-range enum) |
+| `0xFE` | `PARAM` | error (rejected write — invalid arg / unknown opcode / out-of-range enum; sets `EVENT.bit3`. Very early images, 1.2–1.4.3, ignored unknown opcodes silently) |
 | `0xFF` | `UNHANDLED` | error |
 
 #### `EVENT_FLAGS (0x2A)` layout (sticky W1C)
@@ -573,13 +491,11 @@ if event_flags & (1 << 3):    # ERROR bit
 
 #### ⚠ bit 3 async caveat
 
-A `write rejection` asserts `EVENT_FLAGS.bit3` **asynchronously**, ~200 ms after the operation, **not** immediately. **Do not poll bit 3 right after a write** — either wait ≥ 200 ms, or use **Pattern 1** (immediate REG_ERROR capture) for the outcome of a specific operation, and reserve bit 3 polling for long-running monitoring.
+A `write rejection` asserts `EVENT_FLAGS.bit3` **asynchronously**, within one measurement window (~100 ms on current firmware; 200 ms on images before v1.2) after the operation, **not** immediately. **Do not poll bit 3 right after a write** — either wait ≥ 200 ms (covers all images), or use **Pattern 1** (immediate REG_ERROR capture) for the outcome of a specific operation, and reserve bit 3 polling for long-running monitoring.
 
 #### Anti-clone sentinel
 
-> **⚠ Not implemented in v1.4.x firmware.** The anti-clone verification described in this section is a **planned** mechanism (`CMD_SEAL` 0x33 to provision a UID-seal signature, plus a boot-time verify step raising `DEV_ERR_CLONE 0xF9`). Shipped modules on the v1.4.0 line do NOT compute the seal and do NOT run the check — `DEV_ERR_CLONE (0xF9)` is never raised by current firmware. The description below applies **when the mechanism ships**. This documentation is retained for forward-compatibility and will be updated in the release notes when the mechanism lands.
-
-`DEV_ERR_CLONE (0xF9)` is **not** cleared by `CMD_CLEAR_ERROR` or by W1C bit 3. Only a reboot plus a factory reset can clear it (intentional anti-clone protection).
+`DEV_ERR_CLONE (0xF9)` is **reserved** — current firmware never raises it. The code is kept for forward compatibility.
 
 ### 5.4 Atomicity / read-freeze semantics
 
@@ -631,7 +547,7 @@ After POR (power-on reset) or hard reset the module passes through the following
 | ~10 ms | Bus-responsive (the module ACKs its address) |
 | ~50 ms | First RT commit (the RT block at 0x86+ holds valid data; `STATUS.bit0 = 1`) |
 | ~60-80 ms | First valid `V03_STATUS.bit0` (RT pipeline has cycled through one full mains period) |
-| ~200 ms | First `CMD_LATCH_PERIOD` may return `V03_PERIOD_VALID = 1` (latch requires ≥ 1 mains period of accumulation) |
+| ~100 ms | First `CMD_LATCH_PERIOD` may return `V03_PERIOD_VALID = 1` (latch requires ≥ 1 mains period of accumulation; ~200 ms on images before v1.2) |
 | ~250 ms | All measurements stable (typical) |
 
 > Holistic cold boot **to the first valid measurement** ≈ **250 ms** (typical). After a soft `CMD_RESET` the timeline is identical (the full reset state machine runs).
@@ -668,7 +584,7 @@ After POR (power-on reset) or hard reset the module passes through the following
 
 **Guarantees**:
 
-- Address change **works in production mode** (not factory-only).
+- Address change **works in production mode** (not develop-only).
 - `REG_I2C_ADDRESS (0x30)` at boot reads the **active address** (v1.3 canonical). Until reboot after staging it echoes the candidate.
 - The address is **excluded** from the `CMD_SAVE_GAINS` / `CMD_SAVE_USER_CONFIG` namespace — it is persisted only through `CMD_COMMIT_ADDR`.
 
@@ -684,6 +600,10 @@ After POR (power-on reset) or hard reset the module passes through the following
 - 5 s timeout without commit → magic clears; the `prepare` step must be repeated.
 
 ### 6.2 CT model binding — pure staging + per-channel CMD
+
+> On images before fw 1.4.20 (`CAPABILITY` bit 12 clear) the applied per-model scaling reverts to
+> the factory default after a module restart — re-stage and re-commit `CT_MODEL` per channel after
+> every detected restart, or energy will be wrong.
 
 **v1.3 pure-staging canonical**: writing `REG_CT_MODEL (0x05)` **no longer auto-applies** the preset to ch0. Binding happens **only** through `CMD_SET_CT_MODEL_CHn`.
 
@@ -771,7 +691,7 @@ Skew between modules: ~1 ms per module at 50 kHz. Over 16 modules relative to a 
 **Settle window after `CMD_LATCH_PERIOD`**:
 - Minimum **50 ms** before reading `V03_PERIOD_VALID (0x07)` or the period snapshot — this covers worst-case latch latency (1 mains period @ 50 Hz = 20 ms + RT commit + I²C peripheral settling).
 - Optionally the master can **poll `STATUS.bit0 (READY)`** instead of a fixed sleep: `READY=1` means the RT block is in a consistent state, so the period snapshot can be safely burst-read.
-- On a brand-new module (< 200 ms after boot) a latch may return `V03_PERIOD_VALID = 0` because less than 1 mains period has accumulated — see §6.0 cold-boot timeline.
+- On a brand-new module (< ~100 ms after boot on current firmware; < 200 ms before v1.2) a latch may return `V03_PERIOD_VALID = 0` because less than 1 mains period has accumulated — see §6.0 cold-boot timeline.
 
 #### Strategy 2 — General-Call broadcast latch (enable required)
 
@@ -779,7 +699,8 @@ Skew = 0 (atomic at bus level). See §6.3.
 
 **When to use what**:
 - < 8 modules: Strategy 1 (simpler, no enable required).
-- ≥ 8 modules or billing-grade synchrony: Strategy 2.
+- ≥ 8 modules or tight synchronization: Strategy 2.
+- **One method per module**: the addressed `CMD_LATCH_PERIOD` and the GC broadcast latch reset the **same single accumulator** — mixing them on one module cuts the running period short. The per-module fallback (§6.3.3) is safe because it fires only on a module the broadcast did not reach.
 
 ### 6.5 Provisioning — fresh-flash + SAVE
 
@@ -810,12 +731,9 @@ read REG_ERROR (0x02):
   0x00  → no error (false signal — clear stale EVENT bit3 via W1C)
          action: write 1<<3 → EVENT_FLAGS (W1C clear)
 
-  0xF9  → CLONE (anti-clone sentinel — RESERVED, NOT raised by v1.4.x)
-         action: not reachable in current firmware — the anti-clone
-                 mechanism is planned but not implemented. If ever raised
-                 by a future firmware version: device unusable; measurement
-                 pipeline halted. Only STATUS/ERROR readable. NOT clearable
-                 through software. Resolution — factory recovery.
+  0xF9  → CLONE (reserved)
+         action: not raised on current firmware. If ever observed, treat as
+                 vendor-reserved and contact the supplier.
 
   0xFA  → LUT_BAD (calibration LUT corrupted)
          action: device unusable for measurement. Factory recovery required.
@@ -833,7 +751,9 @@ read REG_ERROR (0x02):
                  insufficient range for the measured current, or a real overload.
                  Issue CMD_CLEAR_ERROR (0x31) after the cause is removed.
 
-  0xFE  → PARAM (last operation rejected — invalid argument / unknown opcode)
+  0xFE  → PARAM (last operation rejected — invalid argument / unknown opcode;
+                 EVENT bit3 set. Very early images, 1.2–1.4.3, ignored unknown
+                 opcodes silently)
          action: master-side bug — review the last write. Issue CMD_CLEAR_ERROR
                  after fixing the master logic.
 
@@ -865,16 +785,19 @@ read REG_ERROR (0x02):
 | `0x29` | `SET_CT_MODEL_CH1` | 5 ms | – | Bind staged `REG_CT_MODEL` to ch1 |
 | `0x2A` | `SET_CT_MODEL_CH2` | 5 ms | – | Bind staged `REG_CT_MODEL` to ch2 |
 | `0x30` | `COMMIT_ADDR` | 700 ms | – | Persist `I2C_ADDRESS` (see §6.1) |
-| `0x31` | `CLEAR_ERROR` | 0 | – | Clear `REG_ERROR` (transient classes only; `CLONE` is not clearable) |
+| `0x31` | `CLEAR_ERROR` | 0 | – | Clear `REG_ERROR` (transient classes only; `CLONE (0xF9)` is reserved, not raised on current firmware) |
 | `0x32` | `SAVE_USER_CONFIG` | 700 ms | – | Persist the user_config group (production-OK) |
 
-> Opcodes outside the public range (factory) are **not documented** in this reference. A consumer master does not send them in normal operation; an unsupported opcode → `REG_ERROR = ERR_PARAM (0xFE)`.
+> Opcodes outside the public range (factory / develop) are **not documented** in this reference. A consumer master does not send them in normal operation; an unsupported opcode → `REG_ERROR = ERR_PARAM (0xFE)`.
 
 ---
 
 ## 7 · Semantics
 
 ### 7.0 Flash endurance + reset behavior
+
+> Reminder: before fw 1.4.20 a reset also reverts the applied CT-model scaling to the factory
+> default (`CAPABILITY` bit 12 clear) — see §6.2.
 
 **Flash endurance**: ~**10 000 cycles per page** (typical, vendor spec). Every `CMD_SAVE_USER_CONFIG` or `CMD_COMMIT_ADDR` is **one erase+write cycle** on the params page.
 
@@ -888,7 +811,7 @@ read REG_ERROR (0x02):
 |---|---|---|
 | `CMD_RESET (0x01)` | flash (config, address, label, gains, NF) | RAM (UPTIME, ZC_OFFSET, EVENT_FLAGS — except `RESET_OCCURRED` bit 5 set at boot; THRESH_*; DIGEST_CONFIG) |
 | Power cycle / hard reset pin | flash | same as CMD_RESET plus any external RAM held on the host side |
-| `CMD_FACTORY_RESET (0xAA)` (factory only) | nothing | **everything** — wipes flash + RAM (full factory reset) |
+| `CMD_FACTORY_RESET (0xAA)` (develop only) | nothing | **everything** — wipes flash + RAM (full factory reset) |
 
 **`RESET_OCCURRED` bit pattern** (canonical):
 - After a reset, on boot: `EVENT_FLAGS.bit5 = 1`.
@@ -904,7 +827,7 @@ read REG_ERROR (0x02):
 | `CMD_RESET` (0x01) | ✅ OK | — (soft reset) |
 | `CMD_LATCH_PERIOD` (0x27) | ✅ OK | — (latches the period snapshot) |
 | `CMD_CLEAR_ERROR` (0x31) | ✅ OK | — (clears `REG_ERROR`) |
-| `CMD_SAVE_GAINS` (0x26) | ❌ **BLOCKED** in production (silent reject; `REG_ERROR = 0xFE`; reboot reverts) | factory calibration |
+| `CMD_SAVE_GAINS` (0x26) | ❌ **BLOCKED** in production (rejected: `REG_ERROR = 0xFE`; reboot reverts) | factory calibration |
 | `CMD_FACTORY_RESET` (0xAA) | ❌ **BLOCKED** in production | — |
 
 ### 7.2 Read-back ≠ persistence
@@ -931,7 +854,7 @@ Multi-phase measurement (L1/L2/L3 simultaneously) is a **separate SKU** with its
 
 ### 7.4 Master energy integration — wall-clock canon
 
-⚠ **`V03_PERIOD_LATCH_MS (0xEC)` is a diagnostic-only chip-side software timer (SysTick-based). It undercounts by 25–30%** under normal ISR load (SysTick starvation, by design). **DO NOT use for billing.**
+⚠ **`V03_PERIOD_LATCH_MS (0xEC)` is a module diagnostic timer; it may read short under load — use the master clock for energy.**
 
 **Canonical master energy integration**:
 
@@ -942,10 +865,17 @@ dt_s = (t_now - t_prev_latch) / time_unit
 energy_wh[ch] += avg_p[ch] * dt_s / 3600
 t_prev_latch = t_now
 
-# WRONG — chip software timer undercounts by 25-30%
+# WRONG — the module diagnostic timer may read short under load
 dt_chip_s = read_u32(0xEC) / 1000.0
 energy_wh[ch] += avg_p[ch] * dt_chip_s / 3600    # systematically under-reported
 ```
+
+The **module-side measure of the latched window** is `V03_PERIOD_COMMIT_CNT (0xBE)` times the commit
+length — it counts whole RT commits and is not affected by the timer starvation that makes
+`V03_PERIOD_LATCH_MS` read short. One commit = **0.1 s on current firmware** (since v1.2); older
+images used 0.2 s. To tell which applies without a version table: the ratio
+`V03_PERIOD_LATCH_MS / V03_PERIOD_COMMIT_CNT` comes out close to 100 or close to 200. Use it for
+cross-checks; the master wall-clock stays authoritative for billing.
 
 ### 7.5 Failed-latch period preservation
 
@@ -965,7 +895,7 @@ if PERIOD_VALID == 1:
 
 ### 7.6 Clock-drift tolerance
 
-**Canon**: chip-timebase drift up to **30 %** under load is **normal** (SysTick starvation, by design on this MCU/ISR profile). Hardware-measured under production ISR load.
+**Canon**: the module's internal timebase may read short under load by up to **30 %** — this is **normal**, a property of the module's timebase, by design. Hardware-measured under production load.
 
 **Acceptance**: the chip is OK at drift ≤ 30 %.
 
@@ -996,10 +926,10 @@ Consolidated list of known characteristics the master must account for:
 
 | Topic | Behavior | See |
 |---|---|---|
-| Chip-side timer drift | Up to 30 % undercount under ISR load (SysTick starvation) | §7.4, §7.6 |
+| Chip-side timer drift | May read short under load, up to 30 % (acceptance envelope) | §7.4, §7.6 |
 | EMI relay switching | ~67 % read fail rate during commutation; bus self-recovers | §7.7 |
-| `EVENT.bit3` async latency | ~200 ms delay from write rejection to bit 3 assert | §5.3 |
-| `V03_PERIOD_LATCH_MS (0xEC)` | Diagnostic-only; undercounts by 25–30%; master uses its own wall-clock | §4.13, §7.4 |
+| `EVENT.bit3` async latency | up to one window (~100 ms; 200 ms before v1.2) from write rejection to bit 3 assert | §5.3 |
+| `V03_PERIOD_LATCH_MS (0xEC)` | Module diagnostic timer; may read short under load — master uses its own wall-clock | §4.13, §7.4 |
 | `REG_ERROR (0x02)` semantics | Last-write outcome (not sticky); EVENT bit 3 = durable signal | §5.3 |
 | `I_RMS = 0.0` | Below noise floor (valid measurement), NOT "no data" | §5.4.3 |
 | `U_RMS`/`U_PEAK`/`P` on I-variants | Read as `0.0` (valid only if CAPABILITY bit 8 = 1) | §4.10, §7.3 |
@@ -1113,7 +1043,7 @@ S 0xA0 W 0x02 Sr 0xA1 R [0x00] P
 # 1. Configure digest mask: I_RMS + U_RMS + P_REAL (bits 0+1+2 = 0x07)
 S 0xA0 W 0x29 0x07 P
 
-# 2. Wait one RT-commit cycle (~200 ms; or poll STATUS.bit0)
+# 2. Wait one RT-commit cycle (~100 ms on current firmware; waiting 200 ms covers all images; or poll STATUS.bit0)
 
 # 3. Burst-read the digest window (22 bytes)
 S 0xA0 W 0x70 Sr 0xA1 R [22 bytes] P
@@ -1149,6 +1079,9 @@ S 0xA0 W 0x2A 0x02 P
 
 ### 8.9 Raw-capture diagnostic burst (`CAPTURE_*`)
 
+`CMD_CAPTURE_RAW (0x38)` and the `CAPTURE_*` registers are a **diagnostic facility** — not needed in
+normal operation; use only when asked by the supplier to capture raw samples.
+
 ```text
 # 1. Arm raw-capture
 S 0xA0 W 0x01 0x38 P     # CMD_CAPTURE_RAW (opcode 0x38)
@@ -1163,10 +1096,7 @@ S 0xA0 W 0x19 0x00 P
 # 4. Burst-read CAPTURE_WINDOW (32 bytes = 16×u16 LE samples)
 S 0xA0 W 0x1A Sr 0xA1 R [32 bytes] P
 
-# Repeat steps 3-4 for pages 1..15 (16 pages × 16 samples = 256 total ≈ 1.3 mains periods).
-# NOTE: page size = 32 bytes / 16 samples — sized to the 32-byte-max I2C bridge read.
-# Do NOT try a 64-byte burst — you would read one page + 32 bytes of unrelated
-# register space (0x3A..0x59) and mis-align the sample indexes.
+# Repeat steps 3-4 for pages 1..15 (256 samples total ≈ 1.3 mains periods)
 ```
 
 ### 8.10 CT model verify-mirror read-back (post-binding sanity)
@@ -1206,18 +1136,18 @@ Reference firmware: `protocol_version = 1.3`, `schema_version = 2`. Page-0 contr
 
 - **CT_MODEL pure-staging**: `REG_CT_MODEL (0x05)` no longer auto-applies to ch0 on write. Binding happens **only** via `CMD_SET_CT_MODEL_CHn` (order-independent).
 - **Address two-phase commit** (production-OK): `I2C_ADDRESS` is persisted via `ADDR_COMMIT_MAGIC` + `CMD_COMMIT_ADDR`. `REG_I2C_ADDRESS` reads the **active** address on boot.
-- **REG_ERROR = last-write outcome** (not sticky). `EVENT_FLAGS.bit3` is the durable signal (sticky W1C; ~200 ms async after write rejection).
-- **Unknown opcodes / out-of-range enums** → `ERR_PARAM (0xFE)` + `EVENT.bit3` (previously a silent no-op).
+- **REG_ERROR = last-write outcome** (not sticky). `EVENT_FLAGS.bit3` is the durable signal (sticky W1C; asserts within one window, ~100 ms, after write rejection).
+- **Unknown opcodes / out-of-range enums** → rejected: `REG_ERROR = ERR_PARAM (0xFE)` + `EVENT.bit3`. Very early images (1.2–1.4.3) ignored unknown opcodes silently.
 - **Fresh-flash provisioning**: `ERR_FLASH_PARAMS_BAD (0xFB)` on a virgin module → cleared via `CMD_SAVE_USER_CONFIG`.
 - **GC broadcast latch — opt-in per module** via `FLEET_CONFIG.bit0` (default OFF; effective after reset). NACK-on-disabled = hard error, not silent.
-- **Variant family**: UI3 (HW_VARIANT=3) marked **roadmap** (not buildable on the current MCU package).
+- **Variant family**: UI3 (HW_VARIANT=3) marked **not yet available**.
 - **Read/write asymmetry by design**: READ auto-increment ✅; WRITE byte-at-a-time required ❌ (HW-confirmed).
-- **CAPABILITY register** (0x57/0x58 u16 LE): 12-bit feature map. Canonical values `0x069E` (current-only) / `0x079E` (U-variants).
+- **CAPABILITY register** (0x57/0x58 u16 LE): feature bitmap — detect features by individual bits (§3.2), never by comparing the whole value; bit 12 = SCT_RATING_SELF (fw 1.4.20+).
 - **Atomicity**: V03 RMS block + Digest have read-freeze (atomic burst-read); GC_TICK / I2C_ADDRESS / CT_MODEL_CHn mirrors are read-twice-agree.
 - **NF-clamp** semantics: `I_RMS = 0.0` means "below noise floor", a valid measurement.
 - **AC_FREQ ZC-sourced** on all variants (including I-only).
-- **Master energy integration** must use its own wall-clock, not `V03_PERIOD_LATCH_MS (0xEC)` (chip software timer — diagnostic-only, undercounts by 25–30%).
+- **Master energy integration** must use its own wall-clock, not `V03_PERIOD_LATCH_MS (0xEC)` (module diagnostic timer — may read short under load).
 
 ---
 
-> **End of document**. Source-of-truth: `registers_v2.yaml` v1.3 + canonical wire-contract + bench-validated firmware behavior. Draft 2026-06-16.
+> **End of document.**

@@ -1,6 +1,6 @@
 # 03 · Real-Time Polling
 
-Real-time polling — reading instantaneous values of U, I, P, PF, flow direction, and related metrics at regular intervals (typically every 200 ms). It is used for:
+Real-time polling — reading instantaneous values of U, I, P, PF, flow direction, and related metrics at regular intervals (typically once per measurement window, ~100 ms). It is used for:
 
 - Live dashboards (current power, voltage)
 - Threshold alarms
@@ -10,35 +10,38 @@ Real-time polling — reading instantaneous values of U, I, P, PF, flow directio
 
 For **tariff energy accumulation** (Wh over a period) use the period-latch mechanism described in [04_period_metering.md](period-metering.md).
 
-## The 200 ms window
+## The measurement window (100 ms)
 
-![200 ms RT computation window timeline: window boundaries, when registers refresh, DRDY pulse alignment, read-freeze atomic burst region.](images/rt-window-timing.png)
+![Timing of the measurement window and when its result set is published.](images/rt-window-timing.png)
 
 ### What it is
 
-The module continuously samples its ADCs at 5 kHz and produces a result set every ~200 ms:
+The module measures continuously and publishes a result set every ~100 ms
+(firmware images before v1.2: every ~200 ms):
 
 - RMS of voltage and currents
 - Peak values of U and I
 - Active power P, computed as `mean(u(t) · i(t))` — **signed**, with the sign indicating flow direction:
   - `P > 0` — the load consumes from the grid (normal mode)
   - `P < 0` — the load exports to the grid (solar inverter, regenerative load)
-- Reactive power Q (computed on a phase-shifted sample stream; the sign distinguishes inductive (+) from capacitive (−))
+- Reactive power Q, computed as `√(S² − P²)` with `S = U_rms × I_rms` — **unsigned** (≥ 0), includes distortion power; reads 0 on I-only variants and is noisy near PF ≈ 1
 - Power factor PF = P / S, with S = U_rms × I_rms. The sign of PF matches that of P — an additional indicator of flow direction.
 
 After computing a window, the firmware **atomically** publishes the entire result set (50+ bytes) into the I2C register block `0x86..0xCD`.
 
 ### Window length is fixed
 
-The window is **hard-coded to 200 ms**, independent of mains frequency. The firmware collects exactly 10 ADC buffers of 20 ms each (5 kHz sample rate × 100 samples per buffer) and computes the result.
+The window is **hard-coded to 100 ms** on current firmware, independent of mains frequency. On images before v1.2 the window is 200 ms.
 
-At 50 Hz mains this covers exactly 10 cycles; at 60 Hz, 12 cycles. In both cases the integer number of mains cycles keeps RMS and P accurate.
+At 50 Hz mains a 100 ms window covers exactly 5 cycles; at 60 Hz, 6 cycles (10 and 12 on the older 200 ms window). In both cases the integer number of mains cycles keeps RMS and P accurate.
 
-> The register `RT_period_ms` (`0xCA..0xCD`, u32 LE) reports the **actual wall-clock duration** of the last window — usually close to 200 ms. It is diagnostic only; it does not affect measurement accuracy or the energy calculation (see chapter 04).
+> The register `V03_PERIOD_MS` (`0xCA..0xCD`, u32 LE) reports the duration of the **current latch period** so far (ms since the last `CMD_LATCH_PERIOD` — see chapter 04). It is diagnostic only; it does not affect measurement accuracy or the energy calculation.
 
 ### When the next window starts
 
-Immediately after the previous one is published. There is no gap between windows — ADC sampling is continuous.
+Immediately after the previous one is published. There is no gap between windows — measurement is continuous.
+
+![How the measurement window relates to the period latch.](images/window-period-latch-concept.png)
 
 ## DATA_READY (DRDY) — the ready pin
 
@@ -47,25 +50,25 @@ DRDY is an open-drain output pulled up to 3.3 V on the master side. The firmware
 ### Pulse parameters
 
 - LOW duration: ~10 µs (comfortable for any master with EXTI)
-- Frequency: ~5 Hz (one pulse per 200 ms window)
+- Frequency: ~10 Hz (one pulse per 100 ms window; ~5 Hz on images before v1.2)
 - Output type: open-drain (supports wired-OR in multi-module topologies)
 - Semantics: **the falling edge guarantees all RT registers are coherent and up to date**
 
 ### When DRDY is not needed
 
-- The master polls slower than 5 Hz (once per second or minute) — data is refreshed five times a second, so any read picks up fresh data.
+- The master polls slower than the window rate (once per second or minute) — data is refreshed ten times a second on current firmware, so any read picks up fresh data.
 - A trivial polling loop — `read_rt()` can be called any time; you get the latest committed result.
 
 ### When DRDY is useful
 
 - The master wants to minimise I2C traffic or free up CPU for other tasks (battery-powered systems)
 - Precise synchronisation: read the exact moment of measurement completion (useful for high-resolution logs)
-- Event detection: react to every window (e.g. instantaneous-power tracking at 200 ms granularity)
+- Event detection: react to every window (e.g. instantaneous-power tracking at ~100 ms granularity)
 
 ### Usage (Arduino, one module)
 
 ```cpp
-const uint8_t PIN_DRDY = 15;
+const uint8_t PIN_DRDY = 15;   // example pin — any input-capable GPIO works
 volatile bool data_ready = false;
 
 void on_drdy_falling() {
@@ -122,13 +125,13 @@ void classify_flow(float p) {
 
 ## RT register reference
 
-All values are float32 little-endian (4 bytes), read with 4 separate transactions (no auto-increment). Integer fields are marked with their type.
+All values are float32 little-endian (4 bytes). READ supports auto-increment — read each value as a single 4-byte burst (or the whole `0x86..0xBD` block in one burst, see §read-freeze). Integer fields are marked with their type.
 
 ### Voltage
 
 | Address | Field | Type | Unit | Description |
 |---:|---|---|---|---|
-| `0x86` | U_rms | float32 | V | RMS voltage over the last ~200 ms window |
+| `0x86` | U_rms | float32 | V | RMS voltage over the last measurement window |
 | `0x8A` | U_peak | float32 | V | Maximum deviation from mean during the window |
 
 ### Currents (per channel: 0 = primary, 1/2 on UI2/UI3, more on UI5/UI7)
@@ -154,13 +157,13 @@ All values are float32 little-endian (4 bytes), read with 4 separate transaction
 | `0xB2` | PF0 | float32 | – | ± | Power factor, range −1…+1, sign matches P0 |
 | `0xB6` | PF1 | float32 | – | ± |  |
 | `0xBA` | PF2 | float32 | – | ± |  |
-| `0xD0` | Q0_reac | float32 | VAR | ± | Reactive power, channel 0; +inductive, −capacitive (IEEE 1459) |
-| `0xD4` | Q1_reac | float32 | VAR | ± |  |
-| `0xD8` | Q2_reac | float32 | VAR | ± |  |
+| `0xD0` | Q0_reac | float32 | VAr | ≥ 0 | Reactive power ch0 = `√(S² − P²)` — includes distortion power; noisy near PF ≈ 1; 0 on I-only variants |
+| `0xD4` | Q1_reac | float32 | VAr | ≥ 0 |  |
+| `0xD8` | Q2_reac | float32 | VAr | ≥ 0 |  |
 
 > Apparent power S can be derived master-side: `S = U_rms × I_rms`. RMS values are **always ≥ 0**; flow direction lives in the sign of P.
 
-> **Atomicity caveat for Q:** the RT block `0x86..0xBD` (U/I/P/PF) is delivered under a read-freeze and is guaranteed torn-free in a single burst-read. The Q registers (`0xD0..0xDB`) are **outside** that freeze window — if you read U/I/P + Q together in two separate transactions, U/I/P will be from a coherent snapshot but Q may belong to the *next* RT commit. For inter-quantity coherence at sub-period granularity, either read Q under a `CMD_LATCH_PERIOD` snapshot (`0xC2..0xC9` for ch1/ch2 averaged Q is not exposed — use the snapshot block in chapter 11 §4.12) or accept the up-to-200 ms skew between P and Q.
+> **Atomicity caveat for Q:** the RT block `0x86..0xBD` (U/I/P/PF) is delivered under a read-freeze and is guaranteed torn-free in a single burst-read. The Q registers (`0xD0..0xDB`) are **outside** that freeze window — if you read U/I/P + Q together in two separate transactions, U/I/P will be from a coherent snapshot but Q may belong to the *next* RT commit. For inter-quantity coherence at sub-period granularity, either read Q under a `CMD_LATCH_PERIOD` snapshot (`0xC2..0xC9` for ch1/ch2 averaged Q is not exposed — use the snapshot block in chapter 11 §4.12) or accept the up-to-one-window (~100 ms) skew between P and Q.
 
 ### System
 
@@ -171,7 +174,7 @@ All values are float32 little-endian (4 bytes), read with 4 separate transaction
 | `0x03` | VERSION | u8 | Firmware version |
 | `0x20` | AC_FREQ | u8 | Mains frequency (Hz), 0 if no zero-cross detected |
 | `0xCE` | DATA_VALID | u8 | bit0 = valid result available since boot |
-| `0xCA` | RT_period_ms | u32 LE | Actual wall-clock duration of the last RT window (ms, diagnostic) |
+| `0xCA` | V03_PERIOD_MS | u32 LE | Duration of the current latch period so far (ms, diagnostic — see ch. 04) |
 
 ## Polling — single module
 
@@ -193,7 +196,7 @@ void loop() {
 }
 ```
 
-### 200 ms polling without DRDY
+### Fixed-interval polling without DRDY
 
 ```cpp
 unsigned long last_read = 0;
@@ -208,7 +211,9 @@ void loop() {
 }
 ```
 
-This yields ~5 samples per second — the same rate at which the firmware refreshes.
+This yields ~5 samples per second — every other window on current firmware (the module refreshes
+every ~100 ms). Poll every 100 ms to catch each window; the 200 ms interval also works on images
+before v1.2.
 
 ## Multi-channel current (UI2 / UI3)
 
@@ -242,15 +247,15 @@ P1 = mean(u(t) · i1(t))
 P2 = mean(u(t) · i2(t))
 ```
 
-This assumes all CT clamps are on conductors of the **same phase**. For true multi-phase measurement, see the roadmap (rbAmp-U3I3).
+This assumes all CT clamps are on conductors of the **same phase**.
 
 ## Multi-module polling — three strategies
 
-![Side-by-side of the 3 multi-module polling strategies: round-robin / DRDY-per-module / wired-OR DRDY — GPIO cost vs precision trade-off.](images/rt-multimodule-strategies.png)
+![The three strategies for polling several modules: round-robin, DRDY per module and wired-OR DRDY.](images/rt-multimodule-strategies.png)
 
 ### Strategy 1 — round-robin polling (simple)
 
-The master reads the modules in turn, e.g. every 200 ms or every second:
+The master reads the modules in turn, e.g. every window (~100 ms) or every second:
 
 ```cpp
 const uint8_t modules[] = {0x50, 0x51, 0x52};
@@ -319,7 +324,7 @@ rbAmp #3 DRDY ──┘  │
 
 ```cpp
 const uint8_t modules[] = {0x50, 0x51, 0x52};
-const uint8_t PIN_DRDY = 15;
+const uint8_t PIN_DRDY = 15;   // example pin — any input-capable GPIO works
 volatile bool any_ready = false;
 
 void IRAM_ATTR drdy() { any_ready = true; }
@@ -348,7 +353,7 @@ void loop() {
 
 | Approach | Master GPIO | Latency | Complexity | Scalability |
 |---|:---:|:---:|:---:|:---:|
-| Polling without DRDY | 0 | ~200 ms | minimal | up to ~16 modules |
+| Polling without DRDY | 0 | up to 1 window (~100 ms) | minimal | up to ~16 modules |
 | DRDY per module | N | < 1 ms | medium | up to ~4 modules |
 | Wired-OR DRDY | 1 | ~1–5 ms | low | up to ~10 modules |
 
@@ -404,12 +409,12 @@ I-only variants are intended for:
 0xB6 PF1 (f32, ±)        — −1..+1
 0xBA PF2 (f32, ±)        — −1..+1
 
-0xCA RT_period_ms (u32)  — diagnostic, actual window duration
+0xCA V03_PERIOD_MS (u32) — diagnostic, current latch-period duration
 0xCE DATA_VALID (u8)     — bit0 = valid after boot
 
-0xD0 Q0_reac (f32, ±)    — VAR (sign: + inductive, − capacitive)
-0xD4 Q1_reac (f32, ±)    — VAR
-0xD8 Q2_reac (f32, ±)    — VAR
+0xD0 Q0_reac (f32, ≥0)   — VAr, √(S²−P²), includes distortion
+0xD4 Q1_reac (f32, ≥0)   — VAr
+0xD8 Q2_reac (f32, ≥0)   — VAr
 ```
 
 ## Next

@@ -4,7 +4,7 @@ This chapter is the ESP-IDF equivalent of [10_arduino_examples.md](arduino-examp
 
 > **These examples talk to rbAmp directly through the raw I2C register API.** They are intended for production-grade native ESP32 firmware where direct control, full FreeRTOS task design, OTA-friendly project layout and minimal memory footprint matter.
 >
-> **For a more convenient, structured interface — use the `rbamp` ESP-IDF component** (see [chapter 19 · ESP-IDF Library](esp-idf-overview.md)). The component wraps the register-level details behind an opaque `rbamp_handle_t` with named functions (`rbamp_read_voltage()`, `rbamp_latch_period()`, `rbamp_read_period_snapshot()`, etc.), a per-channel Wh accumulator, multi-module helpers, full `idf.py menuconfig` integration via Kconfig (`CONFIG_RBAMP_NACK_RETRY_ATTEMPTS`, `CONFIG_RBAMP_DEFAULT_I2C_FREQ_HZ`, etc.), and the application-level NACK retry + sanity-check discipline mandatory for ESP-IDF v5 `i2c_master` (see the bus-timing and retry guidance in [chapter 3 · API Reference](api-reference.md)). Most user-facing projects should start from the component and fall back to the raw API only when needed.
+> **For a more convenient, structured interface — use the `rbamp` ESP-IDF component** (see the [client-libraries table in the README](README.md#client-libraries-high-level-api-per-platform)). The component wraps the register-level details behind an opaque `rbamp_handle_t` with named functions (`rbamp_read_voltage()`, `rbamp_latch_period()`, `rbamp_read_period_snapshot()`, etc.), a per-channel Wh accumulator, multi-module helpers, full `idf.py menuconfig` integration via Kconfig (`CONFIG_RBAMP_NACK_RETRY_ATTEMPTS`, `CONFIG_RBAMP_DEFAULT_I2C_FREQ_HZ`, etc.), and the SPEC §B.5 retry+sanity discipline mandatory for ESP-IDF v5 `i2c_master`. Most user-facing projects should start from the component and fall back to the raw API only when needed.
 
 ## ESP-IDF version
 
@@ -186,7 +186,6 @@ esp_err_t rbamp_io_wait_ready(i2c_master_dev_handle_t dev, uint32_t timeout_ms);
 
 /* ===== Commands ===== */
 #define RB_CMD_RESET            0x01
-#define RB_CMD_SAVE_GAINS       0x26
 #define RB_CMD_LATCH_PERIOD     0x27
 
 #ifdef __cplusplus
@@ -808,7 +807,7 @@ void app_main(void) {
 ## Example 6 — Home energy balance
 
 **Goal**: full balance dashboard. Three modules:
-- rbAmp #1 on the main feed (STANDARD / PRO — bidirectional)
+- rbAmp #1 on the main feed (STANDARD (STD) — bidirectional)
 - rbAmp #2 on the solar inverter output (BASIC ok)
 - rbAmp #3 UI3 on three large loads (HP, AC, EV)
 
@@ -829,13 +828,14 @@ Master uses `rbamp_io_broadcast_latch(bus)` for synchronous snapshots and publis
 
 static const char *TAG = "rbamp_balance";
 
-#define ADDR_MAINS  0x50    // bidirectional (STANDARD / PRO)
+#define ADDR_MAINS  0x50    // bidirectional (STANDARD (STD))
 #define ADDR_SOLAR  0x51    // generation only
 #define ADDR_LOADS  0x52    // UI3
 
-/* PERIOD_AVG_P_NEG address for the mains module — see the SKU datasheet
- * of the STANDARD / PRO product. Set to 0xFF on BASIC modules. */
-#define REG_PERIOD_AVG_P_NEG_MAINS  0xFF
+/* Bidirectional mains module (STANDARD (STD) tier)? Set true and fill the
+ * PERIOD_AVG_P_NEG address from the SKU datasheet. Keep false on BASIC. */
+#define HAS_NEG_REG_MAINS           false
+#define REG_PERIOD_AVG_P_NEG_MAINS  0x00
 
 extern void wifi_init_sta(void);              // reuse Ex. 4 boilerplate
 extern esp_mqtt_client_handle_t mqtt_start(void);
@@ -888,13 +888,13 @@ void app_main(void) {
         float dt_s = (float)(t_now_us - t_prev_us) / 1000000.0f;
         t_prev_us = t_now_us;
 
-        /* ----- MAINS (bidirectional, STANDARD/PRO) ----- */
+        /* ----- MAINS (bidirectional, STANDARD (STD)) ----- */
         uint8_t valid;
         if (rbamp_io_read_u8(mains, RB_REG_PERIOD_VALID, &valid) == ESP_OK
             && (valid & 0x01)) {
             float p_consume = 0.0f, p_export = 0.0f;
             rbamp_io_read_float_le(mains, RB_REG_PERIOD_AVG_P0, &p_consume);
-            if (REG_PERIOD_AVG_P_NEG_MAINS != 0xFF) {
+            if (HAS_NEG_REG_MAINS) {
                 rbamp_io_read_float_le(mains, REG_PERIOD_AVG_P_NEG_MAINS, &p_export);
             }
             totals.mains_in_wh  += p_consume * dt_s / 3600.0;
@@ -976,7 +976,7 @@ static const char *TAG = "rbamp_event";
 #define PIN_DRDY   15
 #define MOUNT_POINT "/sdcard"
 
-#define EMA_ALPHA           0.05f   // ~4 s time constant at 5 Hz updates
+#define EMA_ALPHA           0.05f   // ~2 s time constant at 10 Hz updates
 #define EVENT_THRESHOLD_W   200.0f
 
 static QueueHandle_t s_drdy_q;
@@ -1576,7 +1576,7 @@ void app_main(void) {
 
 - The IDF SNTP API in 5.x is `esp_netif_sntp_init` / `esp_netif_sntp_sync_wait` (replaces the older `sntp_setservername` / `sntp_init` from LwIP). It returns once the time is plausible.
 - `setenv("TZ", ...)` followed by `tzset()` enables `localtime_r()` to apply DST rules automatically — no manual offset handling required.
-- For STANDARD / PRO bidirectional metering, call `accumulate()` twice — once for consumption and once for export — and publish both peak/off-peak consumption and peak/off-peak export.
+- For STANDARD (STD) bidirectional metering, call `accumulate()` twice — once for consumption and once for export — and publish both peak/off-peak consumption and peak/off-peak export.
 - The daily roll-over publishes a retained payload on `rbamp/tou/day_close`; HA or Grafana can subscribe to record daily totals.
 
 ---
@@ -1612,9 +1612,9 @@ void app_main(void) {
 
 After working through these ten examples:
 
-- For the high-level `rbamp` ESP-IDF component, see [19_esp_idf_library.md](esp-idf-overview.md).
-- For Arduino-style ESP32 development, see [10_arduino_examples.md](arduino-examples.md) (raw) or [17_arduino_library.md](library-arduino-overview.md) (library).
-- For MicroPython / CircuitPython, see [12_micropython_examples.md](micropython-examples.md) (raw) or [18_micropython_library.md](micropython-examples.md) (library).
-- For ESPHome integration (declarative YAML), see [`tools/esphome-rbamp/docs/en/`](esphome-overview.md).
+- For the high-level `rbamp` ESP-IDF component, see the [client-libraries table in the README](README.md#client-libraries-high-level-api-per-platform).
+- For Arduino-style ESP32 development, see [10_arduino_examples.md](arduino-examples.md) (raw).
+- For MicroPython / CircuitPython, see [12_micropython_examples.md](micropython-examples.md) (raw).
+- For ESPHome integration (declarative YAML), see [`tools/esphome-rbamp/docs/en/`](https://rbamp.com/docs/modules-basic-standard-esphome-overview).
 - The formal I2C register specification used here lives in [11_api_reference.md](api-reference.md).
-- For Linux SBC (CPython) integration, see [16_python_sbc_examples.md](python-sbc-examples.md) (raw) or [20_python_sbc_library.md](python-overview.md) (library).
+- For Linux SBC (CPython) integration, see [16_python_sbc_examples.md](python-sbc-examples.md) (raw).

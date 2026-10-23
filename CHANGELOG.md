@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **STD technical reference** (`std/reference/`): register map, transports, commands, measurement and energy model, firmware update, diagnostics and host integration for the STANDARD (STD) module line.
+- **Illustrations**: 22 diagrams (PNG + SVG) — module lines, wiring, I²C pull-up rules, timing, period latch, energy accounting, register map, troubleshooting.
+- Current-channel accuracy table for SCT-013 sensors (all seven ratings) in the overview.
+
+### Changed
+- Measurement window is ~100 ms (images before v1.2 and STD images up to `0x7B`: 200 ms).
+- Two module lines in the documentation: BASIC and STANDARD (STD).
+- I²C pull-ups: recommended external values by number of modules (connect them to 3.3 V, not to the 5 V supply).
+- SCT-013 model codes 1..7 (including -100 and -060) documented as supported.
+- Community files are English only; contact address is info@rbamp.com. The draft quick-start page was removed.
+
+### Added
 - **Channel access window** (`§4.14`): full documentation for
   `REG_CHANNEL_SELECT` (`0x32`) + `REG_CHANNEL_DATA` (`0x3C..0x3F`) — field
   codes table, four-trap callout, wire-level examples (single-channel read,

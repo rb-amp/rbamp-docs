@@ -9,7 +9,9 @@ rbAmp starts measuring **immediately** after power-on. The master only needs to:
 
 No start command, no register-level configuration on the chip is required. Factory calibration is loaded automatically on boot, so the module emits correct physical-unit values from the first reading.
 
-> **Important for modules with an external (plug-in) CT**: after first installation, you must **write the sensor model** to the model register once. The module needs the model to apply the correct mV-per-ampere coefficient. The value is stored in flash and persists across reboots — there is no need to repeat the write on every boot. Details are in the section [Setting the external sensor model](#setting-the-external-sensor-model) below.
+![The sequence from power-on to the first valid reading.](images/first-reading-flow.png)
+
+> **Important for modules with an external (plug-in) CT**: after first installation, you must **write the sensor model** to the model register. The module needs the model to apply the correct mV-per-ampere coefficient. The model **code** is stored in flash and survives reboots. On firmware before **1.4.20** (`CAPABILITY` bit 12 clear) the **applied scaling reverts to the factory default after a module restart** — a master that selected a non-factory model must re-commit it after every detected module restart (see [What persists across a restart](#what-persists-across-a-restart) and the restart-detection rule in [04_period_metering.md](period-metering.md)); from fw 1.4.20 the model switch survives a restart. **On images before 1.4.20, energy will be wrong after any module restart unless `CT_MODEL` is re-committed.** The client libraries handle both cases for you. Details are in the section [Setting the sensor class and CT model](#setting-the-sensor-class-and-ct-model) below.
 
 ## Helper functions (platform-neutral C)
 
@@ -96,12 +98,18 @@ void loop() {
 }
 ```
 
-Expected output (a 60 W incandescent lamp on 230 V):
+Use a load of at least **~3 % of the sensor rating** — below that the error is not specified (a
+60 W lamp is only 0.9 % of a 30 A clamp). On a 30 A clamp, a 2 kW kettle is a good smoke-test load.
+For SKUs with a plug-in CT, set the sensor class and CT model **before** the smoke test (see
+[Setting the sensor class and CT model](#setting-the-sensor-class-and-ct-model)) — without the model
+the current readings are meaningless.
+
+Expected output (a 2 kW kettle on 230 V, 30 A clamp):
 
 ```
 rbAmp ready, version 0x04
-U=229.8 V  I=0.262 A  P=60.2 W  PF=0.998
-U=230.1 V  I=0.262 A  P=60.3 W  PF=0.998
+U=229.8 V  I=8.72 A  P=2004 W  PF=0.999
+U=230.1 V  I=8.73 A  P=2008 W  PF=0.999
 ...
 ```
 
@@ -150,29 +158,61 @@ void main_app(void) {
 
 > Required **only** for SKUs with a plug-in CT (3.5 mm jack). Modules with built-in sensors are already configured at the factory — skip this section.
 
-Two registers describe the external sensor: `SENSOR_CLASS` (the family — SCT-013, WiredCT, BuiltinCT) and `CT_MODEL` (the specific model code within that family). On v1.3 the model is written using a **pure-staging** scheme — writing `CT_MODEL` does **not** apply it on its own; a dedicated per-channel command commits the staged value.
+Two registers describe the external sensor: `SENSOR_CLASS` (the family — SCT-013 clip-on clamps, the wired CT clamp series, built-in CT) and `CT_MODEL` (the specific model code within that family). On v1.3 the model is written using a **pure-staging** scheme — writing `CT_MODEL` does **not** apply it on its own; a dedicated per-channel command commits the staged value.
 
 ### Registers
 
 | Name | Address | Type | Notes |
 |---|---|---|---|
-| `SENSOR_CLASS` | `0x25` | u8 RW | `0 = Unset`, `1 = SCT_013`, `2 = WiredCT` (reserved), `3 = BuiltinCT` (reserved). Changing the class resets `CT_MODEL` to `0`. |
+| `SENSOR_CLASS` | `0x25` | u8 RW | `0 = Unset`, `1 = SCT_013`, `2 = WIRED_CT` (the CT clamp series), `3 = BUILTIN_CT` (integrated sensor, per-unit factory calibration — no model code). Changing the class resets `CT_MODEL` to `0`. |
 | `CT_MODEL` | `0x05` | u8 RW | CT model code — **staging register only**. Pure write does not apply. |
 
-CT model codes (SCT-013 family, `SENSOR_CLASS = 1`):
+#### Choosing a sensor
 
-| Code | Sensor | Rated current |
-|:---:|---|:---:|
-| `0x00` | not set (default on factory-fresh plug-in-CT SKUs) | — |
-| `0x01` | SCT-013-005 | 5 A |
-| `0x02` | SCT-013-010 | 10 A |
-| `0x03` | SCT-013-030 | 30 A |
-| `0x04` | SCT-013-050 | 50 A |
-| `0x05` | SCT-013-100 | 100 A |
-| `0x06` | SCT-013-020 | 20 A |
-| `0x07` | SCT-013-060 | 60 A |
+Buy one of the **voltage-output SCT-013 models listed in the table below** (3.5 mm plug) — not a
+current-output variant. Choose the smallest rated clamp that is **above your largest expected
+current**; for specified accuracy the load should not sit below about **3 % of the rating** (see the
+[accuracy table](overview.md#current-channel-accuracy-with-sct-013-sensors)).
+
+#### CT model codes — SCT-013 family (`SENSOR_CLASS = 1`)
+
+| Code | Sensor | Rated current | RMS clip onset | Peak limit |
+|:---:|---|:---:|:---:|:---:|
+| `0x00` | not set (default on factory-fresh plug-in-CT SKUs) | — | — | — |
+| `0x01` | SCT-013-005 | 5 A | 5.8 A | 8.2 A |
+| `0x02` | SCT-013-010 | 10 A | 11.6 A | 16.4 A |
+| `0x03` | SCT-013-030 | 30 A | 34.8 A | 49.2 A |
+| `0x04` | SCT-013-050 | 50 A | 58 A | 82 A |
+| `0x05` | SCT-013-100 | 100 A | 116 A | 164 A |
+| `0x06` | SCT-013-020 | 20 A | 23.2 A | 32.8 A |
+| `0x07` | SCT-013-060 | 60 A | 69.6 A | 98.4 A |
 
 > Codes `0x06` and `0x07` are non-monotonic by rating — they were added after the original `0x01..0x05` set. Always pick by the rating you need, not by code order.
+>
+> **Limit semantics**: *rated current* and *RMS clip onset* assume a sine-wave load; the measured clip onset is ≈ 1.16 × the rating. The *peak limit* (≈ 1.64 × rating) is the real ceiling — a distorted load (high crest factor) starts clipping at `peak / crest factor`, below the RMS numbers. Stay at or below the rating for specified accuracy: readings clip at about 115–120 % of the rating.
+
+Per-rating accuracy figures (averaged-reading floor, no-load offset, PF reading, clip onset) are in the
+[accuracy table in 00_overview.md](overview.md#current-channel-accuracy-with-sct-013-sensors).
+Changing the sensor model is writing the model code to the module — nothing else is required; there
+is no recalibration step.
+
+#### CT model codes — wired CT clamp series (`SENSOR_CLASS = 2`)
+
+Modules of the **CT- series** ship as a factory-calibrated set with their own clamp: class and model are already set and are part of the calibration. **Do not overwrite them** — the libraries refuse the change on factory-paired modules (a service *force* call exists for re-pairing a replacement sensor; see [Behaviour with the current client libraries](#behaviour-with-the-current-client-libraries)). The table below is reference, not a setup step — the user selects nothing on a CT- series module.
+
+| Code | Clamp | Rated current | RMS clip onset | Peak limit | Status |
+|:---:|---|:---:|:---:|:---:|---|
+| `0x01..0x05` | legacy wired CT presets | — | — | — | factory / legacy use only |
+| `0x06` | CT clamp, 1 A (6 mm window) | 1.0 A | 1.27 A | 1.8 A | available |
+| `0x07` | CT clamp, 5 A (6 mm window) | 4.6 A | 5.75 A | 8.2 A | available |
+| `0x08` | CT clamp, 10 A (6 mm window) | 10.2 A | 12.7 A | 18 A | available |
+| `0x09` | CT clamp, 20 A (10 mm window) | 20.4 A | 25.5 A | 36 A | available |
+| `0x0A` | CT clamp, 30 A (16 mm window) | 30 A | 37.4 A | 52.9 A | available |
+| `0x0B` | CT clamp, 50 A (10 mm window) | 50.9 A | 63.6 A | 90 A | reserved |
+| `0x0C` | CT clamp, 80 A (16 mm window) | 76.8 A | 95.9 A | 135 A | available |
+| `0x0D` | CT clamp, 100 A (16 mm window) | 101.8 A | 127.3 A | 180 A | reserved |
+
+> The window size follows from the rated current (a thicker conductor needs a bigger window) — it is a consequence of the nominal, not a separate choice.
 
 ### Commands
 
@@ -184,8 +224,6 @@ CT model codes (SCT-013 family, `SENSOR_CLASS = 1`):
 | `CMD_SAVE_USER_CONFIG` | `0x32` | Persist user-config block (sensor class, CT model, address, label) to flash | ~700 ms |
 
 ### Procedure
-
-![Two-phase address commit sequence: stage candidate addr → arm ADDR_COMMIT_MAGIC (0xA5) → CMD_COMMIT_ADDR → 700 ms flash → reset → verify at new addr.](images/init-addr-2phase.png)
 
 1. Plug the CT clamp(s) into the module's jack(s) (arrow toward the load — see [01_hardware.md](hardware-connection.md)).
 2. **Set the sensor class** (once, if not already set):
@@ -208,9 +246,24 @@ CT model codes (SCT-013 family, `SENSOR_CLASS = 1`):
    rb_write_u8(0x50, 0x01, 0x32);
    delay(700);                          // flash erase/write
    ```
-5. Done. The configuration survives reboots; subsequent power-ons do not require this step.
+5. Done — with one caveat on firmware before **1.4.20** (`CAPABILITY` bit 12 clear): there the saved model **code** survives reboots, but the **applied scaling** does not (see [What persists across a restart](#what-persists-across-a-restart) below) — if you selected a non-factory model, repeat step 3 (stage + commit) after every detected module restart; `CMD_SAVE_USER_CONFIG` does not need to be repeated. From fw 1.4.20 the model switch survives restarts.
 
 > **Channel-order independence**: on v1.3 you can call `CMD_SET_CT_MODEL_CH0/1/2` in any order. There is no descending-order workaround required (that was an internal artifact of earlier firmware).
+
+### Behaviour with the current client libraries
+
+The rbAmp client libraries (Arduino, ESP-IDF, ESPHome, Python) wrap this procedure and add:
+
+- **Re-writing the same value is skipped.** Setting the sensor class or CT model to the value the
+  module already has issues no bus write and no flash cycle — calling the setter on every boot is
+  safe.
+- **Factory-paired modules refuse class and model changes.** On SKUs shipped as a factory-calibrated
+  set with their own current sensor (the CT- series), the sensor class and model are part of the
+  calibration and a change is refused. A service *force* call exists for re-pairing a replacement
+  sensor.
+- **Per-model limits.** For each CT model the libraries expose its nominal current, the RMS level
+  where clipping sets in, and the peak limit — use them to validate readings against the connected
+  sensor.
 
 ### Verification
 
@@ -226,6 +279,36 @@ Serial.printf("Applied: ch0=0x%02X ch1=0x%02X ch2=0x%02X\n", ch0, ch1, ch2);
 > ⚠ **Readback ≠ persistence.** A successful read of `0x51..0x53` confirms the value is **live in RAM**, not that it survived to flash. To verify persistence, issue `CMD_RESET` (or power-cycle) and re-read after the boot window. The full pattern is in [04_period_metering.md](period-metering.md).
 
 > When commissioning a new module, perform a sanity check with a known resistive load (for example a 100 W incandescent lamp): `I_rms ≈ 100 W / U_rms ≈ 0.43 A` and `P_real ≈ 100 W`. If readings are off by a large factor, the model code is probably wrong.
+
+### What persists across a restart
+
+`CMD_SAVE_USER_CONFIG` persists the user-config block to flash, but not everything a master sets is
+re-applied on the next boot. On firmware before **1.4.20** (`CAPABILITY` bit 12 clear):
+
+| Item | Survives a restart? |
+|---|---|
+| I²C address | yes |
+| Module label | yes |
+| Sensor class + CT model **code** (readable back) | yes |
+| **Applied per-model scaling** | **before fw 1.4.20: no — reverts to the factory default; from 1.4.20 (`CAPABILITY` bit 12 set): yes** |
+| `FLEET_CONFIG` (GC enable) + `GROUP_ID` | yes (via `CMD_SAVE_USER_CONFIG`; effective after reset) |
+| RAM-only config (event thresholds, digest config) | no |
+
+The consequence on those images: a module that was switched to a **different model than it left the
+factory with** reads back the saved model code after a restart, yet measures with the factory
+scaling until the model is committed again. The rule for any master (and for a hub managing a
+fleet, keyed by module UID):
+
+1. Detect the restart — `UPTIME_S` / `RESET_OCCURRED` event bit, see
+   [04_period_metering.md → Detecting a module restart](period-metering.md).
+2. Re-stage and re-commit the CT model on every channel (`CT_MODEL` + `CMD_SET_CT_MODEL_CHn`), then
+   re-apply any RAM-only configuration.
+
+The client libraries implement exactly this in their resume path. From fw **1.4.20** (`CAPABILITY`
+bit 12, `SCT_RATING_SELF`) the model switch keeps the unit calibration and **survives restarts** —
+step 2 is then unnecessary for the CT model; RAM-only configuration still needs re-initialising.
+Modules running on their factory model (including every factory-paired CT- series module) are
+unaffected on every image — the factory scaling is the correct one.
 
 ## Single-module workflow
 
@@ -301,11 +384,13 @@ Module AC   (0x52): OK
 
 The factory address `0x50` is stored in the user-config block in flash. v1.3 uses a **two-phase commit** sequence to make accidental address changes hard: a candidate address goes into a RAM staging register first, has to be armed with a magic byte, and only then is committed to flash by an explicit command. A reset re-enumerates the module at the new address.
 
+![The two-phase address change: stage the candidate address, arm it, commit it, then reset.](images/init-addr-2phase.png)
+
 ### Registers and commands
 
 | Name | Address / opcode | Type | Purpose |
 |---|---|---|---|
-| `REG_I2C_ADDRESS` | `0x30` | u8 RW | **Staging** for the candidate address (`0x08..0x77`). Reads back the active address on boot. |
+| `REG_I2C_ADDRESS` | `0x30` | u8 RW | **Staging** for the candidate address (`0x08..0x77`). One rule: before the reset, `0x30` echoes the staged candidate; after boot it reads the active address. |
 | `ADDR_COMMIT_MAGIC` | `0x31` | u8 W | Arm the commit with `0xA5`. Consumed (cleared) on the commit attempt. |
 | `CMD_COMMIT_ADDR` | opcode `0x30` written to `REG_COMMAND` (`0x01`) | command | Validates the staged address against the magic, persists to flash. |
 | `CMD_RESET` | opcode `0x01` written to `REG_COMMAND` (`0x01`) | command | Soft reset. Module re-enumerates at the new address after ~300 ms. |
@@ -346,7 +431,15 @@ The factory address `0x50` is stored in the user-config block in flash. v1.3 use
 - **Both stages are mandatory.** Writing the candidate to `0x30` alone does nothing persistent — it only lands in RAM and is lost on the next reset. The magic-and-commit pair is what actually rewrites flash.
 - The staged address must lie in the range `0x08..0x77` (valid 7-bit I²C). Out-of-range writes are rejected with `ERR_PARAM`; the module keeps its current address.
 - Reserved I²C addresses: `0x00` (general-call, see below), `0x01..0x07` (CBus reserved), `0x78..0x7F` (10-bit reserved). Do not use these.
-- `REG_I2C_ADDRESS` reads back the **active** (running) address, not the staged candidate. To check what is queued for the next reset, you can re-read `0x30` immediately after staging — it returns the staged value until the next reset.
+- One read-back rule: **before the reset `0x30` echoes the staged candidate; after boot it reads the active address.**
+- The armed magic expires after **5 s** without a commit (chapter 11 §6.1) — re-arm if you waited too long.
+- Namespace reminder — the same byte value can be an address and an opcode:
+
+  | Byte | As a register address | As an opcode (written to `0x01`) |
+  |---|---|---|
+  | `0x27` | `FLEET_CONFIG` | `CMD_LATCH_PERIOD` |
+  | `0x28` | `GROUP_ID` | `CMD_SET_CT_MODEL_CH0` |
+  | `0x30` | `REG_I2C_ADDRESS` | `CMD_COMMIT_ADDR` |
 
 ### Full address-change example
 
@@ -418,9 +511,9 @@ GC latch reception is disabled by default — a fresh module will **NACK** the g
 
 ### GC frame format
 
-![General-Call broadcast frame byte layout: A5 27 group tick_lo tick_hi — labelled bytes with meaning of each field.](images/init-gc-frame.png)
-
 GC latch frames have a fixed magic-and-opcode layout:
+
+![Byte layout of the general-call latch frame.](images/init-gc-frame.png)
 
 ```
 addr 0x00 | A5 27 <group_id> <tick_lo> <tick_hi>
@@ -463,10 +556,12 @@ Step 2: For each module, one at a time:
    a) Connect only this module to the bus.
    b) If the SKU has a plug-in CT: set SENSOR_CLASS (0x25), stage CT_MODEL (0x05),
       issue CMD_SET_CT_MODEL_CHn for each channel, then CMD_SAVE_USER_CONFIG.
-   c) Run change_address(0x50, <new_address>).
-   d) Verify the module responds at the new address.
-   e) Physically mark the module (label with 0x51, 0x52, ...).
-   f) Disconnect and move to the next module.
+   c) On images before fw 1.4.20 (`CAPABILITY` bit 12 clear): after any later reset of this
+      module, re-stage and re-commit CT_MODEL on each channel (see the persistence table above).
+   d) Run change_address(0x50, <new_address>).
+   e) Verify the module responds at the new address.
+   f) Physically mark the module (label with 0x51, 0x52, ...).
+   g) Disconnect and move to the next module.
 
 Step 3: After readdressing all modules, connect them in parallel.
         If more than one module is on the bus, cut the built-in pull-up
@@ -475,6 +570,16 @@ Step 3: After readdressing all modules, connect them in parallel.
 Step 4: At master boot, run a scan loop and verify every readdressed
         module responds at its expected address.
 ```
+
+## BASIC or STD?
+
+The rbAmp **STD** line answers on the same bus but uses a different, **16-bit** register map. Before
+applying the BASIC detection below, you can discriminate: send the 16-bit pointer `0x00 0x00` and
+read 2 bytes — an STD module returns the ASCII pair `'S','T'` (`0x53 0x54`); a BASIC module does not
+(it treats the bytes as 8-bit register writes and returns its normal data). STD modules are covered
+by their own reference documentation.
+
+![How to tell a BASIC module from an STD module at runtime.](images/module-line-detect.png)
 
 ## Module variant auto-detection
 
@@ -510,5 +615,5 @@ VariantInfo detect_variant(uint8_t addr) {
 
 ## Next
 
-- [03_realtime_polling.md](realtime-polling.md) — real-time polling in depth (200 ms window, DRDY)
+- [03_realtime_polling.md](realtime-polling.md) — real-time polling in depth (100 ms window, DRDY)
 - [04_period_metering.md](period-metering.md) — tariff energy accumulation

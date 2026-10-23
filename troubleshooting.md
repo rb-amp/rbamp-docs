@@ -6,9 +6,9 @@ This chapter is a quick reference for common problems and their solutions. Each 
 - **Causes** — why it can happen
 - **What to check / do** — concrete actions
 
-## I2C bus
+![Flowchart for narrowing down a problem from the symptom.](images/troubleshoot-flowchart.png)
 
-![Troubleshooting decision tree: symptom (NACK / zeros / wrong sign / drift) → ordered checks → resolution. Top-of-page navigator for the whole chapter.](images/troubleshoot-flowchart.png)
+## I2C bus
 
 ### 1. NACK / no response from the module
 
@@ -16,7 +16,7 @@ This chapter is a quick reference for common problems and their solutions. Each 
 
 **Causes and checks**:
 
-- ❌ **Module power is missing or unstable** — measure VCC with a multimeter; it must be 5 V ±5%.
+- ❌ **Module power is missing or unstable** — measure VCC with a multimeter; it must be within 4.5…5.5 V.
 - ❌ **No common ground** — the single most frequent mistake. Master GND and module GND **must** be tied together.
 - ❌ **SDA and SCL swapped** — verify against the wiring diagram in [01_hardware.md](hardware-connection.md).
 - ❌ **No pull-ups on the bus** — if the built-in pull-ups have been cut on a module and no external ones are installed, the bus is dead. With everything unpowered, measure SDA↔VCC: it must read 1.5–4.7 kΩ.
@@ -64,7 +64,7 @@ void i2c_scan() {
 - ❌ The module has not finished booting (normal for the first ~250 ms after power-on)
 - ❌ Firmware initialisation error — read `REG_ERROR` (`0x02`):
   - `0xFB` (`ERR_FLASH_PARAMS_BAD`) — flash parameter block is corrupted; the module runs on defaults. Recalibrate / reprovision.
-  - `0xFA` (`ERR_LUT_BAD`) — ADC LUT calibration is broken. Not fatal — measurements still work, but accuracy is slightly degraded.
+  - `0xFA` (`ERR_LUT_BAD`) — the factory calibration table is broken. Not fatal — measurements continue; accuracy may be reduced. Have the supplier recalibrate.
 - ❌ MCU clock failure (rare) — power-cycle the module
 
 **Solutions**:
@@ -85,11 +85,9 @@ void i2c_scan() {
 - ❌ **CT clamp on both L and N at the same time** — fluxes from line and neutral cancel, the sensor reads near zero. See [01_hardware.md → Current sensor](hardware-connection.md). The clamp must be on **one** conductor (line/L).
 - ❌ **Clamp not fully closed** — a gap > 0.1 mm between the core halves dramatically increases magnetic reluctance, so the sensor output drops well below normal. Unclip and re-clip until it clicks shut. Dirt or oxide in the gap is a common culprit — wipe the mating surfaces.
 - ❌ **Loose 3.5 mm jack** — remove and reinsert the plug.
-- ❌ **`REG_CT_MODEL` not set** — the module does not know the sensor's sensitivity. See [02_initialization.md → Setting the external sensor model](initialization.md). Register `0x05` must contain the correct model code.
-- ❌ **Wrong model code written** — for example, an SCT-013-030 sensor with the SCT-013-100 code → current shown will be **3.3× lower** than reality. Verify the sensor's case marking against the model code.
-
-  > **Confirm every CT-model write by reading it back.** After you set the model — either via the channel access window field 15 (`CHFIELD_CT_MODEL`, see API reference §4.14), or via legacy `REG_CT_MODEL` + `CMD_SET_CT_MODEL_CH*`, or via the library's `setCTModel(ch, code)` — read the applied model back from the module (`0x51..0x53` for ch0..ch2, or field 15 for any channel on firmware ≥ v1.4.18-24M) and compare with what you wrote. If the module rejected the pair (`(SENSOR_CLASS, code)` unknown → `ERR_PARAM 0xFE`), the channel keeps its **previous** model — silent partial state is the failure mode. `REG_ERROR` immediately after the write is the definitive check.
-- ❌ **Current below the noise floor** — for very small loads (< ~10 mA on a 30 A clamp) the sensor output is close to ADC noise. The firmware applies quadrature noise subtraction: `I_corrected = √(I_raw² − NF²)`. If `I_raw ≤ NF`, the result is clamped to 0. This is intended behaviour.
+- ❌ **`REG_CT_MODEL` not set** — the module does not know the sensor's sensitivity. See [02_initialization.md → Setting the sensor class and CT model](initialization.md#setting-the-sensor-class-and-ct-model). Register `0x05` must contain the correct model code.
+- ❌ **Wrong model code written** — for example, an SCT-013-030 sensor with the SCT-013-010 code → current shown will be **~3× lower** than reality (and conversely, a too-large code reads high). Verify the sensor's case marking against the model code.
+- ❌ **Current below the noise floor** — for very small loads (< ~10 mA on a 30 A clamp) the sensor output is close to the noise floor. The firmware applies quadrature noise subtraction: `I_corrected = √(I_raw² − NF²)`. If `I_raw ≤ NF`, the result is clamped to 0. This is intended behaviour.
 
 ### 5. `I_rms` off by a large factor
 
@@ -108,15 +106,12 @@ void i2c_scan() {
 
 **Causes and solutions**:
 
-- ❌ **L and N swapped on the voltage terminals** — the most common cause. See [01_hardware.md → Voltage sensor](hardware-connection.md). Swap L and N on the PCB.
+- ❌ **L and N swapped on the voltage terminals** — the most common cause. See [01_hardware.md → Voltage sensor](hardware-connection.md). De-energise the circuit first, then swap L and N on the PCB.
 - ❌ **CT clamp installed backwards** — the arrow on the clamp must point **in the direction of current** toward the load (panel → load). If it points the other way, unclip and reverse the clamp.
-- ❌ **Physical reversal is impractical** — compensate in master code:
-
-```cpp
-float p_corrected = -p_raw;
-```
-
-  but the physical fix is preferable — otherwise every piece of code must remember the inversion.
+- ❌ **Physical reversal is impractical** — on BASIC the period accumulator (`PERIOD_AVG_P_W`) clamps
+  negative samples to zero, so with inverted polarity **the energy register stays 0 until the
+  physical polarity is corrected** — negating in master code (`p_corrected = -p_raw`) only fixes
+  your own RT integration, never the on-module period data. Fix the wiring (de-energised!).
 
 ### 7. Energy total disagrees with a reference meter by a few percent
 
@@ -127,9 +122,9 @@ float p_corrected = -p_raw;
 - ❌ **Clamp not fully closed** (gap) — typically −5 to −20 % low. The single most common cause. Unclip, clean the mating surfaces, clip again until fully shut.
 - ❌ **Clamp installed on a "secondary" wire** — inside the breaker panel, on a short pigtail past a breaker. Stray fields from neighbouring breakers introduce errors. Move the clamp onto the main feed or onto an isolated section of conductor.
 - ❌ **Close to strong reactive loads** — near transformers, asynchronous motors, UPSes. Magnetic fields from neighbouring inductors create a stray signal. Move the clamp ≥ 10 cm away from any ferromagnetic component.
-- ❌ **Low PF** (≤ 0.5) — large reactive loads require precise phase compensation. Factory calibration is tuned for typical residential mix; deeply reactive loads can introduce 1–3 % error. If accuracy on a specific PF profile is critical, contact your module supplier for guidance.
-- ❌ **Distorted mains voltage** (micro-sags, high-order harmonics) — RMS and mean computation are more robust than peak detection, but distortions can still introduce 1–3 % error.
-- ❌ **Damaged CT cable or loose jack** — open-circuit or cold-solder inside the plug. Check with a multimeter (the CT clamp is a step-down transformer; the secondary winding should read 50–200 Ω depending on model).
+- ❌ **Low PF** (≤ 0.5) — large reactive loads require precise phase compensation. Accuracy is specified for resistive loads (PF ≈ 1); it is not specified for strongly reactive loads. If accuracy on a specific PF profile is critical, contact your module supplier for guidance.
+- ❌ **Distorted mains voltage** (micro-sags, high-order harmonics) — RMS and mean computation are more robust than peak detection, but accuracy is not specified for heavily distorted mains voltage; contact your supplier if this matters for your installation.
+- ❌ **Damaged CT cable or loose jack** — open-circuit or cold-solder inside the plug. Check with a multimeter, with the jack unplugged from the module (the CT clamp is a step-down transformer; the secondary winding should read 50–200 Ω depending on model).
 
 ### 8. `avg_P_W` is much lower than expected
 
@@ -137,10 +132,10 @@ float p_corrected = -p_raw;
 
 **Causes**:
 
-- ❌ The load is actually intermittent (cycling thermostat, pulsing element) — `avg_P_W` correctly reports the time average. Cross-check with `PERIOD_MAX_P_W` (`0xE0`) to see the peak inside any 200 ms window.
+- ❌ The load is actually intermittent (cycling thermostat, pulsing element) — `avg_P_W` correctly reports the time average. Cross-check with `PERIOD_MAX_P_W` (`0xE0`) to see the peak inside any measurement window.
 - ❌ If the load is steady and RT `P_real ≈ avg_P_W` does not hold:
   - On **BASIC tier**: check the RT sign of `P_real`. If `P` is occasionally negative (a solar inverter is feeding back, for example), negative samples are excluded from `PERIOD_AVG_P_W`, dragging the average down. See [04_period_metering.md → BASIC tier](period-metering.md).
-  - On **STANDARD / PRO**: compute `total_avg = avg_P_consume + avg_P_export` (export taken as magnitude) to see the channel's true activity.
+  - On **STANDARD (STD)**: compute `total_avg = avg_P_consume + avg_P_export` (export taken as magnitude) to see the channel's true activity.
 
 ### 9. `PERIOD_VALID = 0` after a latch
 
@@ -148,7 +143,7 @@ float p_corrected = -p_raw;
 
 **Causes**:
 
-- ❌ **Latches too close together** — no RT window (200 ms) completed between two latches. The accumulator is empty, the snapshot is discarded.
+- ❌ **Latches too close together** — no RT window (~100 ms on current firmware; 200 ms before v1.2) completed between two latches. The accumulator is empty, the snapshot is discarded.
 - ❌ **Race with an RT commit** — rare: the master wrote the command at the exact instant the firmware was committing the live accumulator. Possible on very fast masters.
 
 **Solution** — the retry pattern (see [04_period_metering.md → Basic cycle](period-metering.md)):
@@ -170,11 +165,13 @@ if ((rb_read_u8(0x50, 0x07) & 0x01) == 0) {
 
 **Cause**: two or more modules share the same address → I2C arbitration / collision. Frequent right after unboxing, when every module is on the factory default `0x50`.
 
+**Subtler form**: the address answers **stably**, but the UID read at `0x5C` (ch. 11 §4.8) matches no module you know. Two modules are answering together — the bus wire-ANDs their outputs into a stable but fictitious UID. If a hub sees an "unknown UID" at an address it provisioned, suspect a collision before suspecting a foreign module.
+
 **Solution**:
 
 1. Disconnect every module.
-2. Reconnect one at a time; readdress each to a unique address.
-3. After readdressing all modules, reconnect them in parallel.
+2. Reconnect **one at a time** — never readdress with two factory-default modules on the bus; readdress each to a unique address.
+3. After readdressing all modules, reconnect them in parallel and verify each address by reading its UID.
 
 See [02_initialization.md → Recommended workflow](initialization.md).
 
@@ -182,7 +179,7 @@ See [02_initialization.md → Recommended workflow](initialization.md).
 
 **Symptom**: with [wired-OR DRDY](realtime-polling.md), the master EXTI fires every 1–5 ms a few times in a row.
 
-**Cause**: the modules are not perfectly synchronised — each has its own crystal, and RT window periods differ slightly (199.8 ms vs 200.1 ms). Over the ~200 ms span, the modules pull the line at slightly different instants.
+**Cause**: the modules are not perfectly synchronised — each has its own crystal, and RT window periods differ slightly (99.9 ms vs 100.1 ms). Over the window span, the modules pull the line at slightly different instants.
 
 **This is normal.** Solutions:
 
@@ -194,7 +191,7 @@ See [02_initialization.md → Recommended workflow](initialization.md).
 
 **Symptom**: DRDY fires while the master is already in a transaction with another module. The EXTI handler is delayed.
 
-**This is normal.** The RT registers remain valid until the next commit (200 ms later). The master:
+**This is normal.** The RT registers remain valid until the next commit (one window, ~100 ms, later). The master:
 
 - Finishes the current transaction.
 - Services the delayed EXTI and reads the next module.
@@ -216,7 +213,7 @@ float ratio = (float)chip_dt / (float)master_dt;
 printf("Chip drift: %.3f (1.000 = perfect)\n", ratio);
 ```
 
-**Acceptance threshold for `PERIOD_LATCH_MS`: up to 30 % undercount is normal under load** (ratio as low as ~0.70). The chip-side timestamp is incremented on SysTick, which is starved when interrupts and DMA traffic are heavy — by design. The 30 % envelope is a property of the firmware timebase, not a fault. Apply this threshold uniformly across all SKUs and tiers.
+**Acceptance threshold for `PERIOD_LATCH_MS`: up to 30 % undercount is normal under load** (ratio as low as ~0.70). The module's internal diagnostic timebase reads short when the module is busy — by design. The 30 % envelope is a property of the module's timebase, not a fault. Apply this threshold uniformly across all SKUs and tiers.
 
 The legacy 3 % threshold from earlier documentation is **wrong** for v1.3 and will mass-reject healthy modules; do not use it.
 
@@ -279,7 +276,7 @@ Before powering up a module in a production system:
 - [ ] Arrow on the CT clamp **pointing toward the load**
 - [ ] CT clamp fully closed (no gap, no slack — clip until it clicks)
 - [ ] CT cable intact, jack fully seated in the socket
-- [ ] Power VCC = 5 V ±5 %, clean ground
+- [ ] Power VCC within 4.5…5.5 V, clean ground
 - [ ] I2C pull-ups verified (see [01_hardware.md → I2C pull-ups](hardware-connection.md))
 - [ ] For modules with a plug-in CT: `REG_CT_MODEL` written and saved to match the installed sensor
 - [ ] Smoke test with a resistive load completed — all five values (U, I, P, PF, Q) within the expected ranges
@@ -291,11 +288,11 @@ If any item is unchecked, expect strange readings. The most common causes of met
 | Code | Name | Meaning | Action |
 |:---:|---|---|---|
 | `0x00` | `ERR_OK` | Normal — last write succeeded | — |
-| `0xF9` | `ERR_CLONE` | Reserved (anti-clone sentinel). **⚠ NOT raised by v1.4.x firmware** — the anti-clone verification is not implemented in shipped modules. This code is reserved for a future firmware cycle. | Not reachable in current firmware; no user action required. |
-| `0xFA` | `ERR_LUT_BAD` | ADC LUT calibration CRC failed; the module runs on linear approximation | Not fatal. ADC accuracy may be off by 1–5 %. Have the supplier recalibrate. |
+| `0xF9` | `ERR_CLONE` | Reserved — not raised on current firmware | If ever observed, contact the supplier. |
+| `0xFA` | `ERR_LUT_BAD` | factory calibration table CRC failed; the module runs on linear approximation | Not fatal. Measurements continue; accuracy may be reduced. Have the supplier recalibrate. |
 | `0xFB` | `ERR_FLASH_PARAMS_BAD` | Flash parameter block corrupted; defaults restored | Reconfigure address / `SENSOR_CLASS` / `CT_MODEL` and issue `CMD_SAVE_USER_CONFIG` (`0x32`). **Normal on a virgin module** (see chapter 11 §6.5) — do not abort first-time provisioning on `0xFB`. |
 | `0xFC` | `ERR_NOT_READY` | First RT window has not yet completed after boot | Wait 300 ms. |
-| `0xFD` | `ERR_SENSOR_OVERFLOW` | Signal clipping on the ADC rails (full-scale exceeded) | Reduce current or use a larger CT. |
+| `0xFD` | `ERR_SENSOR_OVERFLOW` | Input signal clipping (full scale exceeded) | Reduce current or use a larger CT. |
 | `0xFE` | `ERR_PARAM` | Invalid command code or out-of-range value | Check command and value range. |
 | `0xFF` | `ERR_UNHANDLED` | HardFault or unhandled condition | Power-cycle. If it recurs, contact the supplier. |
 
@@ -321,4 +318,4 @@ Symptoms that warrant service:
 ## Next
 
 - [10_arduino_examples.md](arduino-examples.md) — examples with error handling
-- For smart-home integrations, see chapters 06–09 (ESPHome, Tasmota, MicroPython, Python on SBC)
+- For smart-home integrations (ESPHome / Home Assistant, Python), see the [client-libraries table in the README](README.md#client-libraries-high-level-api-per-platform)

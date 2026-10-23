@@ -4,7 +4,11 @@ This chapter collects complete, working Arduino sketches for typical rbAmp scena
 
 > **These examples talk to rbAmp directly through the raw I2C register API.** They are intended for native, embedded, or otherwise resource-constrained integrations where direct control is required and every byte on the bus matters.
 >
-> **For a more convenient, structured interface — use the `rbamp` Arduino library** (see [chapter 17 · Arduino Library](library-arduino-overview.md)). The library wraps the register-level details behind a high-level `RbAmp` class with named methods (`readVoltage()`, `latchPeriod()`, `readPeriodSnapshot()`, etc.), an automatic per-channel Wh accumulator, application-level NACK retry + sanity-check discipline for ESP32 targets, and multi-module helpers (see the bus-timing and retry guidance in [chapter 3 · API Reference](api-reference.md)). Most user-facing projects should start from the library and fall back to the raw API only when needed.
+> Module restart detection (power dips, watchdog) is covered once for all platforms in
+> [04_period_metering.md → Detecting a module restart](period-metering.md) — add it to any
+> long-running sketch below.
+>
+> **For a more convenient, structured interface — use the `rbamp` Arduino library** (see the [client-libraries table in the README](README.md#client-libraries-high-level-api-per-platform)). The library wraps the register-level details behind a high-level `RbAmp` class with named methods (`readVoltage()`, `latchPeriod()`, `readPeriodSnapshot()`, etc.), an automatic per-channel Wh accumulator, SPEC §B.5 retry+sanity discipline for ESP32 targets, and multi-module helpers. Most user-facing projects should start from the library and fall back to the raw API only when needed.
 
 ## Examples table of contents
 
@@ -121,7 +125,7 @@ void setup() {
 }
 
 void loop() {
-  // Real-time block at 0x86..0xBD is refreshed every ~200 ms by the module.
+  // Real-time block at 0x86..0xBD is refreshed every ~100 ms by the module (200 ms before fw v1.2).
   float u  = rb_read_float_le(RB_ADDR, 0x86);  // RMS voltage,   V
   float i  = rb_read_float_le(RB_ADDR, 0x8E);  // RMS current,   A
   float p  = rb_read_float_le(RB_ADDR, 0xA6);  // active power,  W (signed)
@@ -373,9 +377,9 @@ void loop() {
 
 ## Example 5 — Master-side bidirectional accounting on a BASIC module
 
-**Goal**: implement bidirectional accounting on the master when the module's tier is BASIC (period accumulator clamps negative samples). The master reads RT `P_real` every ~200 ms and separates consumption / export itself.
+**Goal**: implement bidirectional accounting on the master when the module's tier is BASIC (period accumulator clamps negative samples). The master reads RT `P_real` every measurement window (~100 ms on current firmware) and separates consumption / export itself.
 **Hardware**: ESP32 + rbAmp UI1 on a load with a solar inverter.
-**Applicability**: for BASIC owners who need export visibility. Slightly lower accuracy than a true STANDARD / PRO module, but works today.
+**Applicability**: for BASIC owners who need export visibility. Slightly lower accuracy than a true STANDARD (STD) module, but works today.
 
 ```cpp
 #define RB_ADDR 0x50
@@ -437,7 +441,7 @@ void loop() {
 
 **Notes**:
 
-- DRDY synchronises reads with each RT window (~200 ms).
+- DRDY synchronises reads with each RT window (~100 ms on current firmware).
 - Accuracy depends on DRDY interval stability (typically ±1 ms).
 - A small error accumulates near P zero-crossings but is negligible for household loads.
 
@@ -454,19 +458,20 @@ void loop() {
 The master computes: `total_consumed = solar_self_used + grid_consumed`, `solar_generated = solar_self_used + grid_exported`.
 
 **Hardware**: ESP32 + 3 × rbAmp + WiFi + MQTT.
-**Tiers**: STANDARD or PRO product tier for the mains module (bidirectional). Solar and Loads modules can be BASIC (unidirectional by construction).
+**Tiers**: STANDARD (STD) product tier for the mains module (bidirectional). Solar and Loads modules can be BASIC (unidirectional by construction).
 
 ```cpp
 #include <WiFi.h>
 #include <PubSubClient.h>
 
-const uint8_t ADDR_MAINS = 0x50;                // bidirectional (STANDARD/PRO)
+const uint8_t ADDR_MAINS = 0x50;                // bidirectional (STANDARD (STD))
 const uint8_t ADDR_SOLAR = 0x51;                // generation only (BASIC OK)
 const uint8_t ADDR_LOADS = 0x52;                // UI3, big consumers
 
-// PERIOD_AVG_P_NEG address for the mains module — see the SKU datasheet
-// of the STANDARD / PRO product. Set to 0xFF on BASIC modules.
-#define REG_PERIOD_AVG_P_NEG_MAINS 0xFF
+// Bidirectional mains module (STANDARD (STD) tier)? Set true and fill the
+// PERIOD_AVG_P_NEG address from the SKU datasheet. Keep false on BASIC.
+const bool HAS_NEG_REG_MAINS = false;
+#define REG_PERIOD_AVG_P_NEG_MAINS 0x00
 
 WiFiClient espClient;
 PubSubClient mqtt(espClient);
@@ -525,10 +530,10 @@ void loop() {
   float dt_s = (t_now - t_prev_ms) / 1000.0f;
   t_prev_ms = t_now;
 
-  // ----- MAINS (bidirectional, STANDARD/PRO tier) -----
+  // ----- MAINS (bidirectional, STANDARD (STD) tier) -----
   if (rb_read_u8(ADDR_MAINS, 0x07) & 0x01) {
     float avg_p_consume = rb_read_float_le(ADDR_MAINS, 0xDC);
-    float avg_p_export  = (REG_PERIOD_AVG_P_NEG_MAINS != 0xFF)
+    float avg_p_export  = HAS_NEG_REG_MAINS
         ? rb_read_float_le(ADDR_MAINS, REG_PERIOD_AVG_P_NEG_MAINS)
         : 0.0f;
     totals.mains_in_wh  += avg_p_consume * dt_s / 3600.0;
@@ -588,7 +593,7 @@ void loop() {
 
 ## Example 7 — Power-event detection
 
-**Goal**: on every RT window (200 ms), compare P against an exponentially-weighted moving average (EMA). Log significant deviations to an SD card.
+**Goal**: on every RT window (~100 ms on current firmware), compare P against an exponentially-weighted moving average (EMA). Log significant deviations to an SD card.
 **Hardware**: ESP32 + rbAmp + SD card.
 **Use case**: automatic detection of large-load events (microwave, AC, kettle) turning on or off.
 
@@ -600,7 +605,7 @@ const int PIN_SD_CS = 5;
 
 volatile bool data_ready = false;
 float p_ema = 0;                                // exponential moving average
-const float EMA_ALPHA = 0.05;                   // ~4 s time constant at 5 Hz updates
+const float EMA_ALPHA = 0.05;                   // ~2 s time constant at 10 Hz updates
 const float EVENT_THRESHOLD_W = 200.0;          // ignore steps below this
 
 File logfile;
@@ -669,11 +674,9 @@ void loop() {
 
 ## Example 8 — MQTT publisher with Home Assistant Auto-discovery
 
-![RESULT screenshot for the MQTT + Home Assistant auto-discovery example: the rbAmp energy dashboard in HA. REUSE existing render (Odoo attachment 7922 png / 7923 webp). Applies across all platform example chapters (12-16).](images/example-ha-dashboard.png)
-
 **Goal**: a drop-in HA integration. The ESP32 connects to WiFi and an MQTT broker, publishes Home Assistant auto-discovery configs (so the entities appear in HA without any YAML), and emits a JSON state every minute. No HA YAML changes are needed.
 **Hardware**: ESP32 + one rbAmp UI1 + WiFi network with an MQTT broker (Mosquitto, EMQX, HA Mosquitto add-on, etc.).
-**Accounting**: unidirectional. Replace the period registers with the bidirectional ones for STANDARD / PRO modules.
+**Accounting**: unidirectional. Replace the period registers with the bidirectional ones for STANDARD (STD) modules.
 
 ```cpp
 #include <WiFi.h>
@@ -909,7 +912,7 @@ void loop() {
 **Extending**:
 
 - For multi-channel UI2/UI3, repeat the discovery block with suffixed keys (`current_1`, `power_1`, `energy_1`, …) and add those fields to the state JSON.
-- For bidirectional STANDARD / PRO modules, add `energy_exported` with `device_class: energy` and `state_class: total_increasing`.
+- For bidirectional STANDARD (STD) modules, add `energy_exported` with `device_class: energy` and `state_class: total_increasing`.
 
 ---
 
@@ -1100,7 +1103,7 @@ void loop() {
 
 **Goal**: bill energy under a time-of-use schedule (different rates during peak and off-peak hours). The ESP32 keeps a real wall-clock via NTP, splits each latched period into the right tariff bucket, resets daily totals at midnight, and publishes MQTT payloads with ISO timestamps.
 **Hardware**: ESP32 + one rbAmp UI1 + WiFi.
-**Accounting**: unidirectional. The same bucket logic works for STANDARD / PRO tiers — just feed both the consumption and the export accumulators through it.
+**Accounting**: unidirectional. The same bucket logic works for STANDARD (STD) tiers — just feed both the consumption and the export accumulators through it.
 
 ```cpp
 #include <WiFi.h>
@@ -1356,7 +1359,7 @@ void loop() {
 - The chip never sees the wall clock. The master attaches the timestamp at the moment of the latch — that is the right moment, because that is when the measurement window closed.
 - `localtime_r()` automatically applies the POSIX `TZ` rule, so DST transitions are handled correctly without any extra code.
 - Boundary error: a 60 s period that crosses the 22:00 boundary is attributed entirely to off-peak (the timestamp is at the latch instant, after 22:00). For 60-second periods this is at most ~30 s of misattribution per day — negligible for residential billing. For 15-minute periods, prefer to align the latch to the schedule boundary, or split the period across both buckets.
-- For STANDARD / PRO bidirectional metering, run a second `accumulate_energy()` call on the export side and publish both peak/off-peak consumption and peak/off-peak export.
+- For STANDARD (STD) bidirectional metering, run a second `accumulate_energy()` call on the export side and publish both peak/off-peak consumption and peak/off-peak export.
 - The daily roll-over publishes a retained `rbamp/tou/day_close` payload at midnight; Home Assistant or a Grafana data source can subscribe to it to record daily totals.
 
 **Sample MQTT state payload**:
@@ -1411,11 +1414,11 @@ void loop() {
 
 Once you are comfortable with these ten examples, build the integration code for your target platform. Pre-built libraries:
 
-- Arduino → `RbAmp` class (see [17_arduino_library.md](library-arduino-overview.md))
-- ESPHome → external component (full deep-dive at [`tools/esphome-rbamp/docs/en/`](esphome-overview.md))
-- MicroPython → `rbamp` package (see [18_micropython_library.md](micropython-examples.md))
-- ESP-IDF → `rbamp` component (see [19_esp_idf_library.md](esp-idf-overview.md))
-- Linux SBC (CPython) → `rbamp` package (see [20_python_sbc_library.md](python-overview.md))
+- Arduino → `RbAmp` class (see the README client-libraries table)
+- ESPHome → external component (full deep-dive at [`tools/esphome-rbamp/docs/en/`](https://rbamp.com/docs/modules-basic-standard-esphome-overview))
+- MicroPython → `rbamp` package (see the README client-libraries table)
+- ESP-IDF → `rbamp` component (see the README client-libraries table)
+- Linux SBC (CPython) → `rbamp` package (see the README client-libraries table)
 - Tasmota → Berry driver — deferred (no library shipped)
 
 If your platform is not covered, the Arduino examples here serve as a reference: port the `rb_read_*` helpers to your platform's I2C API and the rest of the logic stays the same.
