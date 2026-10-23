@@ -4,8 +4,6 @@ Canonical host-side flows. Every step names the register (I²C address; Modbus i
 to check. The command-polling rules used everywhere here are defined once in
 [D2](#d2--executing-a-command).
 
----
-
 ## D1 — Power-up / discovery
 
 1. Read **12 bytes at 0x0000 in one transaction**: `ID` = 'S','T' · `VERSION` ≥ 0x36 ·

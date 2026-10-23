@@ -8,8 +8,6 @@ This chapter describes the physical connection of rbAmp to a master device and t
 > conductor only (`L`) — never the whole cable. The sensor clamp is contactless, but it needs a
 > conductor with intact insulation.
 
----
-
 ## LV-side pinout
 
 The module runs on 3.3 V logic and is tolerant to 5 V logic on the I2C lines. All LV-side pins are fully galvanically isolated from mains.
@@ -29,8 +27,6 @@ The module runs on 3.3 V logic and is tolerant to 5 V logic on the I2C lines. Al
 ## I2C pull-ups — installed on the board
 
 **Important**: each rbAmp module has built-in 4.7 kΩ pull-up resistors on SDA and SCL to 3.3 V. For a **single-module** bus, no external pull-ups are required — connect the master directly.
-
----
 
 ### When to disable the built-in pull-ups
 
@@ -157,8 +153,6 @@ Multiple rbAmp modules can share a single I2C bus:
 
 ![Mains-side connection of an rbAmp module inside a panel: the L and N tap and the current clamp on the L conductor.](images/mains-ct-connection-panel.png)
 
----
-
 ### Voltage sensor (UI* variants)
 
 The PCB exposes `L` (line / phase) and `N` (neutral) terminals. **Polarity matters** for the sign of active power:
@@ -209,8 +203,6 @@ Each jack on the PCB is labeled with the channel name (`I0`, `I1`, `I2`, …) an
 ## DATA_READY (DRDY)
 
 Optional pin for optimized polling. If your application is happy polling on its own fixed interval (100 ms or slower), you can leave DRDY disconnected.
-
----
 
 ### Electrical parameters
 

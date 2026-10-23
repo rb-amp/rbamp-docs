@@ -3,8 +3,6 @@
 What the numbers in the map mean, when they update, and how energy is kept so that a power cut,
 reset or firmware update never silently loses or invents it.
 
----
-
 ## Sampling and windows
 
 - All channels are measured **synchronously**; power is computed **per sample**

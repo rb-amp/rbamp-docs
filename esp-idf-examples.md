@@ -6,8 +6,6 @@ This chapter is the ESP-IDF equivalent of [10_arduino_examples.md](arduino-examp
 >
 > **For a more convenient, structured interface — use the `rbamp` ESP-IDF component** (see the [client-libraries table in the README](README.md#client-libraries-high-level-api-per-platform)). The component wraps the register-level details behind an opaque `rbamp_handle_t` with named functions (`rbamp_read_voltage()`, `rbamp_latch_period()`, `rbamp_read_period_snapshot()`, etc.), a per-channel Wh accumulator, multi-module helpers, full `idf.py menuconfig` integration via Kconfig (`CONFIG_RBAMP_NACK_RETRY_ATTEMPTS`, `CONFIG_RBAMP_DEFAULT_I2C_FREQ_HZ`, etc.), and the SPEC §B.5 retry+sanity discipline mandatory for ESP-IDF v5 `i2c_master`. Most user-facing projects should start from the component and fall back to the raw API only when needed.
 
----
-
 ## ESP-IDF version
 
 Examples are written for **ESP-IDF 5.2+** using the new I2C-master driver in `driver/i2c_master.h`. The legacy `driver/i2c.h` API still works and the helpers are easy to port — see the inline note in the common header.
@@ -78,8 +76,6 @@ idf.py build flash monitor
 ## Common helpers (`rbamp_io.h` / `rbamp_io.c`)
 
 These helpers are included by every example. To save space in the rest of this chapter, the `#include "rbamp_io.h"` line and any `rbamp_io_*` calls are shown without re-defining the helpers.
-
----
 
 ### `rbamp_io.h`
 

@@ -6,8 +6,6 @@ This chapter is the SBC equivalent of [10_arduino_examples.md](arduino-examples.
 >
 > **For a more convenient, structured interface — use the `rbamp` Python package** (see the [client-libraries table in the README](README.md#client-libraries-high-level-api-per-platform)). The package wraps the register-level details behind a `RbAmp` class with named methods (`dev.voltage`, `dev.latch_period()`, `dev.read_period_snapshot()`, etc.), a per-channel `RbAmpEnergy` accumulator, an `asyncio` variant via `async for`, multi-module helpers, HA MQTT auto-discovery and systemd service templates in the bundled examples, and a `rbamp` CLI (`rbamp scan` / `read --watch` / `period`). The same package runs unmodified on MicroPython — see the README client-libraries table. Most projects should start from the package and fall back to the raw API only when needed.
 
----
-
 ## How Linux differs from a microcontroller
 
 The single-biggest difference: **Linux already does a lot of the work** that the bare-metal examples wire up by hand. You don't initialise the I2C peripheral, you don't synchronise the wall clock, you don't fight for retained memory across reboots. All of that exists at the system level. Your Python script does measurement-and-business-logic and nothing else.
@@ -34,8 +32,6 @@ If you've been writing firmware up to now, the mental shift is: **stop reaching 
 ## Linux I2C setup (one-time)
 
 Steps below are for **Raspberry Pi OS** with a Raspberry Pi 3/4/5; other SBCs (Orange Pi, BeagleBone, x86 + USB-I2C adapter) follow the same pattern with a different bus number.
-
----
 
 ### 1. Enable the I2C controller in the kernel
 
@@ -1005,8 +1001,6 @@ After the first publish Home Assistant auto-creates a `Mains rbAmp` device with 
 
 **Goal**: a long-running daemon that snapshots a period every minute, writes the result to SQLite, and publishes a state to MQTT. The process restarts cleanly after a reboot, picking up the accumulated total from the database.
 **Hardware**: any SBC + one rbAmp UI1.
-
----
 
 ### Daemon (`rbamp_daemon.py`)
 

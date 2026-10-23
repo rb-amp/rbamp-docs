@@ -8,8 +8,6 @@ The active transport (I²C or Modbus RTU) is selected once per boot by the trans
 Hardware interface. On the I²C setting the Modbus register space is not served,
 and vice versa; commands and data are the same on both.
 
----
-
 ## Register pointer
 
 - **16-bit register pointer, big-endian on the wire** (high byte first), with **auto-increment**.

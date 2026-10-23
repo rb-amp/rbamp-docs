@@ -10,7 +10,6 @@ This page collects, in one place, the isolation architecture, what you may safel
 to a qualified electrician, and how an isolated design differs from the shunt-based meters common in
 DIY energy monitoring.
 
----
 
 ## The architecture: an all-low-voltage module
 

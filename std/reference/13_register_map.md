@@ -8,8 +8,6 @@ current STD build (one code base) unless marked *reserved*.
 Access column: r = read, w = write, rw = both. Persistence: regs marked *flash* survive power-off
 after SAVE_CONFIG / SAVE_CAL; *RAM* regs reset to defaults at every boot.
 
----
-
 ## CORE 0x0000–0x00FF
 
 | Addr | Name | Type | Acc | Meaning |
@@ -47,8 +45,6 @@ after SAVE_CONFIG / SAVE_CAL; *RAM* regs reset to defaults at every boot.
 | 0x00EC | ADDR_UID_I2C | u8 | w | new I²C address 0x08..0x77, 0 = keep |
 | 0x00ED | ADDR_UID_UNIT | u8 | w | new Modbus unit 1..247, 0 = keep |
 | 0x00F4 | UID | 12 B | r | unique chip id |
-
----
 
 ### Configuration 0x0070–0x0085 (persisted by SAVE_CONFIG unless marked RAM)
 

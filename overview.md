@@ -34,8 +34,6 @@ The two module lines report the same quantities in different formats. BASIC retu
 
 Accuracy is not part of this table: for BASIC with an SCT-013 sensor see the [SCT-013 characteristics table](#current-channel-accuracy-with-sct-013-sensors) below; specifications of individual modules are given with the model descriptions. The BASIC register map is in [03_realtime_polling.md](realtime-polling.md), [04_period_metering.md](period-metering.md) and [11_api_reference.md](api-reference.md); the STD register map is in the [STD technical reference](std/reference/README.md).
 
----
-
 ### Current-channel accuracy with SCT-013 sensors
 
 **BASIC modules (SCT-UI series) with your own SCT-013 sensor — resistive load, measured at 50 Hz.**
@@ -98,8 +96,6 @@ Current BASIC product line: **SCT-UI1, SCT-UI2, SCT-UI3, SCT-UI5, SCT-UI7, SCT-I
 rbAmp is offered in two product tiers. Each tier is a complete combination of **hardware revision and firmware** — not a firmware-only flag. Moving between tiers requires a physical SKU change, not a firmware update.
 
 ![The BASIC and STANDARD (STD) rbAmp module lines side by side.](images/module-lines.png)
-
----
 
 ### BASIC — entry-level product line
 

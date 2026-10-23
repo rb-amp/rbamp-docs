@@ -6,8 +6,6 @@ Hosted version: <https://www.rbamp.com/docs/modules-basic-standard-overview>
 
 **Safe by design.** rbAmp is entirely low-voltage — the current sensor (CT) clamps around the outside of the conductor with no electrical contact, and the only mains reference (on voltage-sensing variants) is a galvanically isolated tap. The side you wire to your ESP32, Arduino or Raspberry Pi is never at mains potential. See [Safety — Safe by Design](safety.md).
 
----
-
 ## Contents
 
 - [Overview](overview.md)

@@ -10,13 +10,9 @@ Real-time polling — reading instantaneous values of U, I, P, PF, flow directio
 
 For **tariff energy accumulation** (Wh over a period) use the period-snapshot mechanism described in [04_period_metering.md](period-metering.md).
 
----
-
 ## The measurement window (100 ms)
 
 ![Timing of the measurement window and when its result set is published.](images/rt-window-timing.png)
-
----
 
 ### What it is
 
@@ -56,8 +52,6 @@ Immediately after the previous one is published. There is no gap between windows
 ## DATA_READY (DRDY) — the ready pin
 
 DRDY is an open-drain output pulled up to 3.3 V on the master side. The firmware drives it LOW for ~10 µs **after** the RT registers have been refreshed — a hardware signal that says "data is ready to read".
-
----
 
 ### Pulse parameters
 
@@ -135,8 +129,6 @@ In the RT registers, the sign of active power is the **primary indicator of curr
 
 RMS values of current and voltage are **always ≥ 0** (RMS is non-negative by definition). Therefore `I_rms` **cannot** be used to determine flow direction — use `P_real`.
 
----
-
 ### Flow-classification example
 
 ```cpp
@@ -159,8 +151,6 @@ void classify_flow(float p) {
 ## RT register reference
 
 All values are float32 little-endian (4 bytes). READ supports auto-increment — read each value as a single 4-byte burst (or the whole `0x86..0xBD` block in one burst, see §read-freeze). Integer fields are marked with their type.
-
----
 
 ### Voltage
 
@@ -302,8 +292,6 @@ void read_ui3(uint8_t addr) {
 
 The current channels are **independent** — each has its own CT clamp with its own coefficient. A UI3 module can monitor, for example, the main feed, the water heater, and the lighting circuit simultaneously on the same phase. The sign of P can differ between channels: mains-input P > 0 (the house consumes from grid) while the solar-output channel shows P < 0 (the inverter exports while feeding the same phase that the house draws from).
 
----
-
 ### UI5 / UI7: channels 3 and up
 
 The flat real-time block holds channels **0, 1 and 2** only. On **UI5** (channels 0..4) and **UI7** (channels 0..6) the remaining channels are read through the **channel access window**: write `(field << 4) | channel` to `REG_CHANNEL_SELECT` (`0x32`), then read the value from `REG_CHANNEL_DATA` (`0x3C`, float32). Fields: `0` = RMS current, `1` = peak current, `2` = active power, `3` = power factor, `13` = period-average power.
@@ -372,8 +360,6 @@ This assumes all CT clamps are on conductors of the **same phase**.
 ## Multi-module polling — three strategies
 
 ![The three strategies for polling several modules: round-robin, DRDY per module and wired-OR DRDY.](images/rt-multimodule-strategies.png)
-
----
 
 ### Strategy 1 — round-robin polling (simple)
 

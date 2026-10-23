@@ -4,8 +4,6 @@ On the Modbus setting of the transport jumper the module is a Modbus RTU slave o
 ready-to-poll electricity meter. The Modbus layer is a **translation onto the same register file**
 as I²C: same quantities, same commands, one command queue; only the wire format differs.
 
----
-
 ## Serial
 
 - **Framing:** standard RTU `[addr][function][data][CRC16]`, CRC16 poly 0xA001 (reflected),
@@ -56,8 +54,6 @@ Modbus addresses are **their own namespace** — independent of I²C addresses. 
 
 The per-block native and holding addresses are listed with the I²C map in the
 [register map](13_register_map.md#modbus-mapping).
-
----
 
 ### Native profile (input 0x6000+)
 

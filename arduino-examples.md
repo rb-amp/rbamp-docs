@@ -10,8 +10,6 @@ This chapter collects complete, working Arduino sketches for typical rbAmp scena
 >
 > **For a more convenient, structured interface — use the `rbamp` Arduino library** (see the [client-libraries table in the README](README.md#client-libraries-high-level-api-per-platform)). The library wraps the register-level details behind a high-level `RbAmp` class with named methods (`readVoltage()`, `latchPeriod()`, `readPeriodSnapshot()`, etc.), an automatic per-channel Wh accumulator, SPEC §B.5 retry+sanity discipline for ESP32 targets, and multi-module helpers. Most user-facing projects should start from the library and fall back to the raw API only when needed.
 
----
-
 ## Examples table of contents
 
 | # | Title | Difficulty | Display / Output | MQTT | DRDY | Multi-module | Bidirectional | Use case |

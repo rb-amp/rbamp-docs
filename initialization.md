@@ -24,8 +24,6 @@ No start command, no register-level configuration on the chip is required. Facto
 > | Python | [`dev.begin()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devbegin) / [`dev.wait_ready(timeout_ms=1000)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devwait_readytimeout_ms1000---none) | probe the module, then wait for the ready flag |
 > | ESPHome | [`rbamp: address:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#address) | module address set in YAML; the component probes the module at setup |
 
----
-
 ## Helper functions (platform-neutral C)
 
 All examples below use three small helpers that are easy to implement on any platform:
@@ -180,8 +178,6 @@ void main_app(void) {
 > Required **only** for BASIC SCT-series modules used with SCT-013 sensors. BASIC CT-series and STANDARD (STD) modules are supplied as a pair with their sensors: everything is preset and calibrated at the factory for that particular sensor, and they start without initialization — skip this section.
 
 Two registers describe the external sensor: `SENSOR_CLASS` (the family — SCT-013 clip-on clamps, the wired CT clamp series, built-in CT) and `CT_MODEL` (the specific model code within that family). On v1.3 the model is written using a **pure-staging** scheme — writing `CT_MODEL` does **not** apply it on its own; a dedicated per-channel command commits the staged value.
-
----
 
 ### Registers
 
@@ -368,8 +364,6 @@ unaffected on every image — the factory scaling is the correct one.
 
 Scenario: three rbAmp modules on a single bus to monitor different sections of a house (main feed, water heater, air conditioner).
 
----
-
 ### Step 1 — Addresses
 
 Out of the box all three modules carry address `0x50`. They must be readdressed one at a time. **Connect only one module to the bus until readdressing is complete.**
@@ -450,8 +444,6 @@ Module AC   (0x52): OK
 The factory address `0x50` is stored in the user-config block in flash. v1.3 uses a **two-phase commit** sequence to make accidental address changes hard: a candidate address goes into a RAM staging register first, has to be armed with a magic byte, and only then is committed to flash by an explicit command. A reset re-enumerates the module at the new address.
 
 ![The two-phase address change: stage the candidate address, arm it, commit it, then reset.](images/init-addr-2phase.png)
-
----
 
 ### Registers and commands
 
@@ -565,8 +557,6 @@ void setup() {
 ## General Call (broadcast at address 0x00)
 
 The I²C protocol reserves address **`0x00` (general call)** — frames sent to this address are received by all slaves on the bus simultaneously. rbAmp can take its period snapshot on a general-call frame, but only **after the feature has been explicitly enabled** on the module.
-
----
 
 ### Opt-in enable (default OFF)
 

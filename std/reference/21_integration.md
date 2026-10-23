@@ -3,8 +3,6 @@
 How to run an STD module from your own code — with our libraries or with nothing but an I²C/Modbus
 master.
 
----
-
 ## With the rbAmp libraries
 
 One client library per platform covers the whole line; channel count and features are discovered at
@@ -44,8 +42,6 @@ Everything the libraries do is plain register I/O. The protocol is documented an
 changes are versioned (`VERSION`) and feature-gated (`CAPABILITIES`). **The canonical step-by-step
 flows (init, command, config, address change, energy, history, OTA, unlock) are in
 [Sequences](22_sequences.md)** — below are the shortest working patterns.
-
----
 
 ### Minimal I²C bring-up (pseudocode)
 

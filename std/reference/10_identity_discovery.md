@@ -3,8 +3,6 @@
 How a host recognises an STD module, what it is, and what it can do. All registers in this chapter
 are read-only unless stated otherwise. I²C addresses; Modbus discovery mirrors are listed at the end.
 
----
-
 ## Discovery sequence
 
 On first contact a master reads the identity block at `0x0000` and gates everything else on it:
@@ -44,8 +42,6 @@ On first contact a master reads the identity block at `0x0000` and gates everyth
 > ⚠ Two "firmware version" registers exist for historical reasons. `FW_VERSION` (0x000B, u16) only
 > marks the firmware line. The actual, monotonically increasing image version is **`FW_VER`
 > (0x0114, u32)** — use it for inventory and update decisions.
-
----
 
 ### BOARD_ID (0x017C)
 

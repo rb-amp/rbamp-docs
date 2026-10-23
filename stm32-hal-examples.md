@@ -6,8 +6,6 @@ This chapter is the STM32 equivalent of [10_arduino_examples.md](arduino-example
 >
 > Configure the I²C peripheral in CubeMX for **50 kHz** (recommended — see chapter 11 §2.2) and wrap register reads in a short retry.
 
----
-
 ## Supported families and toolchain
 
 | Family | Validated | I2C peripheral | Notes |
@@ -91,8 +89,6 @@ CubeMX pin setup used in every example unless noted:
 ## Common helpers (`rbamp_io.h` / `rbamp_io.c`)
 
 Place these files in `Core/Inc` and `Core/Src` of your CubeMX project. To save space, the `#include "rbamp_io.h"` line is omitted in each example below.
-
----
 
 ### `rbamp_io.h`
 

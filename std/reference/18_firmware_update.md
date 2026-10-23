@@ -9,8 +9,6 @@ image **rolls back automatically** to the previous working one.
 per ~250 ms); the few measurement frames lost to each flash write are gap-compensated in the energy
 counters.
 
----
-
 ## Release files
 
 A release ships **prepared bank images** — signed and encrypted on the build host. The transport

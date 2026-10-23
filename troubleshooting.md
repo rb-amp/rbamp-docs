@@ -8,8 +8,6 @@ This chapter is a quick reference for common problems and their solutions. Each 
 
 ![Flowchart for narrowing down a problem from the symptom.](images/troubleshoot-flowchart.png)
 
----
-
 ## I2C bus
 
 ### 1. NACK / no response from the module
@@ -376,8 +374,6 @@ If any item is unchecked, expect strange readings. The most common causes of met
 | `0xFD` | `ERR_SENSOR_OVERFLOW` | Input signal clipping (full scale exceeded) | Reduce current or use a larger CT. |
 | `0xFE` | `ERR_PARAM` | Invalid command code or out-of-range value | Check command and value range. |
 | `0xFF` | `ERR_UNHANDLED` | HardFault or unhandled condition | Power-cycle. If it recurs, contact the supplier. |
-
----
 
 ### Semantics — `REG_ERROR` is NOT sticky (v1.3)
 

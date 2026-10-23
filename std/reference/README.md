@@ -13,8 +13,6 @@ channels, three-phase) run the same map — they
 differ only in `N_VOLTAGE` / `N_CURRENT` and the variant code, so everything here is written
 generically by channel count. 
 
----
-
 ## Contents
 
 | # | File | Covers |

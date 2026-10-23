@@ -14,8 +14,6 @@
 
 **rbAmp** is a compact hardware module for precision measurements of AC mains parameters over an I²C interface. The module behaves as a standard I²C slave with a fixed register map (page-0, 0x00..0xFF). This document describes the **wire protocol** at the level of registers, commands, and sequences.
 
----
-
 ### 1.1 SKU lineup
 
 The module variants (SCT-UI1 … SCT-I3, with their voltage and current channels) are listed in [00_overview.md → Module variants](overview.md#module-variants).
@@ -271,8 +269,6 @@ return UNKNOWN_DEVICE
 **Filter applied**: `build: production` (cal-build registers excluded). Factory-calibration registers (NF, GAIN, PHASE) are **not documented** — they belong to the factory bench, not the consumer surface.
 
 ![Overview of the rbAmp register map and its address blocks.](images/api-register-map.png)
-
----
 
 ### 4.0 Reserved ranges (internal)
 

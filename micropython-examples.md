@@ -6,8 +6,6 @@ This chapter is the Python equivalent of [10_arduino_examples.md](arduino-exampl
 >
 > **For a more convenient, structured interface — use the `rbamp` MicroPython library** (see the [client-libraries table in the README](README.md#client-libraries-high-level-api-per-platform)). The library wraps the register-level details behind a high-level `RbAmp` class with named methods (`dev.voltage`, `dev.latch_period()`, `dev.read_period_snapshot()`, etc.), sync and `uasyncio` APIs, an automatic per-channel Wh accumulator, multi-module helpers, and SPEC §B.5 retry+sanity discipline for ESP32 ports via `MachineI2CBackend(retry_attempts=…)`. The same package runs unmodified on CPython — see the README client-libraries table. Most user-facing projects should start from the library and fall back to the raw API only when needed.
 
----
-
 ## MicroPython vs CircuitPython — quick reference
 
 The Python language is the same; the device-access modules differ. The table below maps each concept used in the examples to the equivalent module / class on each dialect.
@@ -128,8 +126,6 @@ def rb_wait_ready(i2c, addr, timeout_ms=2000):
     raise OSError("rbAmp at 0x{:02X} not ready".format(addr))
 ```
 
----
-
 ### CircuitPython delta — common header
 
 CircuitPython uses `adafruit_bus_device.i2c_device.I2CDevice` (per-slave wrapper) and lacks `time.ticks_ms`. Equivalent helpers:
@@ -211,8 +207,6 @@ while True:
     print("U={:.1f}V  I={:.3f}A  P={:+.1f}W  PF={:+.3f}".format(u, i_, p, pf))
     time.sleep(1)
 ```
-
----
 
 ### CircuitPython delta
 

@@ -4,8 +4,6 @@ All device actions go through the **COMMAND register (`0x0060`, u8)** — on Mod
 (write-only there). A write queues the opcode; execution happens in the device's main loop
 (milliseconds for most commands; flash-touching commands take longer).
 
----
-
 ## Completion and result semantics
 
 - **Busy:** `CMD_STATE` (0x006A) bit 0 = BUSY while a command executes. **BUSY is the completion

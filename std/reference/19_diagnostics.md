@@ -3,8 +3,6 @@
 Everything a host (or a person with a bus adapter) can read to answer "is this module healthy, and
 if not — why".
 
----
-
 ## STATUS (0x0006)
 
 | Bit | Name | Meaning |

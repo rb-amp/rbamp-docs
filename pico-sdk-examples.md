@@ -6,8 +6,6 @@ This chapter is the Raspberry Pi Pico equivalent of [10_arduino_examples.md](ard
 >
 > **No dedicated Pico SDK library is shipped** — the client libraries cover Arduino (incl. arduino-pico for RP2040 via the Wire API), MicroPython (runs on the RP2040 port), ESP-IDF and CPython on Linux SBC; see the [client-libraries table in the README](README.md#client-libraries-high-level-api-per-platform). For native Pico SDK firmware in C, follow the raw-API recipes below. If you want a higher-level API on RP2040, the easiest path is the arduino-pico core + the rbAmp Arduino library.
 
----
-
 ## Supported targets and toolchain
 
 | Target | Validated | Wi-Fi | Notes |
@@ -109,8 +107,6 @@ make -j
 ## Common helpers (`rbamp_io.h` / `rbamp_io.c`)
 
 Place these in your project's `src/` directory. To save space, the `#include "rbamp_io.h"` line is omitted in each example below.
-
----
 
 ### `rbamp_io.h`
 

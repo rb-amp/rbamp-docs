@@ -4,8 +4,6 @@ Hosts that poll on a timer waste bus transactions and still lag the data. The ST
 hardware **DRDY (data-ready) line** plus a register-side event model, shared across the rbAmp
 family.
 
----
-
 ## DRDY line contract
 
 - **Electrical:** open-drain output, idle **released HIGH** (master provides the pull-up).

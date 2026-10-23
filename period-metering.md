@@ -6,13 +6,9 @@ This is the **production-grade** way to extract energy data. The alternative —
 
 **BASIC and STD periods.** BASIC keeps **one** period snapshot per channel: on the master's command the module freezes the average and peak power and the period length (next to the live 100 ms window, which is not a period), and the host integrates energy. STANDARD (STD) keeps the energy **on the module**: cumulative counters (import/export, active and reactive) that survive power loss, plus time-stamped **15-minute and hourly records** (the master sets the clock). The STD family contract also defines 8 independent snapshot banks; current firmware does not implement them, and the interval energy comes from differences of the counters. The rest of this chapter describes the BASIC period snapshot; STD is described in the [STD technical reference](std/reference/16_measurement_energy.md).
 
----
-
 ## Why a period snapshot is needed
 
 ![Why a period snapshot is used on top of the measurement window.](images/window-period-latch-concept.png)
-
----
 
 ### A single time base, owned by the master
 
@@ -40,8 +36,6 @@ Where:
 ## Atomic period — concept
 
 ![How a single snapshot command freezes the period snapshot and opens the next period.](images/period-atomic-latch.png)
-
----
 
 ### What the command does
 
@@ -116,8 +110,6 @@ E2_Wh = avg_p × (t2 − t1) / 3600
 ...and so on. t1 is both the end of period 1 and the start of period 2.
 ```
 
----
-
 ### The first snapshot is a primer (discard)
 
 The first snapshot after boot captures whatever the accumulator collected from power-on until the master's first call — an undefined-length window unsuitable for billing. **Discard its result**. From the second snapshot onward, data is clean and usable.
@@ -147,8 +139,6 @@ The first snapshot after boot captures whatever the accumulator collected from p
 | `0xE0..0xE3` | `PERIOD_MAX_P_W` | float32 LE | optional | Peak P_real during the period (for demand tariffs) |
 | `0xEC..0xEF` | `PERIOD_LATCH_MS` | u32 LE | diagnostic only | Chip's view of dt between snapshots — can read short under load; use `PERIOD_COMMIT_COUNT` × the commit length for the module-side window length |
 | `0xBE..0xC1` | `PERIOD_COMMIT_COUNT` | u32 LE | window measure | Number of RT commits in the closed period. One commit = **0.1 s** on current firmware; 0.2 s on older images — `count × 0.1 s` (or `× 0.2 s`) is the module's own measure of the window length. See the clock-drift section for how to tell which applies |
-
----
 
 ### STANDARD (STD) additions for bidirectional accounting
 
@@ -252,8 +242,6 @@ void loop() {
 > This section applies to **the STANDARD (STD) product tier** only. On a BASIC module the `PERIOD_AVG_P_NEG_W` registers are not allocated (reads return `0x00`), and `PERIOD_AVG_P_W` is always ≥ 0 (negative samples are dropped from the accumulator).
 
 ![How energy is accounted on BASIC versus STANDARD (STD) modules.](images/energy-basic-vs-std.png)
-
----
 
 ### What bidirectional accounting means
 
@@ -435,8 +423,6 @@ and re-initialise any RAM-only configuration — see chapter 11 (`RESET_OCCURRED
 ## Multi-module — simultaneous snapshot
 
 If the master wants **synchronous** snapshots from all modules (for an instantaneous house energy balance), there are two approaches.
-
----
 
 ### Approach 1 — sequential snapshot (simple)
 
