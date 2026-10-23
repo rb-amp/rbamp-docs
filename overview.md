@@ -41,8 +41,8 @@ Accuracy is not part of this table: for BASIC with an SCT-013 sensor see the nex
 |---|---|---|---|---|---|---|---|
 | Detectable floor (the reading with no load) | ~3 mA | 6–9 mA | ~10 mA | ~13 mA | ~25 mA | ~30 mA | ~60 mA |
 | Readable floor (error ≤ 10 %; 0.5 % of rating) | 25 mA | 50 mA | 0.10 A | 0.15 A | 0.25 A | 0.30 A | 0.50 A |
-| Class near the floor, UI1 / UI2 / UI3 (±1 % of the average, from ~0.7 % of rating) | from 35 mA | from 70 mA | from 0.14 A | from 0.21 A | from 0.35 A | from 0.42 A | from 0.70 A |
-| Class near the floor, UI5 / UI7 (±0.5 %, from 2 % of rating) | from 0.10 A | from 0.20 A | from 0.40 A | from 0.60 A | from 1.0 A | from 1.2 A | from 2.0 A |
+| Class near the floor, UI1 / UI2 / UI3 (UI3 when available; ±1 % of the average, from ~0.7 % of rating) | from 35 mA | from 70 mA | from 0.14 A | from 0.21 A | from 0.35 A | from 0.42 A | from 0.70 A |
+| Class near the floor, UI5 / UI7 (when available; ±0.5 %, from 2 % of rating) | from 0.10 A | from 0.20 A | from 0.40 A | from 0.60 A | from 1.0 A | from 1.2 A | from 2.0 A |
 | Class in the working range (5–100 % of rating, of the average) | ≤ 0.5 % | 0.16–0.35 % | ≤ 0.5 % | 0.53 % | ≤ 0.5 % | ≤ 0.5 % | 0.47 % |
 | Tolerance of the sensor unit (added on top of the class) | ≤ 0.8 % | 0.5–1.0 % | 0.8 % | 1.2 % | 0.7 % | 0.3–0.4 % | 0.45 % |
 | Step of one instantaneous value | 4.1 mA | 8.1 mA | 16 mA | 24 mA | 41 mA | 49 mA | 83 mA |
