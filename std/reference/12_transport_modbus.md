@@ -146,5 +146,5 @@ use a different, single-shot key mechanism (`LT_KEY`), not UNLOCK — see [Comma
 | 04 | internal device failure |
 | 06 | device busy (command or firmware operation in progress) |
 
-The last exception is latched for diagnostics in `LAST_EXCEPTION` (`FC<<24 | code<<16 | address`),
+The last exception is kept for diagnostics in `LAST_EXCEPTION` (`FC<<24 | code<<16 | address`),
 readable on **both** transports: I²C 0x0158, Modbus holding 0x830A–0B.

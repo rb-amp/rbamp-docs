@@ -256,7 +256,7 @@ against the device public key from the certificate.
 | 0x0C02 | HIST_FLAGS | u8 | r | bit0 record valid · bit1 from RAM; cleared when HIST_READ is accepted, filled at its completion |
 | 0x0C04 | HIST_BACK | u16 | rw | records back from newest (0 = newest) |
 | 0x0C06 | HIST_COUNT | u16 | r | records in the ring |
-| 0x0C08 | HIST_CAP | u16 | r | ring capacity (0 for the 15-min selection; current boards: 7 hourly records, 10 event records) |
+| 0x0C08 | HIST_CAP | u16 | r | ring capacity: the number of records the module keeps (0 for the 15-min selection) — read it from this register |
 | 0x0C0A | HIST_RECSZ | u16 | r | record size: 80 (history) / 32 (event log) |
 | 0x0C0C / 0x0C10 | HIST_OLDEST / HIST_NEWEST | u32 | r | oldest / newest record timestamp |
 | 0x0C20 | HIST_REC | 80 B | rw | read result / import staging |
