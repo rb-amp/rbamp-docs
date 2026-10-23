@@ -102,7 +102,7 @@ electrical code, and it is not sold as a certified metering instrument.)*
 
 ## Related
 
-- [01 · Hardware Connection](/docs/modules-basic-standard-hardware-connection) — pinout, wiring, CT install.
-- [FAQ — Is the rbAmp module isolated from mains?](/blog/faq-13/is-the-rbamp-module-isolated-from-mains-57)
-- [Three-Phase Energy Monitoring in Home Assistant](/blog/projects-and-tutorials-11/three-phase-energy-monitoring-in-home-assistant-3-rbamp-ui-on-one-esp32-49) — panel-level safety in a real build.
+- [01 · Hardware Connection](https://www.rbamp.com/docs/modules-basic-standard-hardware-connection) — pinout, wiring, CT install.
+- [FAQ — Is the rbAmp module isolated from mains?](https://www.rbamp.com/blog/faq-13/is-the-rbamp-module-isolated-from-mains-57)
+- [Three-Phase Energy Monitoring in Home Assistant](https://www.rbamp.com/blog/projects-and-tutorials-11/three-phase-energy-monitoring-in-home-assistant-3-rbamp-ui-on-one-esp32-49) — panel-level safety in a real build.
 
