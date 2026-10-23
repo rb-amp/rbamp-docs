@@ -191,7 +191,7 @@ current**; for specified accuracy the load should not sit below about **3 % of t
 >
 > **Limit semantics**: *rated current* and *RMS clip onset* assume a sine-wave load; the measured clip onset is ≈ 1.16 × the rating. The *peak limit* (≈ 1.64 × rating) is the real ceiling — a distorted load (high crest factor) starts clipping at `peak / crest factor`, below the RMS numbers. Stay at or below the rating for specified accuracy: readings clip at about 115–120 % of the rating.
 
-Per-rating accuracy figures (averaged-reading floor, no-load offset, PF reading, clip onset) are in the
+Per-rating figures (detectable and readable floor, class, sensor tolerance, clipping point) are in the
 [accuracy table in 00_overview.md](overview.md#current-channel-accuracy-with-sct-013-sensors).
 Changing the sensor model is writing the model code to the module — nothing else is required; there
 is no recalibration step.

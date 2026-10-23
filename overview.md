@@ -48,7 +48,7 @@ Accuracy is not part of this table: for BASIC with an SCT-013 sensor see the nex
 | Step of one instantaneous value | 4.1 mA | 8.1 mA | 16 mA | 24 mA | 41 mA | 49 mA | 83 mA |
 | Top of the range (clipping, sine wave) | ~6.0 A | 11.9 A | ~24 A | 35 A | ~60 A | ~72 A | ~117 A |
 
-**Source:** verified in bench laboratory tests. Note that real SCT-013 sensors have an actual error of about 1 %, and it can grow with time or with temperature. If you need good measurement quality at small currents, choose a sensor with a smaller rating.
+**Source:** verified in multiple bench laboratory tests. Note that real SCT-013 sensors have an actual error of about 1 %, and it can grow with time or with temperature. If you need good measurement quality at small currents, choose a sensor with a smaller rating.
 
 - **Step of one instantaneous value** is about 0.08 % of the rating. The RMS reading is computed over the whole 100 ms window and returned as a fractional number, so it is finer than the step: for example, with the 5 A sensor the no-load reading is ~3 mA although the step is 4.1 mA. The real resolution is limited by noise, not by the step.
 - **Near the floor:** a single reading (one 100 ms window) at 1 % of the rating is noisy by 0.6–2 %. The average over a period and the energy stay within the class shown in the table.
