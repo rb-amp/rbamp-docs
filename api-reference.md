@@ -4,6 +4,8 @@
 >
 > **Scope**: canonical wire protocol of the rbAmp module at version v1.3 — register map, protocol sequences, behavioral guarantees. This is the complete wire-contract-level reference documentation.
 >
+> **Version**: "v1.3" is the **wire-protocol version** (`VERSION` register `0x03` reads `0x04`), not the version of this document. It is the protocol of all current BASIC module firmware (1.4.x); STANDARD (STD) modules use a different register map — see the STD technical reference.
+>
 > **NOT in scope**: integration with any specific library / OS / framework — read the library documentation for that.
 
 ---
