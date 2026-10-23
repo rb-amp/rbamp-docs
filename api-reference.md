@@ -396,7 +396,7 @@ Channels **3..6** have **no flat per-channel registers** (there was room for 8 b
 
 | Addr | Name | Size | Type | Access | Persistence | Notes |
 |---|---|---|---|---|---|---|
-| `0x32` | `REG_CHANNEL_SELECT` | 1 | u8 | rw | ram | **This is a register address, NOT the command opcode `CMD_SAVE_USER_CONFIG` — they collide numerically. Always cite `0x32` with the register-vs-command space you mean.** Encoded as `(field << 4) \| channel`. `channel` nibble range is **0..15** (reserved for up to 16 channels); the physical maximum per SKU is `channels()` (7 on UI7). Writes to a channel index `>= channels()` are silently discarded (no `ERR_PARAM`). `field` per table below. Writing the selector snapshots the requested value into `REG_CHANNEL_DATA`. |
+| `0x32` | `REG_CHANNEL_SELECT` | 1 | u8 | rw | ram | **This is a register address, NOT the command opcode `CMD_SAVE_USER_CONFIG` — they collide numerically. Always cite `0x32` with the register-vs-command space you mean.** Encoded as `(field << 4) \| channel`. `channel` nibble range is **0..15** (reserved for up to 16 channels); the physical maximum per SKU is `channels()` (7 on UI7). A selector whose channel index is `>= channels()` is accepted without `ERR_PARAM`; the data window then reads `0` and writes to it are ignored. `field` per table below. Writing the selector snapshots the requested value into `REG_CHANNEL_DATA`. |
 | `0x3C..0x3F` | `REG_CHANNEL_DATA` | 4 | float32 LE | r | ram | Data buffer for the selection. `float32 LE` for all public fields. |
 
 **Field codes** (nibble high in `0x32`):
