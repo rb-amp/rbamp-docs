@@ -10,19 +10,27 @@ From the integrator's point of view, rbAmp behaves like a standard I2C slave: ap
 
 ## What it measures
 
-| Quantity | Register (I0) | Type | Range | Accuracy |
-|---|:---:|---|---|---|
-| RMS voltage, U_rms | `0x86` | float32, V | 0…300 V | ±0.5% |
-| Peak voltage, U_peak | `0x8A` | float32, V | 0…450 V | ±1% |
-| RMS current, I_rms | `0x8E` | float32, A | 0…100 A (SKU-dependent) | ±0.5%…±1% — for the current channel with an SCT-013 see the table below |
-| Peak current, I_peak | `0x9A` | float32, A | 0…140 A | ±1% |
-| Active power, P | `0xA6` | float32, W (±) | ±23 kW | ±1% |
-| Power factor, PF | `0xB2` | float32 (±) | −1…+1 | ±0.01 at PF ≈ 1 (resistive load) |
-| Reactive power, Q | `0xD0` | float32, VAr (≥ 0) | 0…23 kVAr | — |
-| Line frequency | `0x20` | u8, Hz | 45…65 Hz | ±0.5 Hz |
-| Time-averaged P over period | `0xDC` | float32, W | same as P | ±1% |
+The two module lines report the same quantities in different formats. BASIC returns floating-point values in base units; STANDARD (STD) returns scaled integers and adds more quantities, 8 independent period latches and on-module energy counters.
 
-The full register map is detailed in [03_realtime_polling.md](realtime-polling.md) and [04_period_metering.md](period-metering.md).
+| Quantity | BASIC | STANDARD (STD) |
+|---|---|---|
+| RMS voltage, U_rms | float32, V | i32, mV (each voltage input has its own value) |
+| Peak voltage, U_peak | float32, V | i32, mV |
+| RMS current, I_rms | float32, A | i32, µA |
+| Peak current, I_peak | float32, A | i32, µA |
+| Active power, P | float32, W, signed | i32, mW, signed |
+| Apparent power, S | — | i32, mVA |
+| Reactive power, Q | float32, var, unsigned (≥ 0) | i32, mvar, signed |
+| Reactive power of the fundamental, Q1 | — | i32, mvar (option) |
+| Power factor, PF | float32, −1…+1 | i16, step 1/1024 ≈ 0.001, −1…+1 |
+| Power factor of the fundamental, PF1 | — | i16, step 1/1024 (option) |
+| Line frequency | u8, Hz: 50 or 60 (detected, not measured) | u16, 0.01 Hz steps, measured |
+| Voltage and current THD | — | u16, 0.01 % steps (option) |
+| Voltage phase angle | — | i16, 0.01° steps (modules with several voltage inputs) |
+| Average power over a period | float32, W; one latch (average and peak P) | 8 independent latches: import/export energy, average U/I/P/Q, peaks |
+| Energy | not kept on the module — the host (library) integrates it | on the module: import/export in Wh / mWh / µWh, reactive in varh / µvarh; kept when the power is off |
+
+Accuracy is not part of this table: for BASIC with an SCT-013 sensor see the next section; specifications of individual modules are given with the model descriptions. The BASIC register map is in [03_realtime_polling.md](realtime-polling.md), [04_period_metering.md](period-metering.md) and [11_api_reference.md](api-reference.md); the STD register map is in the [STD technical reference](std/reference/README.md).
 
 ### Current-channel accuracy with SCT-013 sensors
 
