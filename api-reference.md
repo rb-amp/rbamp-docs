@@ -349,6 +349,7 @@ Read-only mirrors of the **applied** CT model preset per channel. The write wire
 | `0x8E` | `V03_I0_RMS` | 4 | float32 LE | r | ram | A | |
 | `0x92` | `V03_I1_RMS` | 4 | float32 LE | r | ram | A | `0.0` if the variant lacks ch1 |
 | `0x96` | `V03_I2_RMS` | 4 | float32 LE | r | ram | A | `0.0` if the variant lacks ch2 |
+| ⛔ | **STOP — flat per-channel RMS ends at channel 2.** | | | | | | **The next row (`0x9A`) is `V03_I0_PEAK`, NOT `V03_I3_RMS`. Do NOT extrapolate the step-4 pattern past channel 2 — you will read plausible but silently wrong numbers (peak, not RMS; ch0, not ch3). Channels 3+ (UI5/UI7) are accessed only through the [Channel access window](#414-channel-access-window-0x32--0x3c0x3f) — see §4.14.** |
 | `0x9A` | `V03_I0_PEAK` | 4 | float32 LE | r | ram | A | |
 | `0x9E` | `V03_I1_PEAK` | 4 | float32 LE | r | ram | A | |
 | `0xA2` | `V03_I2_PEAK` | 4 | float32 LE | r | ram | A | |
@@ -386,6 +387,81 @@ A period snapshot latched on `CMD_LATCH_PERIOD`. **Ragged layout** (historical l
 | Addr | Name | Size | Type | Access | Persistence | Units | Notes |
 |---|---|---|---|---|---|---|---|
 | `0xEC` | `V03_PERIOD_LATCH_MS` | 4 | u32 LE | r | ram | ms | Chip-side dt between the two most recent latches. **Module diagnostic timer** — it may read short under load; use the master clock for energy. See §7.4 |
+
+### 4.14 Channel access window (`0x32` + `0x3C..0x3F`)
+
+**Applies to UI5 (5-channel) and UI7 (7-channel) modules. On UI1/UI2/UI3 and I1/I2/I3 it is available too — a single unified path if you prefer it over §4.10 flat registers.**
+
+Channels **3..6** have **no flat per-channel registers** (there was room for 8 bytes in the 8-bit address space, and a flat layout would need ~88). Instead a **select-and-read** window is exposed:
+
+| Addr | Name | Size | Type | Access | Persistence | Notes |
+|---|---|---|---|---|---|---|
+| `0x32` | `REG_CHANNEL_SELECT` | 1 | u8 | rw | ram | **This is a register address, NOT the command opcode `CMD_SAVE_USER_CONFIG` — they collide numerically. Always cite `0x32` with the register-vs-command space you mean.** Encoded as `(field << 4) \| channel`. `channel` nibble range is **0..15** (reserved for up to 16 channels); the physical maximum per SKU is `channels()` (7 on UI7). Writes to a channel index `>= channels()` are silently discarded (no `ERR_PARAM`). `field` per table below. Writing the selector snapshots the requested value into `REG_CHANNEL_DATA`. |
+| `0x3C..0x3F` | `REG_CHANNEL_DATA` | 4 | float32 LE | r | ram | Data buffer for the selection. `float32 LE` for all public fields. |
+
+**Field codes** (nibble high in `0x32`):
+
+| Code | Field | Type | Access | Meaning |
+|---|---|---|---|---|
+| `0` | `CHFIELD_I_RMS` | float32 LE | r | Live RMS current for the selected channel (units A) |
+| `1` | `CHFIELD_I_PEAK` | float32 LE | r | Live peak current (units A) |
+| `2` | `CHFIELD_P_REAL` | float32 LE | r | Live real power (units W) |
+| `3` | `CHFIELD_PF` | float32 LE | r | Live power factor (−1..+1) |
+| `4..12` | *(reserved)* | – | – | Not documented for user code; do not depend on values or codes. |
+| `13` | `CHFIELD_PERIOD_AVG_P` | float32 LE | r | Latched period-average real power (W). **For channels 3+ this is the ONLY period/energy field — flat `V03_PERIOD_AVG_P*` (§4.11/§4.12) only covers ch0..ch2.** |
+| `14` | *(reserved)* | – | – | Reserved for future firmware; do not depend on. |
+| `15` | `CHFIELD_CT_MODEL` | u8 in `0x3C` (bytes `0x3D..0x3F` read as zero-padding) | rw | **Firmware ≥ 1.4.18.** Per-channel CT model code for the selected channel (0..N-1). **Read** returns the applied model on the channel. **Write is RAM-only and applies immediately**: the channel's scaling is switched to the preset of the selected model in the same transaction; no separate commit command, no `CMD_SET_CT_MODEL_CH*` needed. Writes are byte-at-a-time per the wire-protocol rule (§5.1). An **unknown `(SENSOR_CLASS, code)` pair returns `ERR_PARAM` (0xFE) and the channel keeps its previous model** — no partial state. **Senior-SKU channels (ch3+) NO LONGER inherit the global model** — each channel must be configured explicitly via field 15. **Persistence**: `CMD_SAVE_USER_CONFIG` (opcode `0x32` on `REG_COMMAND`, **ungated**) persists all channels' models to the user-config flash page in one command. A write without a subsequent `CMD_SAVE_USER_CONFIG` reverts on reboot. The set of accepted `(class, code)` pairs is defined by the model table of your firmware version; the module authoritatively confirms a code — write it, read it back, and check `REG_ERROR`. On modules running v1.4.0 writing this field returns `ERR_PARAM`; use per-channel commands + flat `REG_CT_MODEL` staging instead. |
+
+#### The four traps — read this before writing code
+
+1. **⛔ Flat per-channel RMS ends at channel 2.** The rows `V03_I0_RMS` (`0x8E`) → `V03_I1_RMS` (`0x92`) → `V03_I2_RMS` (`0x96`) are step-4, and `0x9A` continues the step — but `0x9A` is `V03_I0_PEAK`, **not** `V03_I3_RMS`. Extrapolating the pattern silently returns peak-of-ch0 instead of RMS-of-ch3. Firmware cannot detect the mistake; the value looks plausible. **Channels 3+ live only in the channel access window.**
+2. **Re-select before every read.** `REG_CHANNEL_DATA` is a **snapshot** taken at the moment of the selector write, not a live view. Polling `0x3C..0x3F` in a loop without re-writing `0x32` returns a frozen value forever. Every fresh reading requires a fresh write to `0x32`.
+3. **`0x32` register address ≠ `0x32` command opcode.** `CMD_SAVE_USER_CONFIG` uses opcode `0x32` written to `REG_COMMAND` (`0x01`) — that is a different address space than `REG_CHANNEL_SELECT` (which sits at register address `0x32`). Never quote `0x32` without saying which space.
+4. **For channels 3+ period/energy comes only from field `13` (`CHFIELD_PERIOD_AVG_P`).** Registers `V03_PERIOD_AVG_P*` (`0xC2/0xC6/0xDC`) only cover ch0/ch1/ch2. There is no flat `V03_PERIOD_AVG_P_CH3` — read field 13 via the window instead.
+
+#### Wire-level example — read RMS current for channel 3
+
+```text
+# select field=0 (I_RMS), channel=3  →  (0 << 4) | 3  =  0x03
+write_u8(REG_CHANNEL_SELECT=0x32, 0x03)
+
+# read 4 bytes at REG_CHANNEL_DATA — float32 LE
+bytes = read(0x3C, 4)
+i3_rms = unpack_float32_le(bytes)   # amperes
+```
+
+For channel 4 peak current: selector = `(1 << 4) | 4` = `0x14`, then read `0x3C..0x3F`. For channel 5 period-average power: selector = `(13 << 4) | 5` = `0xD5`, then read `0x3C..0x3F`.
+
+#### Wire-level example — read RMS current on ALL channels of a UI7 module
+
+Combines both paths in one loop: flat RT block for ch 0..2, channel access window for ch 3..6.
+
+```text
+# --- Discover physical channel count -----------------------------
+N = read_u8(TOPOLOGY=0x24)      # 5 on UI5, 7 on UI7
+
+# --- ch 0..2 via flat block (single 12-byte burst) ---------------
+bytes = read(V03_I0_RMS=0x8E, 12)
+i0 = unpack_float32_le(bytes[0:4])
+i1 = unpack_float32_le(bytes[4:8])
+i2 = unpack_float32_le(bytes[8:12])
+
+# --- ch 3..N-1 via channel access window (re-select per read) ----
+i_rms = [i0, i1, i2]
+for ch in range(3, N):
+    write_u8(REG_CHANNEL_SELECT=0x32, (0 << 4) | ch)   # field 0 = I_RMS
+    i_rms.append(unpack_float32_le(read(REG_CHANNEL_DATA=0x3C, 4)))
+
+# i_rms is now length-N: RMS current for every physical channel of the module.
+```
+
+The same pattern extends to `I_PEAK` (field 1), `P_REAL` (field 2), `PF` (field 3), and the latched `PERIOD_AVG_P` (field 13) — flat block for ch0..ch2, window for ch3+. **Field 13 is the ONLY period/energy source for ch3+** — the flat block has no `V03_PERIOD_AVG_P_CH3..6`.
+
+For per-channel CT model configuration on any channel (0..N-1), use window field 15 (`CHFIELD_CT_MODEL`): write `(15 << 4) | ch` to `0x32`, then write the model code as one byte to `0x3C`. Persist all channels' models with a single `CMD_SAVE_USER_CONFIG` (opcode `0x32` on `REG_COMMAND (0x01)` — ungated).
+
+#### Recommendation for new integrations
+
+The window covers channels **0..6** — you can use it as a **single unified path** for all channels instead of branching between flat registers (ch0..ch2) and window (ch3..ch6). For fleets that mix junior (UI1/UI2/UI3) and senior (UI5/UI7) SKUs this eliminates a code split. Latency is one extra small write per reading (compared to a straight burst-read of the flat block).
 
 ---
 
