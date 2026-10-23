@@ -4,6 +4,8 @@ For tariff energy accounting (Wh per 1 min / 15 min / 1 hour / day / month / yea
 
 This is the **production-grade** way to extract energy data. The alternative — integrating RT `P_real` on the master side every measurement window (~100 ms on current firmware) — yields nearly the same result on BASIC (slightly lower accuracy due to sampling discretisation) and keeps the master continuously active.
 
+**BASIC and STD periods.** BASIC keeps **one** period snapshot per channel: on the master's command the module freezes the average and peak power and the period length (next to the live 100 ms window, which is not a period), and the host integrates energy. STANDARD (STD) keeps the energy **on the module**: cumulative counters (import/export, active and reactive) that survive power loss, plus time-stamped **15-minute and hourly records** (the master sets the clock). The STD family contract also defines 8 independent snapshot banks; current firmware does not implement them, and the interval energy comes from differences of the counters. The rest of this chapter describes the BASIC period snapshot; STD is described in the [STD technical reference](std/reference/16_measurement_energy.md).
+
 ## Why a period snapshot is needed
 
 ![Why a period snapshot is used on top of the measurement window.](images/window-period-latch-concept.png)

@@ -136,7 +136,7 @@ The module keeps a short on-device history as a back-fill buffer for masters tha
 deep archive belongs to the master/hub). Query interface: [register map](13_register_map.md#history--event-log-query-0x0c000x0c6f).
 
 - **15-minute records** — the most recent, from RAM (lost on reset; `HIST_CAP` reads 0 here).
-- **Hourly ring** — persisted; depth follows the storage size (current boards: 7 records).
+- **Hourly ring** — persisted; depth follows the storage size — read it from `HIST_CAP` (`0x0C08`).
 - Records are written only while the clock is valid.
 
 **Record layout (80 B, little-endian):**
