@@ -11,7 +11,9 @@ No start command, no register-level configuration on the chip is required. Facto
 
 ![The sequence from power-on to the first valid reading.](images/first-reading-flow.png)
 
-> **Important for modules with an external (plug-in) CT**: after first installation, you must **write the sensor model** to the model register. The module needs the model to apply the correct mV-per-ampere coefficient. The model **code** is stored in flash and survives reboots. On firmware before **1.4.20** (`CAPABILITY` bit 12 clear) the **applied scaling reverts to the factory default after a module restart** — a master that selected a non-factory model must re-commit it after every detected module restart (see [What persists across a restart](#what-persists-across-a-restart) and the restart-detection rule in [04_period_metering.md](period-metering.md)); from fw 1.4.20 the model switch survives a restart. **On images before 1.4.20, energy will be wrong after any module restart unless `CT_MODEL` is re-committed.** The client libraries handle both cases for you. Details are in the section [Setting the sensor class and CT model](#setting-the-sensor-class-and-ct-model) below.
+> **Important for BASIC SCT-series modules used with SCT-013 sensors**: after first installation, you must **write the sensor model** to the model register. The module needs the model to apply the correct mV-per-ampere coefficient. The model **code** is stored in flash and survives reboots. On firmware before **1.4.20** (`CAPABILITY` bit 12 clear) the **applied scaling reverts to the factory default after a module restart** — a master that selected a non-factory model must re-commit it after every detected module restart (see [What persists across a restart](#what-persists-across-a-restart) and the restart-detection rule in [04_period_metering.md](period-metering.md)); from fw 1.4.20 the model switch survives a restart. **On images before 1.4.20, energy will be wrong after any module restart unless `CT_MODEL` is re-committed.** The client libraries handle both cases for you. Details are in the section [Setting the sensor class and CT model](#setting-the-sensor-class-and-ct-model) below.
+>
+> BASIC CT-series and STANDARD (STD) modules are supplied as a pair with their sensors, preset and calibrated for that sensor at the factory; they start without initialization.
 
 ## Helper functions (platform-neutral C)
 
@@ -98,9 +100,9 @@ void loop() {
 }
 ```
 
-Use a load of at least **~3 % of the sensor rating** — below that the error is not specified (a
-60 W lamp is only 0.9 % of a 30 A clamp). On a 30 A clamp, a 2 kW kettle is a good smoke-test load.
-For SKUs with a plug-in CT, set the sensor class and CT model **before** the smoke test (see
+Use a load of at least **~1 % of the sensor rating** — below that readings get noisy and the class is not given (a
+60 W lamp is only 0.9 % of a 30 A clamp; see the [characteristics table](overview.md#current-channel-accuracy-with-sct-013-sensors)). On a 30 A clamp, a 2 kW kettle is a good smoke-test load.
+For BASIC SCT-series modules with an SCT-013 sensor, set the sensor class and CT model **before** the smoke test (see
 [Setting the sensor class and CT model](#setting-the-sensor-class-and-ct-model)) — without the model
 the current readings are meaningless.
 
@@ -156,7 +158,7 @@ void main_app(void) {
 
 ## Setting the sensor class and CT model
 
-> Required **only** for SKUs with a plug-in CT (3.5 mm jack). Modules with built-in sensors are already configured at the factory — skip this section.
+> Required **only** for BASIC SCT-series modules used with SCT-013 sensors. BASIC CT-series and STANDARD (STD) modules are supplied as a pair with their sensors: everything is preset and calibrated at the factory for that particular sensor, and they start without initialization — skip this section.
 
 Two registers describe the external sensor: `SENSOR_CLASS` (the family — SCT-013 clip-on clamps, the wired CT clamp series, built-in CT) and `CT_MODEL` (the specific model code within that family). On v1.3 the model is written using a **pure-staging** scheme — writing `CT_MODEL` does **not** apply it on its own; a dedicated per-channel command commits the staged value.
 
@@ -171,14 +173,14 @@ Two registers describe the external sensor: `SENSOR_CLASS` (the family — SCT-0
 
 Buy one of the **voltage-output SCT-013 models listed in the table below** (3.5 mm plug) — not a
 current-output variant. Choose the smallest rated clamp that is **above your largest expected
-current**; for specified accuracy the load should not sit below about **3 % of the rating** (see the
+current**; for the stated class the load should not sit below about **1 % of the rating** (see the
 [accuracy table](overview.md#current-channel-accuracy-with-sct-013-sensors)).
 
 #### CT model codes — SCT-013 family (`SENSOR_CLASS = 1`)
 
 | Code | Sensor | Rated current | RMS clip onset | Peak limit |
 |:---:|---|:---:|:---:|:---:|
-| `0x00` | not set (default on factory-fresh plug-in-CT SKUs) | — | — | — |
+| `0x00` | not set (default on factory-fresh BASIC SCT-series modules) | — | — | — |
 | `0x01` | SCT-013-005 | 5 A | 5.8 A | 8.2 A |
 | `0x02` | SCT-013-010 | 10 A | 11.6 A | 16.4 A |
 | `0x03` | SCT-013-030 | 30 A | 34.8 A | 49.2 A |
@@ -313,7 +315,7 @@ unaffected on every image — the factory scaling is the correct one.
 ## Single-module workflow
 
 1. Wire the module according to [01_hardware.md](hardware-connection.md).
-2. For SKUs with a plug-in CT, write the sensor model once (previous section).
+2. For BASIC SCT-series modules, write the sensor model once (previous section).
 3. Flash the master with the smoke-test sketch.
 4. Open the serial monitor — you should see U/I/P every second.
 5. If readings look wrong, see [05_troubleshooting.md](troubleshooting.md).
@@ -332,7 +334,7 @@ Use the section above. Confirm one module works correctly.
 
 ### Step 3 — Readdress (and, if needed, set the CT model)
 
-Use the address-change procedure below. If the modules have different plug-in CTs, set the CT model on each one before readdressing.
+Use the address-change procedure below. If the modules use different SCT-013 sensors, set the CT model on each one before readdressing.
 
 ### Step 4 — Multi-module polling loop
 
@@ -554,7 +556,7 @@ Step 1: Unbox all modules — every module is on address 0x50.
 
 Step 2: For each module, one at a time:
    a) Connect only this module to the bus.
-   b) If the SKU has a plug-in CT: set SENSOR_CLASS (0x25), stage CT_MODEL (0x05),
+   b) If it is a BASIC SCT-series module: set SENSOR_CLASS (0x25), stage CT_MODEL (0x05),
       issue CMD_SET_CT_MODEL_CHn for each channel, then CMD_SAVE_USER_CONFIG.
    c) On images before fw 1.4.20 (`CAPABILITY` bit 12 clear): after any later reset of this
       module, re-stage and re-commit CT_MODEL on each channel (see the persistence table above).
@@ -578,6 +580,8 @@ applying the BASIC detection below, you can discriminate: send the 16-bit pointe
 read 2 bytes — an STD module returns the ASCII pair `'S','T'` (`0x53 0x54`); a BASIC module does not
 (it treats the bytes as 8-bit register writes and returns its normal data). STD modules are covered
 by their own reference documentation.
+
+**You do not need to do this yourself when you use a client library.** The libraries (Arduino, ESP-IDF, Python, ESPHome) already detect the module line and handle the different register sizes — you do not have to think about whether the register map is 8-bit or 16-bit.
 
 ![How to tell a BASIC module from an STD module at runtime.](images/module-line-detect.png)
 
