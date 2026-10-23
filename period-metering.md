@@ -61,6 +61,15 @@ This is the defining property of the rbAmp snapshot. **A single snapshot command
 
 The master needs **one write per measurement**, not two (as in a naive "start → stop → read" implementation).
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::latchPeriod()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-latchperiod-noexcept) / [`RbAmp::isPeriodValid()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-isperiodvalid-noexcept) | send the snapshot command; check the validity flag |
+> | ESP-IDF | [`rbamp_latch_period()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_latch_period) / [`rbamp_is_period_valid()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_is_period_valid) | send the snapshot command; check the validity flag |
+> | Python | [`dev.latch_period()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devlatch_period---none) / [`dev.is_period_valid()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devis_period_valid---bool) | send the snapshot command; check the validity flag |
+> | ESPHome | [`update_interval:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#update_interval) | each update closes the period; the snapshot command and settle are handled by the component |
+
 ## Continuous polling cycle (recommended)
 
 ```
@@ -95,6 +104,15 @@ E2_Wh = avg_p × (t2 − t1) / 3600
 
 The first snapshot after boot captures whatever the accumulator collected from power-on until the master's first call — an undefined-length window unsuitable for billing. **Discard its result**. From the second snapshot onward, data is clean and usable.
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::readPeriodSnapshot(out, settle_ms, skip_latch)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-readperiodsnapshotrbampperiodsnapshot-out-uint16_t-settle_ms--50-bool-skip_latch--false-noexcept) / [`RbAmp::begin()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-begin-noexcept) | snapshot, settle, validity check and read in one call; begin() discards the first snapshot |
+> | ESP-IDF | [`rbamp_read_period_snapshot()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_period_snapshot) / [`rbamp_begin()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_begin) | snapshot, settle, validity check and read in one call; begin discards the first snapshot |
+> | Python | [`dev.read_period_snapshot(settle_ms=50, skip_latch=False)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_period_snapshotsettle_ms50-skip_latchfalse---rbampperiodsnapshot) / [`dev.begin()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devbegin) | snapshot, settle, validity check and read in one call; begin() discards the first snapshot |
+> | ESPHome | [`update_interval:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#update_interval) / [`latch_interval:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#latch_interval) | update cadence of the snapshot cycle; optional separate snapshot cadence |
+
 ## Period snapshot registers
 
 | Address | Name | Type | When to read | Description |
@@ -117,6 +135,15 @@ The first snapshot after boot captures whatever the accumulator collected from p
 | — | — | Export (negative-direction) accumulators exist on the **rbAmp STD line** only — a different, 16-bit register map (see the STD reference documentation) |
 
 > On BASIC modules there are no export registers; reads from an unmapped address return `0x00` (firmware never NACKs on reads — see chapter 11 §5.2). A master that needs export tracking on BASIC falls back to RT-based accounting (see [10_arduino_examples.md → Example 5](arduino-examples.md)).
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::readPeriodAvgPower(ch)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#float-readperiodavgpoweruint8_t-ch--0-noexcept) / [`RbAmp::readPeriodMaxPower()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#float-readperiodmaxpower-noexcept) | average and peak power of the closed period |
+> | ESP-IDF | [`rbamp_read_period_avg_power()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_period_avg_power) / [`rbamp_read_period_max_power()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_period_max_power) | average and peak power of the closed period |
+> | Python | [`dev.read_period_avg_power(ch=0)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_period_avg_powerch0---float) / [`dev.read_period_max_power()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_period_max_power---float) | average and peak power of the closed period |
+> | ESPHome | [`update_interval:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#update_interval) | the component reads the period averages on each update |
 
 ## Master-side algorithm
 
@@ -183,6 +210,15 @@ void loop() {
 3. **dt is measured on the master**, not derived from `PERIOD_LATCH_MS` — the chip register is only for drift diagnostics.
 4. **`t_prev` updates to the t_now of a successful snapshot**, not to the original period start — this keeps the chain seamless without gaps.
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::energyWh(ch)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#double-energywhuint8_t-ch--0-const-noexcept) / [`RbAmpEnergy::reset(ch)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#public-methods) | running Wh total kept on the host; zero the accumulator |
+> | ESP-IDF | [`rbamp_energy_wh()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#energy-accounting-master-side-accumulator) / [`rbamp_energy_reset()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#energy-accounting-master-side-accumulator) | running Wh total kept on the host; zero the accumulator |
+> | Python | [`dev.energy.wh(ch)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devenergy--rbampenergy-instance) / [`dev.energy.reset(ch)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devenergy--rbampenergy-instance) | running Wh total kept on the host; zero the accumulator |
+> | ESPHome | [`energy`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#energy--energy_1--energy_6) | energy sensor integrated by the component |
+
 ## Bidirectional accounting (STANDARD (STD))
 
 > This section applies to **the STANDARD (STD) product tier** only. On a BASIC module the `PERIOD_AVG_P_NEG_W` registers are not allocated (reads return `0x00`), and `PERIOD_AVG_P_W` is always ≥ 0 (negative samples are dropped from the accumulator).
@@ -242,6 +278,15 @@ If you own a BASIC-tier module and need bidirectional accounting, you have two o
 
 1. **Master-side integration** — read RT `P_real` (`0xA6`) every measurement window (~100 ms on current firmware, 200 ms before v1.2) and integrate positive and negative samples separately on the master side. See Example 5 in [10_arduino_examples.md](arduino-examples.md). Accuracy is slightly lower (due to sampling discretisation), but works on any firmware.
 2. **Upgrade the hardware** to a STANDARD (STD) product tier. Contact your supplier — bidirectional support is a hardware + firmware combination, not a firmware-only flag.
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::stdReadEnergy(out)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-stdreadenergyrbampstdenergy-out-noexcept) / [`RbAmp::readPower(ch)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#float-readpoweruint8_t-ch--0-noexcept) | STD: on-device import/export counters; BASIC: signed power, split on the host |
+> | ESP-IDF | [`rbamp_std_read_energy()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#life-time-energy-counters) / [`rbamp_read_power()` (signed)](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#per-channel-reads) | STD: on-device import/export counters; BASIC: signed power, split on the host |
+> | Python | [`dev.read_std_energy()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_std_energy---rbampstdenergy) / [`dev.read_power(ch)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#methods-fully-equivalent-to-the-property-form) | STD: on-device import/export counters; BASIC: signed power, split on the host |
+> | ESPHome | [`bidirectional:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#bidirectional) / [`energy_exported`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#energy_exported--energy_exported_1--energy_exported_2) | enable export energy; export sensors (BASIC publishes 0) |
 
 ## I-only variants — period metering returns zero
 
@@ -329,6 +374,15 @@ re-commit the CT model if you run a non-factory model on firmware before 1.4.20 
 ([02_initialization.md → What persists across a restart](initialization.md#what-persists-across-a-restart)),
 and re-initialise any RAM-only configuration — see chapter 11 (`RESET_OCCURRED` event bit).
 `RESET_CAUSE` does not change the handling; log it and move on.
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmpPeriodSnapshot::module_restarted`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#rbampperiodsnapshot) | restart flag in the period result (STD counter path) |
+> | ESP-IDF | [`rbamp_read_uptime_s()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_uptime_s) / [`module_restarted`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_period_snapshot_t) | read the module uptime; restart flag in the period result |
+> | Python | — | not exposed — no dedicated call for restart detection on BASIC |
+> | ESPHome | — | not exposed — no restart-detection option in YAML |
 
 ## Multi-module — simultaneous snapshot
 
@@ -436,6 +490,15 @@ void loop() {
 > **Broadcast snapshot is opt-in** per module via `FLEET_CONFIG.bit0` (default OFF on a fresh module). When OFF, the slave NACKs the general-call frame and the master falls back to per-module sequential snapshot automatically. See [02_initialization.md](initialization.md) — *General Call (broadcast at address 0x00)* — for the enable sequence and frame format.
 
 > **One accumulator, two triggers.** The addressed snapshot (`0x27` at the module's own address) and the broadcast snapshot reset the **same** period accumulator — there is only one per module. Pick one method per module for the regular cycle; an extra snapshot by the other method cuts the running period short. The fallback patterns above are safe because they fire only when the broadcast did not land on that module.
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmpFleet::gcLatch(group, tick, settle_ms)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) / [`RbAmp::readPeriodSnapshot(out, settle_ms, skip_latch=true)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-readperiodsnapshotrbampperiodsnapshot-out-uint16_t-settle_ms--50-bool-skip_latch--false-noexcept) | broadcast snapshot frame to the fleet; read each module after an external snapshot |
+> | ESP-IDF | [`rbamp_fleet_gclatch()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) / [`rbamp_read_period_snapshot(..., skip_latch=true)`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_period_snapshot) | broadcast snapshot frame to the fleet; read each module after an external snapshot |
+> | Python | [`fleet.gc_latch(group, tick, settle_ms)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) / [`dev.read_period_snapshot(skip_latch=True)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/04_hardware.md#period-sync--synchronizing-the-periods) | broadcast snapshot frame to the fleet; read each module after an external snapshot |
+> | ESPHome | [`fleet_gc_enable:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#fleet_gc_enable-v13-new) / [`group_id:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#group_id-v13-new) | YAML options for General Call opt-in and group id |
 
 ## Choosing the period length
 

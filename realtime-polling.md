@@ -94,6 +94,15 @@ void loop() {
 }
 ```
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::setDrdyPin(pin)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-setdrdypinint-pin-noexcept) / [`RbAmp::waitDataReady(timeout_ms, ev)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-waitdatareadyuint32_t-timeout_ms-rbampdrdyevent-ev--nullptr-noexcept) | attach the DRDY line; wait for a new snapshot |
+> | ESP-IDF | [`rbamp_set_drdy_gpio()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#data-ready-drdy) / [`rbamp_wait_data_ready()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#data-ready-drdy) | attach the DRDY GPIO; wait for a new snapshot |
+> | Python | — | not exposed — the library does not use the pin; handle it in your own code |
+> | ESPHome | [`drdy_pin:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#drdy_pin) | optional DRDY input in YAML; the component only logs it |
+
 ## The sign of P and flow direction
 
 In the RT registers, the sign of active power is the **primary indicator of current direction**:
@@ -176,6 +185,15 @@ All values are float32 little-endian (4 bytes). READ supports auto-increment —
 | `0xCE` | DATA_VALID | u8 | bit0 = valid result available since boot |
 | `0xCA` | V03_PERIOD_MS | u32 LE | Duration of the current snapshot period so far (ms, diagnostic — see ch. 04) |
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::readAll(RbAmpSnapshot&)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-readallrbampsnapshot-out-noexcept) / [`RbAmp::readPower(ch)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#float-readpoweruint8_t-ch--0-noexcept) | read the whole RT block, or one value at a time |
+> | ESP-IDF | [`rbamp_read_all()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#one-shot-read-of-the-whole-rt-block) / [`rbamp_read_power()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#per-channel-reads) | read the whole RT block, or one value at a time |
+> | Python | [`dev.read_all()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#one-shot-read-of-the-entire-rt-block) / [`dev.read_power(ch)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#methods-fully-equivalent-to-the-property-form) | read the whole RT block, or one value at a time |
+> | ESPHome | [`voltage`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#voltage) / [`power`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#power--power_1--power_6) | YAML sensors for the RT values |
+
 ## Polling — single module
 
 ### Simplest 1 Hz polling loop
@@ -214,6 +232,15 @@ void loop() {
 This yields ~5 samples per second — every other window on current firmware (the module refreshes
 every ~100 ms). Poll every 100 ms to catch each window; the 200 ms interval also works on images
 before v1.2.
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::readAll(RbAmpSnapshot&)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-readallrbampsnapshot-out-noexcept) / [`RbAmp::readAllReady(timeout_ms, out, ev)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-readallreadyuint32_t-timeout_ms-rbampsnapshot-out-rbampdrdyevent-ev--nullptr-noexcept) | read the RT block; or wait for a new snapshot, then read it |
+> | ESP-IDF | [`rbamp_read_all()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#one-shot-read-of-the-whole-rt-block) / [`rbamp_read_all_ready()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#data-ready-drdy) | read the RT block; or wait for a new snapshot, then read it |
+> | Python | [`dev.read_all()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#one-shot-read-of-the-entire-rt-block) | read the whole RT block in one call |
+> | ESPHome | [`update_interval:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#3-data-flow-and-timing) | the component reads the RT block in one burst on each update |
 
 ## Multi-channel current (UI2 / UI3 / UI5 / UI7)
 
@@ -288,6 +315,15 @@ P2 = mean(u(t) · i2(t))
 ```
 
 This assumes all CT clamps are on conductors of the **same phase**.
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::channels()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#uint8_t-channels-const-noexcept) / [`RbAmp::readCurrent(ch)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#float-readcurrentuint8_t-ch--0-noexcept) | get the channel count; read a channel by index |
+> | ESP-IDF | [`rbamp_channels()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#handle-state-getters) / [`rbamp_read_channel()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#channel-access-channels-3-and-above) | get the channel count; read all RT fields of a channel (incl. 3 and up) |
+> | Python | [`dev.channels`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#properties--handle-state) / [`dev.current[ch]`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#properties) | channel count after begin(); read a channel by index |
+> | ESPHome | [`current_N:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#21-single-fields) | declare one sensor slot per current channel |
 
 ## Multi-module polling — three strategies
 
@@ -402,6 +438,15 @@ void loop() {
 - **1–3 modules**, low latency required → DRDY per module
 - **3–10 modules**, GPIO budget matters → wired-OR DRDY
 - **Any number**, latency does not matter → simple polling
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmpFleet::scan(match_product, added)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#discovery--scan) / [`RbAmpFleet::pollAll(snaps, status, capacity, n_ok)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#polling--pollall) | discover the modules; read all of them in one pass |
+> | ESP-IDF | [`rbamp_fleet_scan()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#discovery--rbamp_fleet_scan) / [`rbamp_fleet_poll_all()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#polling--rbamp_fleet_poll_all) | discover the modules; read all of them in one pass |
+> | Python | [`fleet.scan(match_product=True)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#discovery--scan) / [`fleet.poll_all()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#polling--poll_all) | discover the modules; read all of them in one pass |
+> | ESPHome | [`rbamp:` (list)](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#1-component-block--rbamp) | one `rbamp:` block per module, each with its own `id` and `address` |
 
 ## I-only variants (no voltage sensor)
 

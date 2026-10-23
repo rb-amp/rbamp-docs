@@ -106,6 +106,15 @@ Authoritative SKU byte:
 
 Any other value → the device is not identified as rbAmp.
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::readVariant()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#rbampvariant-readvariant-noexcept) | read the hardware variant (SKU) |
+> | ESP-IDF | [`rbamp_read_variant()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_variant) | read the hardware variant (SKU) |
+> | Python | [`dev.read_variant()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_variant---int) | read the hardware variant (SKU) |
+> | ESPHome | [`get_variant_str()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) | read the hardware variant (SKU) |
+
 ### 3.2 `CAPABILITY` (regs `0x57/0x58`, u16 LE, read-only)
 
 Feature-detection bitmap. This is the canonical way to detect supported features — **without** numeric version comparison.
@@ -160,6 +169,15 @@ cap_hi = read_u8(0x58)             # high byte holds bits 8..15
 has_voltage = bool(cap_hi & 0x01)  # bit 8 of the u16 = bit 0 of byte 0x58
 ```
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::readCapability(out)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-readcapabilityuint16_t-out-noexcept--basic-only) / [`RbAmp::hasVoltageHw()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-hasvoltagehw-const-noexcept) | read the 16-bit feature map; check for a voltage channel |
+> | ESP-IDF | [`rbamp_read_capability()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_capability) / [`rbamp_has_voltage()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_has_voltage) | read the 16-bit feature map; check for a voltage channel |
+> | Python | [`dev.read_capability()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_capability---int) / [`dev.has_voltage()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devhas_voltage---bool) | read the 16-bit feature map; check for a voltage channel |
+> | ESPHome | [`get_capability_hex()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) | read the capability bitmap |
+
 ### 3.3 Variant profile table — invariant
 
 | SKU | HW_VARIANT (0x55) | N_I | voltage-HW | CAPABILITY bit 8 (voltage-HW) |
@@ -190,6 +208,15 @@ Product family discriminator:
 
 The master **MUST** read `PRODUCT_ID` before interpreting any family-specific register.
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::readProductId()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#uint8_t-readproductid-noexcept) | read the family id byte |
+> | ESP-IDF | [`rbamp_read_product_id()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_product_id) | read the family id byte |
+> | Python | [`dev.read_product_id()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_product_id---int) | read the family id byte |
+> | ESPHome | — | not exposed |
+
 ### 3.6 Canonical detection algorithm
 
 ```python
@@ -205,6 +232,15 @@ if 1 <= hw <= 8:
     return {sku: SKU[hw], N_I: N_I_TABLE[hw], has_voltage: has_voltage}
 return UNKNOWN_DEVICE
 ```
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::begin()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-begin-noexcept) / [`RbAmp::readVariant()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#rbampvariant-readvariant-noexcept) | probe the module and detect its line; read the variant |
+> | ESP-IDF | [`rbamp_begin()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_begin) / [`rbamp_read_variant()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_variant) | probe the module and detect its line; read the variant |
+> | Python | [`dev.begin()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devbegin) / [`dev.read_variant()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_variant---int) | probe the module and detect its line; read the variant |
+> | ESPHome | [`rbamp: address:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#address) / [`get_variant_str()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) | module address set in YAML; the variant as text |
 
 ---
 
@@ -241,6 +277,15 @@ The following ranges are reserved for internal/factory use and are **not describ
 | `0x05` | `CT_MODEL` | 1 | u8 | rw | user_config | SCT-013 SKU code (v1.3 pure staging — see §6.2) |
 | `0x07` | `V03_PERIOD_VALID` | 1 | u8 | r | ram | Set by `CMD_LATCH_PERIOD`: 1 = fresh, 0 = empty/stale. **NOT cleared-on-read**. See §6.3.3 (witness) + §7.5 (failed-snapshot preservation) |
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::waitReady(timeout_ms)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-waitreadyuint32_t-timeout_ms--1000-noexcept) / [`RbAmp::readLastError()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#uint8_t-readlasterror-noexcept) | wait for the ready flag; read the device error code |
+> | ESP-IDF | [`rbamp_wait_ready()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_wait_ready) / [`rbamp_read_last_error()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_last_error) | wait for the ready flag; read the device error code |
+> | Python | [`dev.wait_ready(timeout_ms=1000)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devwait_readytimeout_ms1000---none) / [`dev.read_last_error()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_last_error---int) | wait for the ready flag (raises on timeout); read the device error code |
+> | ESPHome | [`update()` ready check](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#3-data-flow-and-timing) / [`get_last_error_str()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) | reads are published once the module reports ready; the error code as text |
+
 ### 4.2 Diagnostics — raw input means and capture window (0x10..0x1C)
 
 | Addr | Name | Size | Type | Access | Persistence | Notes |
@@ -263,6 +308,15 @@ The following ranges are reserved for internal/factory use and are **not describ
 | `0x24` | `TOPOLOGY` | 1 | u8 | r | rom | Number of current channels (= `V03_N_I`): 1, 2 or 3; 5 = UI5, 7 = UI7 |
 | `0x25` | `SENSOR_CLASS` | 1 | u8 | rw | user_config | `0 = UNSET`, `1 = SCT_013`, `2 = WIRED_CT` (CT clamp series, models 1..13: 1..5 legacy, 11 and 13 reserved → `ERR_PARAM`; factory-paired on CT- SKUs), `3 = BUILTIN_CT` (per-unit factory cal, model code unused). A class change resets `CT_MODEL = 0`. **Not a variant discriminator** (see §3.4) |
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::setSensorClass(cls)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-setsensorclassrbampsensorclass-cls-noexcept) / [`RbAmp::readSensorClass(out)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-readsensorclassuint8_t-out-noexcept) | set the sensor class; read it back |
+> | ESP-IDF | [`rbamp_set_sensor_class()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_set_sensor_class) / [`rbamp_read_sensor_class()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_sensor_class) | set the sensor class; read it back |
+> | Python | [`dev.set_sensor_class(cls)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devset_sensor_classcls---none) / [`dev.read_sensor_class()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_sensor_class---int) | set the sensor class; read it back |
+> | ESPHome | [`sensor_class:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#sensor_class) | YAML option that pins the sensor class |
+
 ### 4.4 Fleet config (0x27..0x2F)
 
 | Addr | Name | Size | Type | Access | Persistence | Notes |
@@ -275,6 +329,15 @@ The following ranges are reserved for internal/factory use and are **not describ
 | `0x2C` | `THRESH_I_HI` | 2 | u16 LE | rw | ram | Current threshold → `EVENT_FLAGS.THRESH_I`. Units: 0.01 A. `0xFFFF` = disabled |
 | `0x2E` | `THRESH_P_HI` | 2 | u16 LE | rw | ram | Power threshold → `EVENT_FLAGS.THRESH_P`. Units: W. `0xFFFF` = disabled |
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::enableGc(enable)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-enablegcbool-enable-noexcept--bool-readfleetconfiguint8_t-out-noexcept) / [`RbAmp::setEventThresholds(i_amps, p_watts)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-seteventthresholdsfloat-i_amps-float-p_watts-noexcept) | enable General Call on a module; set the current and power thresholds |
+> | ESP-IDF | [`rbamp_enable_gc()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_enable_gc--rbamp_read_fleet_config) / [`rbamp_set_event_thresholds()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#events-and-the-alarm-line) | enable General Call on a module; set the current and power thresholds |
+> | Python | [`dev.enable_gc(enable=True)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devenable_gcenable-bool--true---none) / [`dev.read_event_flags()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_event_flags---int--devclear_event_flagsmask-int---none) | enable General Call on a module; read the event flags (no device-threshold setter) |
+> | ESPHome | [`fleet_gc_enable:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#fleet_gc_enable-v13-new) / [`group_id:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#group_id-v13-new) | YAML options for General Call opt-in and group id |
+
 ### 4.5 Address (0x30..0x31)
 
 | Addr | Name | Size | Type | Access | Persistence | Notes |
@@ -283,6 +346,15 @@ The following ranges are reserved for internal/factory use and are **not describ
 | `0x31` | `ADDR_COMMIT_MAGIC` | 1 | u8 | w | ram | Write `0xA5` to arm `CMD_COMMIT_ADDR`. Consumed (cleared) on the commit attempt. Reads return `0x00` |
 
 See §6.1 for the sequence.
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::prepareAddressChange(new_addr)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-prepareaddresschangeuint8_t-new_addr-noexcept) / [`RbAmp::readActiveAddress(out)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-readactiveaddressuint8_t-out-noexcept) | stage and arm the new address; read the active address |
+> | ESP-IDF | [`rbamp_prepare_address_change()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_prepare_address_change--rbamp_commit_address_change) / [`rbamp_read_active_address()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_active_address) | stage and arm the new address; read the active address |
+> | Python | [`dev.prepare_address_change(new_addr)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devprepare_address_changenew_addr---none) / [`dev.commit_address_change()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devcommit_address_change---none) | stage and arm the new address, then commit it |
+> | ESPHome | [`new_address:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#new_address) | one-time address change at boot; remove the option afterwards |
 
 ### 4.6 Health / diagnostics (0x46..0x4F)
 
@@ -294,6 +366,15 @@ See §6.1 for the sequence.
 | `0x4D` | `I2C_REINIT_COUNT` | 1 | u8 | r | ram | I²C peripheral BUSY-recovery reinit count, saturating |
 | `0x4E` | `ZC_OFFSET` | 2 | u16 LE | r | ram | µs from the last GC-snapshot STOP edge to the next **voltage** zero-cross — used for U/I phase compensation in power computation. Firmware-gated to `0xFFFF` on I-only variants (no voltage front-end → no voltage ZC). This is **not** the mains-frequency ZC source — `AC_FREQ (0x20)` is derived from a dedicated mains-ZC pin and is available on all variants. |
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | — | BASIC health registers not exposed (STD line only) |
+> | ESP-IDF | [`rbamp_read_uptime_s()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_uptime_s) | read the module uptime in seconds |
+> | Python | — | BASIC health registers not exposed (STD line only) |
+> | ESPHome | — | no uptime or health entity |
+
 ### 4.7 CT model verify mirrors (0x51..0x53)
 
 Read-only mirrors of the **applied** CT model preset per channel. The write wire protocol is unchanged (see §6.2) — this is purely a read-back for verification.
@@ -303,6 +384,15 @@ Read-only mirrors of the **applied** CT model preset per channel. The write wire
 | `0x51` | `CT_MODEL_CH0` | 1 | u8 | r | user_config | Applied CT model preset on ch0 (verify mirror) |
 | `0x52` | `CT_MODEL_CH1` | 1 | u8 | r | user_config | Applied CT model preset on ch1 |
 | `0x53` | `CT_MODEL_CH2` | 1 | u8 | r | user_config | Applied CT model preset on ch2 |
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::readCTModelCh(channel, out)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-readctmodelchuint8_t-channel-uint8_t-out-noexcept) | read the CT model actually applied on a channel |
+> | ESP-IDF | [`rbamp_read_ct_model_ch()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_ct_model_ch) | read the CT model actually applied on a channel |
+> | Python | [`dev.read_ct_model_ch(ch)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_ct_model_chch-int---int) | read the CT model actually applied on a channel |
+> | ESPHome | [boot log `ct_model[0]: matches`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/05_quickstart.md#step-5--what-to-expect-in-the-boot-log) | log lines confirming the sensor class and model were applied |
 
 ### 4.8 Identity (0x54..0x6F)
 
@@ -315,6 +405,15 @@ Read-only mirrors of the **applied** CT model preset per channel. The write wire
 | `0x59` | `GC_TICK` | 2 | u16 LE | r | ram | Master tick from the last accepted GC frame; `0xFFFF` = never received |
 | `0x5C` | `UID` | 12 | bytes | r | rom | 96-bit chip UID. One burst-read. |
 | `0x68` | `LABEL` | 8 | bytes | rw | user_config | User location label (ASCII, zero-padded). Empty = unset. **Write byte-at-a-time** (see §5.1) |
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::readProductId()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#uint8_t-readproductid-noexcept) / [`RbAmp::readUid(uid)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-readuiduint8_t-uid12-noexcept) | read the family id; read the 96-bit UID |
+> | ESP-IDF | [`rbamp_read_product_id()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_product_id) / [`rbamp_read_uid()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_uid) | read the family id; read the 96-bit UID |
+> | Python | [`dev.read_product_id()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_product_id---int) / [`dev.read_uid()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_uid---bytes) | read the family id; read the 96-bit UID |
+> | ESPHome | [`get_uid_hex()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) / [`get_variant_str()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) | the UID as hex; the variant as text |
 
 ### 4.9 Digest window (0x70..0x85)
 
@@ -332,6 +431,15 @@ Read-only mirrors of the **applied** CT model preset per channel. The write wire
 | `0x70` | `DIGEST` | 22 | bytes | r | ram | Layout: `[STATUS_MIRROR u8][SEQ u8]` + mask-enabled fields. The maximum payload (UI3 full mask) is 19 B + 2 B header = 21 B used; 1 B tail unused (reads `0x00`). SEQ increments per RT commit, wrapping 255→0. **Atomic via read-freeze** (see §5.4). |
 
 **Layout is dynamic per `DIGEST_CONFIG`** — each enabled bit appends its fields in a fixed order: `I_RMS[N]` → `U_RMS` → `P[N]` → `PF[N]`. Disabled bits leave **no** padding — fields slide forward. The master must parse with the same mask it wrote into `DIGEST_CONFIG`. A burst-read of 22 bytes is safe (the tail is `0x00` whenever the total payload is < 22 bytes). The single-byte tail is always `0x00` (reserved).
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | — | digest window not exposed |
+> | ESP-IDF | [`rbamp_set_digest_fields()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#basic-digest) / [`rbamp_read_digest()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#basic-digest) | choose the digest fields; read them in one transaction (BASIC) |
+> | Python | — | digest window not exposed |
+> | ESPHome | — | digest window not exposed |
 
 ### 4.10 V03 real-time block (0x86..0xBD)
 
@@ -355,6 +463,15 @@ Read-only mirrors of the **applied** CT model preset per channel. The write wire
 | `0xB6` | `V03_PF1` | 4 | float32 LE | r | ram | – | |
 | `0xBA` | `V03_PF2` | 4 | float32 LE | r | ram | – | |
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::readAll(snapshot)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-readallrbampsnapshot-out-noexcept) / [`RbAmp::channels()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#uint8_t-channels-const-noexcept) | read the whole real-time block; number of current channels |
+> | ESP-IDF | [`rbamp_read_all()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#one-shot-read-of-the-whole-rt-block) / [`rbamp_channels()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#handle-state-getters) | read the whole real-time block; number of current channels |
+> | Python | [`dev.read_all()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#one-shot-read-of-the-entire-rt-block) / [`dev.channels`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#properties--handle-state) | read the whole real-time block; number of current channels |
+> | ESPHome | [`voltage`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#voltage) / [`power`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#power--power_1--power_6) | YAML sensors for the real-time values |
+
 ### 4.11 V03 period block (0xBE..0xCF)
 
 A period snapshot taken on `CMD_LATCH_PERIOD`. **Ragged layout** (historical legacy from v1.2, frozen at v1.3): `avg_p` for ch1/ch2 lives here, while `avg_p` for ch0 sits in §4.12 at address `0xDC` (the legacy energy primitive was not relocated, to avoid an API break for existing integrators). Logically these three values belong to the same group.
@@ -367,6 +484,15 @@ A period snapshot taken on `CMD_LATCH_PERIOD`. **Ragged layout** (historical leg
 | `0xCA` | `V03_PERIOD_MS` | 4 | u32 LE | r | ram | ms | Current period duration |
 | `0xCE` | `V03_STATUS` | 1 | u8 | r | ram | – | bit 0 = valid (RT commit outcome). **NOT cleared-on-read**. The master polls `STATUS (0x00)` for ready-wait. *Alias `DATA_VALID` is sometimes used for this register in tutorial chapters — same address, same semantics.* |
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::readPeriodAvgPower(ch)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#float-readperiodavgpoweruint8_t-ch--0-noexcept) / [`RbAmp::readPeriodSnapshot()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-readperiodsnapshotrbampperiodsnapshot-out-uint16_t-settle_ms--50-bool-skip_latch--false-noexcept) | read the period average power; take and read a whole period snapshot |
+> | ESP-IDF | [`rbamp_read_period_avg_power()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_period_avg_power) / [`rbamp_read_period_snapshot()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_period_snapshot) | read the period average power; take and read a whole period snapshot |
+> | Python | [`dev.read_period_avg_power(ch)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_period_avg_powerch0---float) / [`dev.read_period_snapshot()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_period_snapshotsettle_ms50-skip_latchfalse---rbampperiodsnapshot) | read the period average power; take and read a whole period snapshot |
+> | ESPHome | [`update_interval:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#update_interval) / [`latch_interval:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#latch_interval) | YAML options for the period and snapshot cadence |
+
 ### 4.12 V03 Q + period ch0 (0xD0..0xE3, production build)
 
 | Addr | Name | Size | Type | Access | Persistence | Units | Notes |
@@ -377,11 +503,29 @@ A period snapshot taken on `CMD_LATCH_PERIOD`. **Ragged layout** (historical leg
 | `0xDC` | `V03_PERIOD_AVG_P` | 4 | float32 LE | r | ram | W | **PRODUCTION energy primitive**: snapshot avg P ch0, ≥ 0 (BASIC unidirectional clamp). Logically grouped with `V03_PERIOD_AVG_P_CH1/CH2` (§4.11); the legacy layout is preserved for compatibility |
 | `0xE0` | `V03_PERIOD_MAX_P` | 4 | float32 LE | r | ram | W | Snapshot max P ch0 this period |
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::readPeriodAvgPower(ch)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#float-readperiodavgpoweruint8_t-ch--0-noexcept) / [`RbAmp::readPeriodMaxPower()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#float-readperiodmaxpower-noexcept) | read the period average and maximum power |
+> | ESP-IDF | [`rbamp_read_period_avg_power()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_period_avg_power) / [`rbamp_read_period_max_power()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_period_max_power) | read the period average and maximum power |
+> | Python | [`dev.read_period_avg_power(ch)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_period_avg_powerch0---float) / [`dev.read_period_max_power()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_period_max_power---float) | read the period average and maximum power |
+> | ESPHome | [`reactive_power`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#reactive_power--reactive_power_1--reactive_power_2) / [`update_interval:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#update_interval) | reactive power sensor; each update closes the period and reads the averages |
+
 ### 4.13 Diagnostic chip-side dt (0xEC)
 
 | Addr | Name | Size | Type | Access | Persistence | Units | Notes |
 |---|---|---|---|---|---|---|---|
 | `0xEC` | `V03_PERIOD_LATCH_MS` | 4 | u32 LE | r | ram | ms | Chip-side dt between the two most recent snapshots. **Module diagnostic timer** — it may read short under load; use the master clock for energy. See §7.4 |
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::readPeriodLatchMs()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#uint32_t-readperiodlatchms-noexcept) | read the module-side period length (diagnostic only) |
+> | ESP-IDF | [`rbamp_read_period_latch_ms()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_period_latch_ms) | read the module-side period length (diagnostic only) |
+> | Python | [`dev.read_period_latch_ms()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_period_latch_ms---int) | read the module-side period length (diagnostic only) |
+> | ESPHome | — | not exposed |
 
 ### 4.14 Channel access window (`0x32` + `0x3C..0x3F`)
 
@@ -457,6 +601,15 @@ For per-channel CT model configuration on any channel (0..N-1), use window field
 #### Recommendation for new integrations
 
 The window covers channels **0..6** — you can use it as a **single unified path** for all channels instead of branching between flat registers (ch0..ch2) and window (ch3..ch6). For fleets that mix junior (UI1/UI2/UI3) and senior (UI5/UI7) SKUs this eliminates a code split. Latency is one extra small write per reading (compared to a straight burst-read of the flat block).
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::readCurrent(ch)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#float-readcurrentuint8_t-ch--0-noexcept) / [`RbAmp::channels()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#uint8_t-channels-const-noexcept) | read any channel by index; number of channels |
+> | ESP-IDF | [`rbamp_read_channel()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#channel-access-channels-3-and-above) / [`rbamp_read_all_channels()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#channel-access-channels-3-and-above) | read one channel by index, channels 3 and up included; read every channel |
+> | Python | [`dev.current[ch]`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#properties) / [`dev.channels`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#properties--handle-state) | index over the valid channels; number of channels |
+> | ESPHome | [`current_N:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#21-single-fields) | per-channel sensor slots for up to seven current channels |
 
 ---
 
@@ -568,6 +721,15 @@ A `write rejection` asserts `EVENT_FLAGS.bit3` **asynchronously**, within one me
 
 `DEV_ERR_CLONE (0xF9)` is **reserved** — current firmware never raises it. The code is kept for forward compatibility.
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::readLastError()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#uint8_t-readlasterror-noexcept) / [`RbAmp::hasError(out)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-haserrorbool-out-noexcept) | read the last-write error code; read the durable error flag |
+> | ESP-IDF | [`rbamp_read_last_error()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_last_error) / [`rbamp_has_error()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_has_error) | read the last-write error code; read the durable error flag |
+> | Python | [`dev.read_last_error()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_last_error---int) / [`dev.has_error()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devhas_error---bool) | read the last-write error code; read the durable error flag |
+> | ESPHome | [`get_last_error_str()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) / [`get_event_flags()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) | the error code as text; the event flags |
+
 ### 5.4 Atomicity / read-freeze semantics
 
 #### 5.4.1 Read-freeze present (atomic — NOT torn)
@@ -604,6 +766,15 @@ else:
 
 The master code **must not** interpret `I_RMS = 0.0` as an error or missing data.
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::readAll(snapshot)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-readallrbampsnapshot-out-noexcept) | read the whole real-time block in one call |
+> | ESP-IDF | [`rbamp_read_all()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#one-shot-read-of-the-whole-rt-block) | read the whole real-time block in one call |
+> | Python | [`dev.read_all()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#one-shot-read-of-the-entire-rt-block) | read the whole real-time block in one call |
+> | ESPHome | [burst read of the instantaneous block](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#3-data-flow-and-timing) | the component reads the instantaneous block in one burst per update |
+
 ---
 
 ## 6 · Protocol sequences
@@ -636,6 +807,15 @@ After POR (power-on reset) or hard reset the module passes through the following
 5. configure (SENSOR_CLASS, CT_MODEL, FLEET_CONFIG, etc.)
 6. poll STATUS (0x00) until bit0 = 1 (READY) — usually immediate after step 5
 ```
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::begin()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-begin-noexcept) / [`RbAmp::waitReady(timeout_ms)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-waitreadyuint32_t-timeout_ms--1000-noexcept) | probe the module, then wait for the ready flag |
+> | ESP-IDF | [`rbamp_begin()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_begin) / [`rbamp_wait_ready()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_wait_ready) | probe the module, then wait for the ready flag |
+> | Python | [`dev.begin()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devbegin) / [`dev.wait_ready(timeout_ms=1000)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devwait_readytimeout_ms1000---none) | probe the module, then wait for the ready flag |
+> | ESPHome | [`rbamp: address:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#address) | module address set in YAML; the component probes the module at setup |
 
 ### 6.1 Address change — two-phase commit (production-OK)
 
@@ -670,6 +850,15 @@ After POR (power-on reset) or hard reset the module passes through the following
 - Candidate out of range (< 0x08 or > 0x77) → `ERR_PARAM`.
 - 5 s timeout without commit → magic clears; the `prepare` step must be repeated.
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::prepareAddressChange(new_addr)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-prepareaddresschangeuint8_t-new_addr-noexcept) / [`RbAmp::commitAddressChange()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-commitaddresschange-noexcept) | stage and arm the new address, then commit it |
+> | ESP-IDF | [`rbamp_prepare_address_change()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_prepare_address_change--rbamp_commit_address_change) / [`rbamp_commit_address_change()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_prepare_address_change--rbamp_commit_address_change) | stage and arm the new address, then commit it |
+> | Python | [`dev.prepare_address_change(new_addr)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devprepare_address_changenew_addr---none) / [`dev.commit_address_change()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devcommit_address_change---none) | stage and arm the new address, then commit it |
+> | ESPHome | [`new_address:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#new_address) | one-time address change at boot; remove the option afterwards |
+
 ### 6.2 CT model binding — pure staging + per-channel CMD
 
 > On images before fw 1.4.20 (`CAPABILITY` bit 12 clear) the applied per-model scaling reverts to
@@ -696,6 +885,15 @@ After POR (power-on reset) or hard reset the module passes through the following
 **Failure modes** (validation of (class, model) happens at the `CMD_SET_CT_MODEL_CHn` bind step, not at the pure-staging write to 0x05):
 - `SENSOR_CLASS = 0` (UNSET) when `CMD_SET_CT_MODEL_CHn` is issued → `REG_ERROR = ERR_PARAM`.
 - `CT_MODEL` outside 1..7 (SCT-013-005/-010/-030/-050/-100/-020/-060) at `CMD_SET` → `ERR_PARAM`.
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::setSensorClass(cls)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-setsensorclassrbampsensorclass-cls-noexcept) / [`RbAmp::setCTModel(channel, code)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-setctmodeluint8_t-channel-uint8_t-code-noexcept) | set the sensor class and the per-channel CT model |
+> | ESP-IDF | [`rbamp_set_sensor_class()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_set_sensor_class) / [`rbamp_set_ct_model_ch()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_set_ct_model_ch) | set the sensor class and the per-channel CT model |
+> | Python | [`dev.set_sensor_class(cls)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devset_sensor_classcls---none) / [`dev.set_ct_model_ch(channel, code)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devset_ct_model_chchannel-code---none) | set the sensor class and the per-channel CT model |
+> | ESPHome | [`sensor_class:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#sensor_class) / [`ct_model:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#ct_model) | YAML options for the sensor class and CT model |
 
 ### 6.3 GC broadcast snapshot — opt-in fleet sync
 
@@ -745,6 +943,15 @@ sleep(50 ms)
 foreach module: read period snapshot with skip_latch=true
 ```
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmpFleet::gcLatch(group, tick, settle_ms)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) / [`RbAmpFleet::checkSync()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) | send the General Call snapshot frame; check each module |
+> | ESP-IDF | [`rbamp_fleet_gclatch()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) / [`rbamp_fleet_check_sync()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) | send the General Call snapshot frame; check each module |
+> | Python | [`fleet.gc_latch(group, tick, settle_ms)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) / [`fleet.check_sync(expected_tick)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) | send the General Call snapshot frame; check each module |
+> | ESPHome | [`fleet_gc_enable:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#fleet_gc_enable-v13-new) / [sync-check log](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/05_quickstart.md#synchronization-check) | opt-in General Call snapshot; log line confirming the modules are in sync |
+
 ### 6.4 Period sync — two strategies
 
 #### Strategy 1 — sequential snapshot + shared settle (any firmware)
@@ -773,6 +980,15 @@ Skew = 0 (atomic at bus level). See §6.3.
 - ≥ 8 modules or tight synchronization: Strategy 2.
 - **One method per module**: the addressed `CMD_LATCH_PERIOD` and the GC broadcast snapshot reset the **same single accumulator** — mixing them on one module cuts the running period short. The per-module fallback (§6.3.3) is safe because it fires only on a module the broadcast did not reach.
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::readPeriodSnapshot(..., skip_latch=true)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-readperiodsnapshotrbampperiodsnapshot-out-uint16_t-settle_ms--50-bool-skip_latch--false-noexcept) / [`RbAmpFleet::gcLatch()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) | sequential read after one shared snapshot; General Call snapshot frame |
+> | ESP-IDF | [`rbamp_read_period_snapshot(..., skip_latch=true)`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_period_snapshot) / [`rbamp_fleet_gclatch()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) | sequential read after one shared snapshot; General Call snapshot frame |
+> | Python | [sequential snapshot, `skip_latch=True`](https://github.com/rb-amp/rbamp-python/blob/main/docs/04_hardware.md#period-sync--synchronizing-the-periods) / [`fleet.gc_latch()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) | sequential read after one shared snapshot; General Call snapshot frame |
+> | ESPHome | [`latch_interval:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#latch_interval) / [`fleet_gc_enable:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#fleet_gc_enable-v13-new) | separate snapshot cadence; opt-in General Call snapshot |
+
 ### 6.5 Provisioning — fresh-flash + SAVE
 
 **Freshly flashed module behavior**:
@@ -791,6 +1007,15 @@ This is **NORMAL** for a virgin module and **not fatal**. Do not abort provision
 4. wait ~700 ms (flash write)
 5. verify: REG_ERROR = 0x00, EVENT_FLAGS.bit3 cleared
 ```
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmpFleet::provision()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#provisioning--provision-static) / [`RbAmp::saveUserConfig()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-saveuserconfig-noexcept) | move one virgin module to its address; save the user config |
+> | ESP-IDF | [`rbamp_provision()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#provisioning--rbamp_provision) / [`rbamp_save_user_config()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_save_user_config) | move one virgin module to its address; save the user config |
+> | Python | [fleet provisioning](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#provisioning) / [`dev.save_user_config()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devsave_user_config---none) | provision one virgin module, then add it to the fleet; save the user config |
+> | ESPHome | [Provisioning workflow](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/06_examples.md#2--provisioning-workflow-virgin--fleet) / [`new_address:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#new_address) | step-by-step YAML for a virgin module; one-time address change |
 
 ### 6.7 Error-state recovery — decision tree
 
@@ -843,6 +1068,15 @@ read REG_ERROR (0x02):
 ```
 
 **For persistent errors** — issue `CMD_RESET` and walk through the cold-boot timeline (§6.0). If the error persists after reset and is not 0xFB (fresh-flash) — contact vendor support.
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::readLastError()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#uint8_t-readlasterror-noexcept) / [`RbAmp::clearError()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-clearerror-noexcept) | read the error code; clear it |
+> | ESP-IDF | [`rbamp_read_last_error()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_last_error) / [`rbamp_clear_error()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_clear_error) | read the error code; clear it |
+> | Python | [`dev.read_last_error()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_last_error---int) / [`dev.clear_error()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devclear_error---none) | read the error code; clear it |
+> | ESPHome | [`write_clear_error()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#7-native-api-services-v13-new--recovery-automations) / [`write_reset()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#7-native-api-services-v13-new--recovery-automations) | clear the error; soft reset of the module |
 
 ### 6.6 Commands reference
 
@@ -948,6 +1182,15 @@ images used 0.2 s. To tell which applies without a version table: the ratio
 `V03_PERIOD_LATCH_MS / V03_PERIOD_COMMIT_CNT` comes out close to 100 or close to 200. Use it for
 cross-checks; the master wall-clock stays authoritative for billing.
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::energyWh(ch)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#double-energywhuint8_t-ch--0-const-noexcept) | running Wh total of a channel |
+> | ESP-IDF | [`rbamp_energy_wh()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#energy-accounting-master-side-accumulator) | running Wh total of a channel |
+> | Python | [`dev.energy.wh(ch)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devenergy--rbampenergy-instance) | running Wh total of a channel |
+> | ESPHome | [`energy`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#energy--energy_1--energy_6) | Wh sensor per channel |
+
 ### 7.5 Failed-snapshot period preservation
 
 The firmware **PRESERVES** the period accumulator on an empty snapshot. When `g_period_count == 0` (a snapshot with no readable period):
@@ -963,6 +1206,15 @@ if PERIOD_VALID == 1:
     reset_master_clock
 # else: skip integration (FW will automatically recover on the next success)
 ```
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::readPeriodSnapshot()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-readperiodsnapshotrbampperiodsnapshot-out-uint16_t-settle_ms--50-bool-skip_latch--false-noexcept) / [`RbAmp::isPeriodValid()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-isperiodvalid-noexcept) | take a period snapshot and integrate only when it is valid; check the ready bit |
+> | ESP-IDF | [`rbamp_read_period_snapshot()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_period_snapshot) / [`rbamp_is_period_valid()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_is_period_valid) | take a period snapshot and integrate only when it is valid; check the ready bit |
+> | Python | [`dev.read_period_snapshot()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_period_snapshotsettle_ms50-skip_latchfalse---rbampperiodsnapshot) / [`RbAmpStaleError`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_period_snapshotsettle_ms50-skip_latchfalse---rbampperiodsnapshot) | take a period snapshot; raised when the snapshot is not ready, the next one covers the full interval |
+> | ESPHome | [Period snapshot not valid](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/10_troubleshooting.md#period-snapshot-not-valid--energy-does-not-grow) | logged when the valid flag is 0; the first snapshot after boot is discarded |
 
 ### 7.6 Clock-drift tolerance
 
@@ -1023,12 +1275,30 @@ S 0xA0 W 0x57 Sr 0xA1 R [CAP_lo][CAP_hi] P  # burst-read 0x57..0x58 (auto-increm
 
 Where `S`=start, `Sr`=repeated start, `P`=stop, `W`=write bit, `R`=read bit, `0xA0`=slave addr 0x50 << 1.
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::readVariant()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#rbampvariant-readvariant-noexcept) / [`RbAmp::readCapability(out)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-readcapabilityuint16_t-out-noexcept--basic-only) | read the hardware variant; read the capability map |
+> | ESP-IDF | [`rbamp_read_variant()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_variant) / [`rbamp_read_capability()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_capability) | read the hardware variant; read the capability map |
+> | Python | [`dev.read_variant()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_variant---int) / [`dev.read_capability()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_capability---int) | read the hardware variant; read the capability map |
+> | ESPHome | [`get_variant_str()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) / [`get_capability_hex()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) | the variant as text; the capability bitmap as hex |
+
 ### 8.2 Burst-read RT block (UI variant, all channels)
 
 ```text
 # Read all of V03 RMS + P + PF (0x86..0xBD) — 56 bytes, atomic via read-freeze
 S 0xA0 W 0x86 Sr 0xA1 R [56 bytes] P
 ```
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::readAll(snapshot)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-readallrbampsnapshot-out-noexcept) | read the whole real-time block in one call |
+> | ESP-IDF | [`rbamp_read_all()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#one-shot-read-of-the-whole-rt-block) | read the whole real-time block in one call |
+> | Python | [`dev.read_all()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#one-shot-read-of-the-entire-rt-block) | read the whole real-time block in one call |
+> | ESPHome | [burst read of the instantaneous block](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#3-data-flow-and-timing) | the component reads the instantaneous block in one burst per update |
 
 ### 8.3 Multi-byte WRITE — `LABEL` byte-at-a-time
 
@@ -1047,6 +1317,15 @@ S 0xA0 W 0x6E 'r' P
 S 0xA0 W 0x6F '1' P
 ```
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::writeLabel(label)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-writelabelconst-char-label-noexcept--basic-only) / [`RbAmp::readLabel(out)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-readlabelchar-out9-noexcept--basic-only) | write the 8-byte label (BASIC only); read it back |
+> | ESP-IDF | [`rbamp_write_label()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_label--rbamp_write_label) / [`rbamp_read_label()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_label--rbamp_write_label) | write the 8-char label; read it back |
+> | Python | [`dev.set_label(label)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devset_labellabel-str---none) / [`dev.read_label()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_label---str) | write the 8-byte label; read it back |
+> | ESPHome | — | label option not documented |
+
 ### 8.4 GC broadcast snapshot + witness fallback
 
 ```text
@@ -1062,6 +1341,15 @@ foreach module in [0x50, 0x51, 0x52]:
         # Fall back to per-device snapshot
         S (module<<1)|W 0x01 0x27 P    # CMD_LATCH_PERIOD
 ```
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmpFleet::gcLatch(group, tick, settle_ms)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) / [`RbAmpFleet::checkSync()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) | send the General Call snapshot frame; check each module |
+> | ESP-IDF | [`rbamp_fleet_gclatch()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) / [`rbamp_fleet_check_sync()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) | send the General Call snapshot frame; check each module |
+> | Python | [`fleet.gc_latch(group, tick, settle_ms)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) / [`fleet.check_sync(expected_tick)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) | send the General Call snapshot frame; check each module |
+> | ESPHome | [`fleet_gc_enable:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#fleet_gc_enable-v13-new) / [sync-check log](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/05_quickstart.md#synchronization-check) | opt-in General Call snapshot; log line confirming the modules are in sync |
 
 ### 8.5 Address change 5-step
 
@@ -1086,6 +1374,15 @@ S 0xA0 W 0x01 0x01 P
 S 0xA2 W 0x55 Sr 0xA3 R [HW_VARIANT] P   # 0xA2 = 0x51 << 1
 ```
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::prepareAddressChange(new_addr)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-prepareaddresschangeuint8_t-new_addr-noexcept) / [`RbAmp::commitAddressChange()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-commitaddresschange-noexcept) | stage and arm the new address, then commit it |
+> | ESP-IDF | [`rbamp_prepare_address_change()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_prepare_address_change--rbamp_commit_address_change) / [`rbamp_commit_address_change()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_prepare_address_change--rbamp_commit_address_change) | stage and arm the new address, then commit it |
+> | Python | [`dev.prepare_address_change(new_addr)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devprepare_address_changenew_addr---none) / [`dev.commit_address_change()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devcommit_address_change---none) | stage and arm the new address, then commit it |
+> | ESPHome | [`new_address:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#new_address) | one-time address change at boot; remove the option afterwards |
+
 ### 8.6 Fresh-flash provisioning
 
 ```text
@@ -1108,6 +1405,15 @@ S 0xA0 W 0x01 0x32 P    # CMD_SAVE_USER_CONFIG
 S 0xA0 W 0x02 Sr 0xA1 R [0x00] P
 ```
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::configureChannels(cls, models, n)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-configurechannelsrbampsensorclass-cls-const-uint8_t-models-uint8_t-n-noexcept-1) / [`RbAmp::saveUserConfig()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-saveuserconfig-noexcept) | set the class and all channel models; save the user config |
+> | ESP-IDF | [`rbamp_configure_channels()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_configure_channels) / [`rbamp_save_user_config()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_save_user_config) | set the class and all channel models; save the user config |
+> | Python | [`dev.configure_channels(cls, models)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devconfigure_channelscls-rbampsensorclass-models-sequenceint-n-int--none---none) / [`dev.save_user_config()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devsave_user_config---none) | set the class and all channel models; save the user config |
+> | ESPHome | [`sensor_class:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#sensor_class) / [`ct_model:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#ct_model) | YAML options for the sensor class and CT model |
+
 ### 8.7 DIGEST round-trip — configure + read
 
 ```text
@@ -1128,6 +1434,15 @@ S 0xA0 W 0x70 Sr 0xA1 R [22 bytes] P
 #   byte[8..21] = unused (0x00)
 ```
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | — | digest window not exposed |
+> | ESP-IDF | [`rbamp_set_digest_fields()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#basic-digest) / [`rbamp_read_digest()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#basic-digest) | choose the digest fields; read them in one transaction (BASIC) |
+> | Python | — | digest window not exposed |
+> | ESPHome | — | digest window not exposed |
+
 ### 8.8 Threshold event flow — write threshold → trigger → W1C clear
 
 ```text
@@ -1147,6 +1462,15 @@ S 0xA0 W 0x2A Sr 0xA1 R [event_flags] P
 # 5. Clear EVENT_FLAGS.bit1 via W1C
 S 0xA0 W 0x2A 0x02 P
 ```
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::setEventThresholds(i_amps, p_watts)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-seteventthresholdsfloat-i_amps-float-p_watts-noexcept) / [`RbAmp::readEventFlags(out)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-readeventflagsuint8_t-out-noexcept--bool-cleareventflagsuint8_t-mask-noexcept) | set the current and power thresholds; read and clear the event flags |
+> | ESP-IDF | [`rbamp_set_event_thresholds()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#events-and-the-alarm-line) / [`rbamp_read_event_flags()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_event_flags--rbamp_clear_event_flags) | set the current and power thresholds; read and clear the event flags |
+> | Python | [`dev.read_event_flags()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_event_flags---int--devclear_event_flagsmask-int---none) | read and clear the event flags (no device-threshold setter) |
+> | ESPHome | [Threshold alarms in YAML](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/06_examples.md#13--ha-automations-on-rbamp-sensors) / [`get_event_flags()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) | threshold automations on sensor values; the event flags |
 
 ### 8.9 Raw-capture diagnostic burst (`CAPTURE_*`)
 
@@ -1181,6 +1505,15 @@ S 0xA0 W 0x51 Sr 0xA1 R [model_ch0][model_ch1][model_ch2] P
 #   byte[1] = 0x03   # SCT-013-030 applied on ch1
 #   byte[2] = 0x00   # unused (UI2 N_I=2)
 ```
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::readCTModelCh(channel, out)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-readctmodelchuint8_t-channel-uint8_t-out-noexcept) | read the CT model actually applied on a channel |
+> | ESP-IDF | [`rbamp_read_ct_model_ch()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_ct_model_ch) | read the CT model actually applied on a channel |
+> | Python | [`dev.read_ct_model_ch(ch)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_ct_model_chch-int---int) | read the CT model actually applied on a channel |
+> | ESPHome | [boot log `ct_model[0]: matches`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/05_quickstart.md#step-5--what-to-expect-in-the-boot-log) | log lines confirming the sensor class and model were applied |
 
 ---
 

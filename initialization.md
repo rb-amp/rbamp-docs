@@ -15,6 +15,15 @@ No start command, no register-level configuration on the chip is required. Facto
 >
 > BASIC CT-series and STANDARD (STD) modules are supplied as a pair with their sensors, preset and calibrated for that sensor at the factory; they start without initialization.
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::begin()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-begin-noexcept) / [`RbAmp::waitReady(timeout_ms)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-waitreadyuint32_t-timeout_ms--1000-noexcept) | probe the module, then wait for the ready flag |
+> | ESP-IDF | [`rbamp_begin()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_begin) / [`rbamp_wait_ready()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_wait_ready) | probe the module, then wait for the ready flag |
+> | Python | [`dev.begin()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devbegin) / [`dev.wait_ready(timeout_ms=1000)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devwait_readytimeout_ms1000---none) | probe the module, then wait for the ready flag |
+> | ESPHome | [`rbamp: address:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#address) | module address set in YAML; the component probes the module at setup |
+
 ## Helper functions (platform-neutral C)
 
 All examples below use three small helpers that are easy to implement on any platform:
@@ -312,6 +321,15 @@ step 2 is then unnecessary for the CT model; RAM-only configuration still needs 
 Modules running on their factory model (including every factory-paired CT- series module) are
 unaffected on every image — the factory scaling is the correct one.
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::setSensorClass(cls)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-setsensorclassrbampsensorclass-cls-noexcept) / [`RbAmp::setCTModel(channel, code)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-setctmodeluint8_t-channel-uint8_t-code-noexcept) | set the sensor class and the per-channel CT model |
+> | ESP-IDF | [`rbamp_set_sensor_class()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_set_sensor_class) / [`rbamp_set_ct_model_ch()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_set_ct_model_ch) | set the sensor class and the per-channel CT model |
+> | Python | [`dev.set_sensor_class(cls)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devset_sensor_classcls---none) / [`dev.set_ct_model_ch(channel, code)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devset_ct_model_chchannel-code---none) | set the sensor class and the per-channel CT model |
+> | ESPHome | [`sensor_class:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#sensor_class) / [`ct_model:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#ct_model) | YAML options for the sensor class and CT model |
+
 ## Single-module workflow
 
 1. Wire the module according to [01_hardware.md](hardware-connection.md).
@@ -381,6 +399,15 @@ Module AC   (0x52): OK
 [AC  ] U=229.9  P=0.0 W
 ...
 ```
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmpFleet::scan(match_product, added)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#discovery--scan) / [`RbAmpFleet::pollAll(snaps, status, capacity, n_ok)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#polling--pollall) | discover the modules on the bus; read all of them in one pass |
+> | ESP-IDF | [`rbamp_fleet_scan()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#discovery--rbamp_fleet_scan) / [`rbamp_fleet_poll_all()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#polling--rbamp_fleet_poll_all) | discover the modules on the bus; read all of them in one pass |
+> | Python | [`fleet.scan(match_product=True)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#discovery--scan) / [`fleet.poll_all()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#polling--poll_all) | discover the modules on the bus; read all of them in one pass |
+> | ESPHome | [`rbamp: (list)`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#1-component-block--rbamp) | one `rbamp:` block per module, each with its own `id` and `address` |
 
 ## Address change
 
@@ -480,6 +507,15 @@ void setup() {
 }
 ```
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::prepareAddressChange(new_addr)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-prepareaddresschangeuint8_t-new_addr-noexcept) / [`RbAmp::commitAddressChange()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-commitaddresschange-noexcept) | stage and arm the new address, then commit it |
+> | ESP-IDF | [`rbamp_prepare_address_change()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_prepare_address_change--rbamp_commit_address_change) / [`rbamp_commit_address_change()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_prepare_address_change--rbamp_commit_address_change) | stage and arm the new address, then commit it |
+> | Python | [`dev.prepare_address_change(new_addr)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devprepare_address_changenew_addr---none) / [`dev.commit_address_change()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devcommit_address_change---none) | stage and arm the new address, then commit it |
+> | ESPHome | [`new_address:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#new_address) | one-time address change at boot; remove the option afterwards |
+
 ## General Call (broadcast at address 0x00)
 
 The I²C protocol reserves address **`0x00` (general call)** — frames sent to this address are received by all slaves on the bus simultaneously. rbAmp can take its period snapshot on a general-call frame, but only **after the feature has been explicitly enabled** on the module.
@@ -549,6 +585,15 @@ After the broadcast, each module updates its snapshot independently. The master 
 
 Application: precise period synchronisation for multi-module energy balancing (e.g. `mains_input − solar_output`), where the snapshot instant must be identical across modules.
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::enableGc(enable)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-enablegcbool-enable-noexcept--bool-readfleetconfiguint8_t-out-noexcept) / [`RbAmpFleet::gcLatch(group, tick, settle_ms)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) | enable General Call on a module; send the snapshot frame to the fleet |
+> | ESP-IDF | [`rbamp_enable_gc()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_enable_gc--rbamp_read_fleet_config) / [`rbamp_fleet_gclatch()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) | enable General Call on a module; send the snapshot frame to the fleet |
+> | Python | [`dev.enable_gc(enable=True)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devenable_gcenable-bool--true---none) / [`fleet.gc_latch(group, tick, settle_ms)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#fleet-gc-sync--synchronous-snapshots-across-the-whole-fleet) | enable General Call on a module; send the snapshot frame to the fleet |
+> | ESPHome | [`fleet_gc_enable:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#fleet_gc_enable-v13-new) / [`group_id:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#group_id-v13-new) | YAML options for General Call opt-in and group id |
+
 ## Recommended multi-module deployment workflow
 
 ```
@@ -585,6 +630,15 @@ by their own reference documentation.
 
 ![How to tell a BASIC module from an STD module at runtime.](images/module-line-detect.png)
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::line()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#rbampline-line-const-noexcept) / [`RbAmp::begin()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-begin-noexcept) | line detected in begin(); read it back from the cached value |
+> | ESP-IDF | [`rbamp_line()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#handle-state-getters) / [`rbamp_begin()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_begin) | line detected in begin; read it back from the cached value |
+> | Python | [`dev.is_std`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#properties--handle-state) / [`dev.begin()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devbegin) | line detected in begin(); read it back from the property |
+> | ESPHome | — | not exposed — detection is automatic, nothing to configure in YAML |
+
 ## Module variant auto-detection
 
 > ⚠ Do **not** detect the variant by probing for a NACK on register reads. The firmware never NACKs on register reads — unmapped addresses return `0x00` (see chapter 11 §5.2). A NACK-based check always reports "channel present".
@@ -616,6 +670,15 @@ VariantInfo detect_variant(uint8_t addr) {
 `HW_VARIANT` 1..3 are UI-variants (`has_voltage == true`); 4..6 are I-only variants (`has_voltage == false`). Mismatch between `HW_VARIANT` family and `CAPABILITY.bit8` indicates a broken / mis-flashed module.
 
 `AC_FREQ (0x20)` works on **all** variants — the zero-cross signal comes from a dedicated mains-ZC pin independent of the voltage front-end.
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::readVariant()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#rbampvariant-readvariant-noexcept) / [`RbAmp::readCapability(out)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-readcapabilityuint16_t-out-noexcept--basic-only) | read the hardware variant and the capability map |
+> | ESP-IDF | [`rbamp_read_variant()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_variant) / [`rbamp_read_capability()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_capability) | read the hardware variant and the capability map |
+> | Python | [`dev.read_variant()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_variant---int) / [`dev.read_capability()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_capability---int) | read the hardware variant and the capability map |
+> | ESPHome | [`get_variant_str()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) / [`get_capability_hex()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) | variant string and capability bitmap from the identity surface |
 
 ## Next
 

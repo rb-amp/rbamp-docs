@@ -204,6 +204,15 @@ The falling edge of DRDY guarantees that **all RT registers are coherent and fre
 - DRDY does **not** fire on period snapshots (period snapshots are updated by the snapshot command which the master triggers — so the master already knows when to read).
 - For slow-polling masters (every 1 s or 60 s), DRDY can be ignored.
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::setDrdyPin(pin)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-setdrdypinint-pin-noexcept) / [`RbAmp::waitDataReady(timeout_ms, ev)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-waitdatareadyuint32_t-timeout_ms-rbampdrdyevent-ev--nullptr-noexcept) | attach the DRDY pin; wait for the next published window |
+> | ESP-IDF | [`rbamp_set_drdy_gpio()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#data-ready-drdy) / [`rbamp_wait_data_ready()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#data-ready-drdy) | attach the DRDY pin; wait for the next published window |
+> | Python | — | the library does not use the DRDY pin |
+> | ESPHome | [`drdy_pin:`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#drdy_pin) | optional DRDY input; only logged, not used as a read trigger |
+
 ## Reference wiring example (ESP32, single module)
 
 ![Reference wiring of a single rbAmp module to an ESP32 master: SDA, SCL, DRDY with a 10K pull-up, power and ground, plus the mains-side clamp and L/N terminals.](images/hw-wiring-esp32.png)

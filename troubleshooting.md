@@ -55,6 +55,15 @@ void i2c_scan() {
 - Reduce speed to 50 kHz / add 100 nF between VCC and GND of the module near the connector
 - For long runs outside an enclosure, add ESD protection (TVS diodes on SDA and SCL)
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::retryExhaustionCount()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#uint32_t-retryexhaustioncount-const-noexcept) / [`RbAmp::sanityRejectCount()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#uint32_t-sanityrejectcount-const-noexcept) | count exhausted bus retries and rejected readings |
+> | ESP-IDF | [`rbamp_retry_exhaustion_count()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_retry_exhaustion_count--rbamp_sanity_reject_count--rbamp_reset_counters) / [`rbamp_sanity_reject_count()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_retry_exhaustion_count--rbamp_sanity_reject_count--rbamp_reset_counters) | count exhausted bus retries and rejected readings |
+> | Python | [`dev.sanity_reject_count`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devsanity_reject_count-int) / [`MachineI2CBackend` counters](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#machinei2cbackend-diagnostic-counters-micropython-only) | count rejected readings; retry counters on the MicroPython backend |
+> | ESPHome | — | no diagnostic counters exposed |
+
 ### 3. `DATA_VALID` (`0xCE`) never becomes 1
 
 **Symptom**: master reads `0xCE` and always gets `0x00`. Other registers may also stay at zero.
@@ -72,6 +81,15 @@ void i2c_scan() {
 - Wait 300 ms after power-on before polling `0xCE`.
 - If `DATA_VALID = 1` is not seen after > 1 s — power-cycle.
 - If the problem persists after a power-cycle — check power (ripple, brown-out).
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::waitReady(timeout_ms)`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-waitreadyuint32_t-timeout_ms--1000-noexcept) / [`RbAmp::readLastError()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#uint8_t-readlasterror-noexcept) | wait for the ready flag; read the device error code |
+> | ESP-IDF | [`rbamp_wait_ready()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_wait_ready) / [`rbamp_read_last_error()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_last_error) | wait for the ready flag; read the device error code |
+> | Python | [`dev.wait_ready(timeout_ms=1000)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devwait_readytimeout_ms1000---none) / [`dev.read_last_error()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_last_error---int) | wait for the ready flag (raises on timeout); read the device error code |
+> | ESPHome | [`update()` ready check](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#3-data-flow-and-timing) / [`get_last_error_str()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) | reads are published once the module reports ready; the error code as text |
 
 ## Calibration and accuracy
 
@@ -157,6 +175,15 @@ if ((rb_read_u8(0x50, 0x07) & 0x01) == 0) {
 }
 ```
 
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::isPeriodValid()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-isperiodvalid-noexcept) / [`RbAmp::readPeriodSnapshot()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-readperiodsnapshotrbampperiodsnapshot-out-uint16_t-settle_ms--50-bool-skip_latch--false-noexcept) | check the snapshot-ready bit; take and validate a period snapshot |
+> | ESP-IDF | [`rbamp_is_period_valid()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_is_period_valid) / [`rbamp_read_period_snapshot()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_period_snapshot) | check the snapshot-ready bit; take and validate a period snapshot |
+> | Python | [`dev.is_period_valid()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devis_period_valid---bool) / [`dev.read_period_snapshot()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_period_snapshotsettle_ms50-skip_latchfalse---rbampperiodsnapshot) | check the snapshot-ready bit; take and validate a period snapshot |
+> | ESPHome | [Period snapshot not valid](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/10_troubleshooting.md#period-snapshot-not-valid--energy-does-not-grow) | what the component logs when the valid flag is 0; the first snapshot after boot is discarded |
+
 ## Multi-module issues
 
 ### 10. Address collision
@@ -174,6 +201,15 @@ if ((rb_read_u8(0x50, 0x07) & 0x01) == 0) {
 3. After readdressing all modules, reconnect them in parallel and verify each address by reading its UID.
 
 See [02_initialization.md → Recommended workflow](initialization.md).
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmpFleet::checkConflict()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#addressing-and-conflict-checking) / [`RbAmpFleet::scan()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#discovery--scan) | check an address for a second device; scan the bus for modules |
+> | ESP-IDF | [`rbamp_fleet_check_conflict()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#addressing-and-conflict-checking) / [`rbamp_fleet_scan()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#discovery--rbamp_fleet_scan) | check an address for a second device; scan the bus for modules |
+> | Python | [`fleet.check_conflict(addr)`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#addressing-and-conflict-checking) / [`fleet.scan()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#discovery--scan) | check an address for a second device; scan the bus for modules |
+> | ESPHome | [`rbamp:` list](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#1-component-block--rbamp) | one block per module, each with its own `id` and `address` |
 
 ### 11. Wired-OR DRDY fires several times in quick succession
 
@@ -218,6 +254,15 @@ printf("Chip drift: %.3f (1.000 = perfect)\n", ratio);
 The legacy 3 % threshold from earlier documentation is **wrong** for v1.3 and will mass-reject healthy modules; do not use it.
 
 This drift only affects the chip-side diagnostic register; **energy accuracy is unaffected** because Wh is computed master-side as `avg_P × master_dt` (see [04_period_metering.md](period-metering.md)). If `master_dt` itself wanders (master MCU clock drifts), apply the master's own NTP/SNTP correction — `PERIOD_LATCH_MS` is not the right reference.
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::readPeriodLatchMs()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#uint32_t-readperiodlatchms-noexcept) | read the module-side period length (diagnostic only) |
+> | ESP-IDF | [`rbamp_read_period_latch_ms()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_period_latch_ms) | read the module-side period length (diagnostic only) |
+> | Python | [`dev.read_period_latch_ms()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_period_latch_ms---int) | read the module-side period length (diagnostic only) |
+> | ESPHome | — | not exposed |
 
 ## Power and flash
 
@@ -303,6 +348,15 @@ If any item is unchecked, expect strange readings. The most common causes of met
 If you need a **durable** error signal that survives later writes, use `EVENT_FLAGS.bit3` (`ERROR_OCCURRED`) — it latches W1C and clears only when the master writes `1` to the bit. See chapter 11 §5.3 for the full error model.
 
 Explicit clear (rarely needed): `CMD_CLEAR_ERROR` (opcode `0x31`) zeros `REG_ERROR`.
+
+> **In the client libraries** — the same task without register access:
+>
+> | Library | Call | What it does |
+> |---|---|---|
+> | Arduino | [`RbAmp::readLastError()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#uint8_t-readlasterror-noexcept) / [`RbAmp::clearError()`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#bool-clearerror-noexcept) | read the last-write error code; clear it |
+> | ESP-IDF | [`rbamp_read_last_error()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_read_last_error) / [`rbamp_clear_error()`](https://github.com/rb-amp/rbamp-esp-idf/blob/main/docs/09_api_reference.md#rbamp_clear_error) | read the last-write error code; clear it |
+> | Python | [`dev.read_last_error()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devread_last_error---int) / [`dev.clear_error()`](https://github.com/rb-amp/rbamp-python/blob/main/docs/09_api_reference.md#devclear_error---none) | read the last-write error code; clear it |
+> | ESPHome | [`get_last_error_str()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#5-identity-surface-v13-new--public-c-methods) / [`write_clear_error()`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#7-native-api-services-v13-new--recovery-automations) | the error code as text; clear the error |
 
 ## When to contact the supplier
 
