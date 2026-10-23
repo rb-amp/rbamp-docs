@@ -410,4 +410,4 @@ Symptoms that warrant service:
 ## Next
 
 - [10_arduino_examples.md](arduino-examples.md) — examples with error handling
-- For smart-home integrations (ESPHome / Home Assistant, Python), see the [client-libraries table in the README](README.md#client-libraries-high-level-api-per-platform)
+- For smart-home integrations (ESPHome / Home Assistant, Python), see the [client-libraries table in the README](README.md#client-libraries)

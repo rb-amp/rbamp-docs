@@ -4,7 +4,7 @@ This chapter is the ESP-IDF equivalent of [10_arduino_examples.md](arduino-examp
 
 > **These examples talk to rbAmp directly through the raw I2C register API.** They are intended for production-grade native ESP32 firmware where direct control, full FreeRTOS task design, OTA-friendly project layout and minimal memory footprint matter.
 >
-> **For a more convenient, structured interface — use the `rbamp` ESP-IDF component** (see the [client-libraries table in the README](README.md#client-libraries-high-level-api-per-platform)). The component wraps the register-level details behind an opaque `rbamp_handle_t` with named functions (`rbamp_read_voltage()`, `rbamp_latch_period()`, `rbamp_read_period_snapshot()`, etc.), a per-channel Wh accumulator, multi-module helpers, full `idf.py menuconfig` integration via Kconfig (`CONFIG_RBAMP_NACK_RETRY_ATTEMPTS`, `CONFIG_RBAMP_DEFAULT_I2C_FREQ_HZ`, etc.), and the SPEC §B.5 retry+sanity discipline mandatory for ESP-IDF v5 `i2c_master`. Most user-facing projects should start from the component and fall back to the raw API only when needed.
+> **For a more convenient, structured interface — use the `rbamp` ESP-IDF component** (see the [client-libraries table in the README](README.md#client-libraries)). The component wraps the register-level details behind an opaque `rbamp_handle_t` with named functions (`rbamp_read_voltage()`, `rbamp_latch_period()`, `rbamp_read_period_snapshot()`, etc.), a per-channel Wh accumulator, multi-module helpers, full `idf.py menuconfig` integration via Kconfig (`CONFIG_RBAMP_NACK_RETRY_ATTEMPTS`, `CONFIG_RBAMP_DEFAULT_I2C_FREQ_HZ`, etc.), and the SPEC §B.5 retry+sanity discipline mandatory for ESP-IDF v5 `i2c_master`. Most user-facing projects should start from the component and fall back to the raw API only when needed.
 
 ## ESP-IDF version
 
@@ -1624,7 +1624,7 @@ void app_main(void) {
 
 After working through these ten examples:
 
-- For the high-level `rbamp` ESP-IDF component, see the [client-libraries table in the README](README.md#client-libraries-high-level-api-per-platform).
+- For the high-level `rbamp` ESP-IDF component, see the [client-libraries table in the README](README.md#client-libraries).
 - For Arduino-style ESP32 development, see [10_arduino_examples.md](arduino-examples.md) (raw).
 - For MicroPython / CircuitPython, see [12_micropython_examples.md](micropython-examples.md) (raw).
 - For ESPHome integration (declarative YAML), see [`tools/esphome-rbamp/docs/en/`](https://rbamp.com/docs/modules-basic-standard-esphome-overview).

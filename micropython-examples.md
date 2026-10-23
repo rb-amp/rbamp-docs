@@ -4,7 +4,7 @@ This chapter is the Python equivalent of [10_arduino_examples.md](arduino-exampl
 
 > **These examples talk to rbAmp directly through the raw I2C register API.** They are intended for native, embedded, or otherwise resource-constrained integrations where direct control is required and every byte on the bus matters.
 >
-> **For a more convenient, structured interface — use the `rbamp` MicroPython library** (see the [client-libraries table in the README](README.md#client-libraries-high-level-api-per-platform)). The library wraps the register-level details behind a high-level `RbAmp` class with named methods (`dev.voltage`, `dev.latch_period()`, `dev.read_period_snapshot()`, etc.), sync and `uasyncio` APIs, an automatic per-channel Wh accumulator, multi-module helpers, and SPEC §B.5 retry+sanity discipline for ESP32 ports via `MachineI2CBackend(retry_attempts=…)`. The same package runs unmodified on CPython — see the README client-libraries table. Most user-facing projects should start from the library and fall back to the raw API only when needed.
+> **For a more convenient, structured interface — use the `rbamp` MicroPython library** (see the [client-libraries table in the README](README.md#client-libraries)). The library wraps the register-level details behind a high-level `RbAmp` class with named methods (`dev.voltage`, `dev.latch_period()`, `dev.read_period_snapshot()`, etc.), sync and `uasyncio` APIs, an automatic per-channel Wh accumulator, multi-module helpers, and SPEC §B.5 retry+sanity discipline for ESP32 ports via `MachineI2CBackend(retry_attempts=…)`. The same package runs unmodified on CPython — see the README client-libraries table. Most user-facing projects should start from the library and fall back to the raw API only when needed.
 
 ## MicroPython vs CircuitPython — quick reference
 
@@ -1067,7 +1067,7 @@ while True:
 
 After working through these ten examples:
 
-- For the high-level `rbamp` package, see the [client-libraries table in the README](README.md#client-libraries-high-level-api-per-platform).
+- For the high-level `rbamp` package, see the [client-libraries table in the README](README.md#client-libraries).
 - For ESPHome integration (declarative YAML), see [`tools/esphome-rbamp/docs/en/`](https://rbamp.com/docs/modules-basic-standard-esphome-overview).
 - For a richer SBC environment (Raspberry Pi, full CPython), see the README client-libraries table.
 - Tasmota Berry driver — deferred (no library shipped).

@@ -4,7 +4,7 @@ This chapter is the Raspberry Pi Pico equivalent of [10_arduino_examples.md](ard
 
 > **These examples talk to rbAmp directly through the raw I2C register API.** They are intended for production embedded firmware on RP2040 / RP2350 — direct control of the dual-core Cortex-M0+ / M33, integration with the LwIP MQTT client, FATFS, and the SDK's sleep / persistence primitives.
 >
-> **No dedicated Pico SDK library is shipped** — the client libraries cover Arduino (incl. arduino-pico for RP2040 via the Wire API), MicroPython (runs on the RP2040 port), ESP-IDF and CPython on Linux SBC; see the [client-libraries table in the README](README.md#client-libraries-high-level-api-per-platform). For native Pico SDK firmware in C, follow the raw-API recipes below. If you want a higher-level API on RP2040, the easiest path is the arduino-pico core + the rbAmp Arduino library.
+> **No dedicated Pico SDK library is shipped** — the client libraries cover Arduino (incl. arduino-pico for RP2040 via the Wire API), MicroPython (runs on the RP2040 port), ESP-IDF and CPython on Linux SBC; see the [client-libraries table in the README](README.md#client-libraries). For native Pico SDK firmware in C, follow the raw-API recipes below. If you want a higher-level API on RP2040, the easiest path is the arduino-pico core + the rbAmp Arduino library.
 
 ## Supported targets and toolchain
 
