@@ -19,7 +19,6 @@ The module runs on 3.3 V logic and is tolerant to 5 V logic on the I2C lines. Al
 | `SDA` | I2C SDA | I2C data |
 | `SCL` | I2C SCL | I2C clock |
 | `DRDY` | Data-ready (optional) | Open-drain LOW pulse ~10 µs every measurement window (~100 ms on current firmware) |
-
 ![Pinout of the rbAmp low-voltage side: VCC, GND, SDA, SCL and the optional DRDY line.](images/hw-pinout.png)
 
 ---
@@ -55,7 +54,6 @@ Solution: each module has **solder-jumper cuts** on the bottom of the PCB next t
 | 7…16 | Cut on all modules, external pair **1.5…2.2 kΩ** near the master; check the total bus capacitance (≤ 400 pF) and lower the bus speed if needed |
 
 > These are **recommended values** calculated from the I²C specification (pull-up sink current ≤ 3 mA at 3.3 V, bus capacitance ≤ 400 pF) — not a measured guarantee for every cable and master. Connect the external pull-ups to **3.3 V** (the logic level of the bus), not to the 5 V `VCC` supply. A 5 V master: see *I2C voltage compatibility* below.
-
 ![Which I2C pull-ups to keep or cut depending on how many rbAmp modules share the bus.](images/i2c-pullup-rules.png)
 
 > **In doubt**: measure the resistance between SDA and VCC with all devices unpowered. For a single-module bus the typical value is ~4.7 kΩ (one built-in pull-up); on a multi-module bus the parallel combination drops to the **1.5–4.7 kΩ** range depending on how many built-in pull-ups remain active. Anything below ~1 kΩ means too many active pull-ups in parallel — cut the built-in pull-ups on all but one module.
@@ -109,8 +107,8 @@ The module contains a galvanic isolation barrier between the mains side (CT clam
 ### Parameters
 
 - **Default address**: `0x50` (7-bit)
-- **Address range**: `0x08..0x77` (reprovisionable via two-phase commit, see [02_initialization.md](initialization.md))
-- **Speed**: **50 kHz recommended** (lowest NACK rate observed across host stacks). 100 kHz workable with application-level retry. 400 kHz is **not** validated for v1.3.
+- **Address range**: `0x08..0x77` (reprovisionable via two-phase commit, see [initialization.md](initialization.md))
+- **Speed** (recommendation; the user chooses): **50 kHz on ESP32 and ESP8266 hosts** (a limitation of the ESP-IDF I²C driver, not of the module); **100 kHz** on other hosts; **do not use 400 kHz**. 100 kHz is also workable on ESP32/ESP8266 with application-level retry.
 - **READ auto-increment**: **YES** — burst-read supported (multi-byte registers, V03 RT block, DIGEST window).
 - **WRITE auto-increment**: **NO** — every byte written needs an explicit register address, including multi-byte fields (write low byte, then high byte separately).
 - **Clock-stretching**: not used by the module as a flow-control mechanism. The master should observe an inter-transaction gap (`tBUF`) of ≥ 100 µs.
@@ -128,11 +126,11 @@ I2C is, by default, a short bus (~15 cm). Many users connect modules with low-qu
 | Twisted pair UTP + I2C buffer (PCA9515 / TCA9617) | up to 3 m | 100 kHz |
 | Differential bus (PCA9615 / LTC4332) | up to 100 m | 100 kHz |
 
-> The lengths above are given for 100 kHz; the **50 kHz recommendation** (§Parameters) applies to
+> The lengths above are given for 100 kHz; the **50 kHz recommendation** for ESP32/ESP8266 masters (§Parameters) applies to
 > every topology — the lower speed only adds margin.
 
 > For runs longer than 0.15 m, **twisted pair is required**: SDA and SCL must be in **separate** pairs, each with its own ground (for example, blue + blue-white for SDA, green + green-white for SCL). Putting SDA and SCL in the same pair causes cross-coupling that distorts edges.
-
+>
 > ⚠ **Inside an electrical cabinet, shield the I2C cable.** Strong magnetic fields near mains conductors, contactors and transformers induce noise in an unshielded cable. Keep the cable as short as possible and away from the mains wiring.
 
 ---
@@ -142,15 +140,13 @@ I2C is, by default, a short bus (~15 cm). Many users connect modules with low-qu
 Multiple rbAmp modules can share a single I2C bus:
 
 ![Several rbAmp modules sharing one I2C bus with a single master.](images/hw-multimodule-bus.png)
-
 - **Module count**: up to ~16 (limited by total bus capacitance — ≤ 400 pF at 100 kHz)
-- **Addresses**: every module has its own 7-bit address. All modules ship from the factory on `0x50`; readdress them one at a time before connecting in parallel (see [02_initialization.md → Address change](initialization.md)).
+- **Addresses**: every module has its own 7-bit address. All modules ship from the factory on `0x50`; readdress them one at a time before connecting in parallel (see [initialization.md → Address change](initialization.md)).
 - **Pull-ups**: follow the module-count table above (recommended values) — with 3+ modules cut the built-in pull-ups on all of them and use one external pair sized for the module count.
 
 ---
 
 ## Sensor connections (mains side)
-
 ![Mains-side connection of an rbAmp module inside a panel: the L and N tap and the current clamp on the L conductor.](images/mains-ct-connection-panel.png)
 
 ### Voltage sensor (UI* variants)
@@ -165,19 +161,19 @@ The PCB exposes `L` (line / phase) and `N` (neutral) terminals. **Polarity matte
 Correct polarity is critical for:
 
 - Accurate BASIC-tier accounting (BASIC counts only `max(P, 0)`; swapped polarity zeros out the energy total).
-- Correct separation of consumption and generation on the STANDARD (STD) tier.
+- Correct separation of consumption and generation on the STD line.
 
 > **Quick check**: with a purely resistive load (electric kettle, heater, incandescent bulb), `P > 0` and `PF ≈ 1.0`. If P is negative while the load is consuming, de-energise the circuit first, then swap L and N on the PCB.
 
 ---
 
-### Current sensor — CT and SCT-013 (for SKUs with external CT)
+### Current sensor — SCT-013 (for SKUs with external CT)
 
-External CT clamps connect to the module through a 3.5 mm jack. The connector is keyed for correct polarity out of the box; no wiring decisions are needed. Characteristics of each SCT-013 rating (floors, class, tolerance, clipping): see the [SCT-013 table](overview.md#current-channel-accuracy-with-sct-013-sensors).
+SCT-013 clamps connect to the module through a 3.5 mm jack. The connector is keyed for correct polarity out of the box; no wiring decisions are needed. Characteristics of each SCT-013 rating (floors, class, tolerance, clipping): see the [SCT-013 table](overview.md#current-channel-accuracy-with-sct-013-sensors).
 
 ![How the current clamp connects to the rbAmp module through the 3.5 mm jack.](images/mains-ct-connection.png)
-
 The clamp body bears an **arrow** indicating the direction of energy flow for the "normal" orientation:
+
 
 ![The current clamp closed around the L wire with its arrow pointing toward the load.](images/hw-ct-install.png)
 
@@ -197,6 +193,18 @@ Each jack on the PCB is labeled with the channel name (`I0`, `I1`, `I2`, …) an
 
 - Arrow in the correct direction + correct L/N polarity → `P > 0` for consumption, `P < 0` for export.
 - Clamp installed reversed (arrow against current direction) → the sign of P is inverted.
+
+---
+
+### Current clamps — CT series
+
+
+Each channel of a CT-series module has its own clamp on a 1 m cable. The cable arrives connected to the module and is marked with the channel number; connect it to the plug-in connector of that channel.
+
+- **Do not move a clamp to another channel and do not connect another clamp**: the calibration belongs to the pair.
+- Fit the clamp on the L conductor with the arrow pointing toward the load (the consumer); the conductor must go through the window and the clamp must close fully.
+- Window size follows the rating: **6 mm** for 1–10 A, **10 mm** for 20–50 A, **16 mm** for 100 A. The conductor with its insulation must fit the window.
+- Power and bus, pull-ups, bus speed, voltage wire and fuse: as for every BASIC module (see the sections above). The voltage input is the same as on the SCT-UI modules: wire AWG26–22, a fuse in the L line up to 0.1 A.
 
 ---
 
@@ -224,7 +232,7 @@ The falling edge of DRDY guarantees that **all RT registers are coherent and fre
 - **EXTI / GPIO interrupt** on the falling edge — wakes the master and triggers a read.
 - Use **any input-capable GPIO** — the pin numbers in the examples (e.g. GPIO 15) are illustrative, not a requirement.
 - Pull-up 10 kΩ to 3.3 V on the master side.
-- Multiple module DRDYs can be combined into a wired-OR (see [03_realtime_polling.md → Multi-module DRDY](realtime-polling.md)).
+- Multiple module DRDYs can be combined into a wired-OR (see [realtime-polling.md → Multi-module DRDY](realtime-polling.md)).
 
 ---
 
@@ -247,16 +255,6 @@ The falling edge of DRDY guarantees that **all RT registers are coherent and fre
 
 ## Reference wiring example (ESP32, single module)
 
-![Reference wiring of a single rbAmp module to an ESP32 master: SDA, SCL, DRDY with a 10K pull-up, power and ground, plus the mains-side clamp and L/N terminals.](images/hw-wiring-esp32.png)
-
-In this configuration:
-
-- External I2C pull-ups are NOT needed (built into the module).
-- 10K on DRDY is the required external pull-up.
-- The SCT-013 jack is fully inserted.
-- The clamp is fully closed on the L wire, arrow pointing toward the load.
-
----
 
 ## Other module variants
 
@@ -266,5 +264,5 @@ Other module variants use the same LV-side pinout (VCC / GND / SDA / SCL / DRDY)
 
 ## Next
 
-- [02_initialization.md](initialization.md) — first connection, smoke test, address change
-- [05_troubleshooting.md → CT clamp & polarity](troubleshooting.md) — what to do if the sign of P is wrong or I_rms is unstable
+- [initialization.md](initialization.md) — first connection, smoke test, address change
+- [troubleshooting.md → CT clamp & polarity](troubleshooting.md) — what to do if the sign of P is wrong or I_rms is unstable

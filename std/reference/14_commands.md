@@ -11,9 +11,8 @@ All device actions go through the **COMMAND register (`0x0060`, u8)** — on Mod
   (bit 1 OVERRUN set; the running command is not clobbered; OVERRUN clears when the next command is
   accepted). On Modbus a COMMAND write while busy → exception 06.
 - **Result:** `ERROR` (0x0002; Modbus readback holding 0x8114) holds the result after completion
-  (0x00 = OK). From image **0x79** `ERROR` reads 0xF0 (Modbus 0xFFFF) for the whole execution and is
-  written together with completion. **On modules before 0x79** `ERROR` may already read 0 while
-  BUSY = 1 — judge completion by BUSY only, never by ERROR alone.
+  (0x00 = OK). `ERROR` reads 0xF0 (Modbus 0xFFFF) for the whole execution and is written together
+  with completion; judge completion by BUSY, and read the result from ERROR after it.
 - **Freshness:** `CMD_SEQ` (0x0067) increments once per *finished* command — poll it to distinguish
   a fresh result from a stale one.
 - **Pattern:** check BUSY = 0 → write parameters, then COMMAND → poll BUSY → 0 (timeouts: ≥1 s for
@@ -40,7 +39,7 @@ All device actions go through the **COMMAND register (`0x0060`, u8)** — on Mod
 | 0xFB | KEY_GATE | keyed command without a valid single-shot key (`LT_KEY`) |
 | 0xFC | VALUE_CRC | update-page CRC mismatch (resend the page) · time epoch below 1 600 000 000 · UID mismatch (ADDR_BY_UID) · no such history record (HIST_READ) |
 | 0xFD | PARAM | invalid parameter / config value — **nothing persisted** |
-| 0xFE | UNKNOWN_CMD | opcode not implemented by this build |
+| 0xFE | UNKNOWN_CMD | opcode not supported |
 
 ---
 
@@ -52,11 +51,10 @@ All device actions go through the **COMMAND register (`0x0060`, u8)** — on Mod
 |---|---|---|
 | 0x01 | SAVE_CAL | persist calibration registers (service/factory; UNLOCK-gated on Modbus; rate-limited → 0xF9) |
 | 0x02 | RESET | warm reset (UNLOCK-gated on Modbus; expect no/truncated Modbus reply) |
-| 0x03 | LATCH_PERIOD | snapshot + reset the bank selected by `LATCH_BANK` — only on builds with snapshot banks (capability bit 8); otherwise 0xFE |
+| 0x03 | LATCH_PERIOD | at the next window boundary, snapshot the bank selected by `LATCH_BANK` (0..7; ≥ 8 → 0xFD) and restart its accumulation — capability bit 8; otherwise 0xFE |
 | 0x04 | SAVE_CONFIG | persist configuration (read-modify-write; calibration untouched; **not** UNLOCK-gated). Values validated against the legal table; illegal → 0xFD, nothing saved; rate-limited → 0xF9; an unchanged save is an OK no-op (still raises CONFIG_CHANGED) |
-| 0x05 | CAL_THD_FLOOR | capture the no-load THD floor (service; builds with THD) — otherwise 0xFE |
 | 0x06 | SET_TIME | apply the epoch written to TIME_SET/RTC_EPOCH; epoch < 1 600 000 000 → 0xFC; STATUS bit 4 sets immediately |
-| 0x07 | ENERGY_RESET | family opcode, UNLOCK-gated. **Current builds do not implement it** (0xFE / exception 03) — their counter reset is the keyed LT_RESET below |
+| 0x07 | ENERGY_RESET | family opcode, UNLOCK-gated. **Not used** (0xFE / exception 03) — the counter reset is the keyed LT_RESET below |
 | 0x0E | IDENTIFY | blink the LEDs for 10 s — locate the module in a cabinet. Not gated |
 | 0x0F | ATTEST | sign the 32-B challenge at 0x0B80 ([register map](13_register_map.md#security-block-0x0b000x0bff)); ~55 ms; 0xF7 = no key |
 | 0x10 | OTA_BEGIN | open an update session ([Firmware update](18_firmware_update.md)) |

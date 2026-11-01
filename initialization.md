@@ -8,12 +8,11 @@ rbAmp starts measuring **immediately** after power-on. The master only needs to:
 4. Read data — ready.
 
 No start command, no register-level configuration on the chip is required. Factory calibration is loaded automatically on boot, so the module emits correct physical-unit values from the first reading.
-
 ![The sequence from power-on to the first valid reading.](images/first-reading-flow.png)
 
-> **Important for BASIC SCT-series modules used with SCT-013 sensors**: after first installation, you must **write the sensor model** to the model register. The module needs the model to apply the correct mV-per-ampere coefficient. The model **code** is stored in flash and survives reboots. On firmware before **1.4.20** (`CAPABILITY` bit 12 clear) the **applied scaling reverts to the factory default after a module restart** — a master that selected a non-factory model must re-commit it after every detected module restart (see [What persists across a restart](#what-persists-across-a-restart) and the restart-detection rule in [04_period_metering.md](period-metering.md)); from fw 1.4.20 the model switch survives a restart. **On images before 1.4.20, energy will be wrong after any module restart unless `CT_MODEL` is re-committed.** The client libraries handle both cases for you. Details are in the section [Setting the sensor class and CT model](#setting-the-sensor-class-and-ct-model) below.
+> **Important for BASIC SCT-series modules used with SCT-013 sensors**: after first installation, you must **write the sensor model** to the model register. The module needs the model to apply the correct mV-per-ampere coefficient. The model **code** is stored in flash and survives reboots. On firmware before **1.4.20** (`CAPABILITY` bit 12 clear) the **applied scaling reverts to the factory default after a module restart** — a master that selected a non-factory model must re-commit it after every detected module restart (see [What persists across a restart](#what-persists-across-a-restart) and the restart-detection rule in [period-metering.md](period-metering.md)); from fw 1.4.20 the model switch survives a restart. **On images before 1.4.20, energy will be wrong after any module restart unless `CT_MODEL` is re-committed.** The client libraries handle both cases for you. Details are in the section [Setting the sensor class and CT model](#setting-the-sensor-class-and-ct-model) below.
 >
-> BASIC CT-series and STANDARD (STD) modules are supplied as a pair with their sensors, preset and calibrated for that sensor at the factory; they start without initialization.
+> BASIC CT-series modules are supplied as a pair with their sensors, preset and calibrated for that sensor at the factory; they start without initialization.
 
 > **In the client libraries** — the same task without register access:
 >
@@ -173,9 +172,44 @@ void main_app(void) {
 
 ---
 
+## CT-series modules: start-up without configuration
+
+A CT-series module is delivered with every current channel **already configured**: sensor class, rating and calibration are written at the factory for the clamp packed with that channel. **No initialization writes are needed — the host only reads.**
+
+> ⚠ **Do not write the sensor class or the sensor model on a CT-series module.**
+> - Writing the model to a channel replaces that channel's factory calibration with a generic preset: the current error becomes −2…+3 % and the low-current threshold is wrong.
+> - Writing the class clears the model of every channel.
+>
+> On firmware 1.4.22 and later a CT-series module refuses class and model writes in normal operation with `ERR_PARAM (0xFE)`; the client libraries refuse them on all firmware.
+
+**The channel and its clamp are a pair.** Each clamp is labelled with the channel it belongs to. Do not move a clamp to another channel and do not connect another clamp to a channel: the calibration applies only to the factory pairing. Ratings are fixed; there is no rating to choose.
+
+### Start-up sequence
+
+1. Connect the clamps (arrow toward the load — see [hardware-connection.md](hardware-connection.md)) and power the module.
+2. Read the class (`SENSOR_CLASS`, `0x25`): `2` = CT clamp series.
+3. Read the applied model of each channel (`0x51..0x53`, one register per channel; UI5/UI7 channels 3 and up: through the channel access window, field `CT_MODEL`) and map it to the rating:
+
+   | Model code | `0x06` | `0x07` | `0x08` | `0x09` | `0x0A` | `0x0B` | `0x0D` |
+   |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+   | Rating | 1 A | 5 A | 10 A | 20 A | 30 A | 50 A | 100 A |
+
+   Use the rating to scale display ranges and to validate readings; the module already reports amperes.
+4. Poll as for any BASIC module — measurement window of 100 ms, data-ready pin or periodic read (see [realtime-polling.md](realtime-polling.md)); period metering as in [period-metering.md](period-metering.md).
+
+Nothing else is required: there is no sensor selection, no gain step and no save command. The module keeps its configuration across restarts.
+
+---
+
+### Replacing a clamp or a module
+
+The calibration belongs to the pair. A clamp or channel cannot be replaced in the field: a module needing a new clamp is returned to the factory service for re-pairing.
+
+---
+
 ## Setting the sensor class and CT model
 
-> Required **only** for BASIC SCT-series modules used with SCT-013 sensors. BASIC CT-series and STANDARD (STD) modules are supplied as a pair with their sensors: everything is preset and calibrated at the factory for that particular sensor, and they start without initialization — skip this section.
+> Required **only** for BASIC SCT-series modules used with SCT-013 sensors. BASIC CT-series modules are supplied as a pair with their sensors: everything is preset and calibrated at the factory for that particular sensor, and they start without initialization — skip this section.
 
 Two registers describe the external sensor: `SENSOR_CLASS` (the family — SCT-013 clip-on clamps, the wired CT clamp series, built-in CT) and `CT_MODEL` (the specific model code within that family). On v1.3 the model is written using a **pure-staging** scheme — writing `CT_MODEL` does **not** apply it on its own; a dedicated per-channel command commits the staged value.
 
@@ -211,27 +245,26 @@ current**; for the stated class the load should not sit below about **1 % of the
 > **Limit semantics**: *rated current* and *RMS clip onset* assume a sine-wave load; the measured clip onset is ≈ 1.16 × the rating. The *peak limit* (≈ 1.64 × rating) is the real ceiling — a distorted load (high crest factor) starts clipping at `peak / crest factor`, below the RMS numbers. Stay at or below the rating for specified accuracy: readings clip at about 115–120 % of the rating.
 
 Per-rating figures (detectable and readable floor, class, sensor tolerance, clipping point) are in the
-[accuracy table in 00_overview.md](overview.md#current-channel-accuracy-with-sct-013-sensors).
+[accuracy table in overview.md](overview.md#current-channel-accuracy-with-sct-013-sensors).
 Changing the sensor model is writing the model code to the module — nothing else is required; there
 is no recalibration step.
 
 #### CT model codes — wired CT clamp series (`SENSOR_CLASS = 2`)
 
-Modules of the **CT- series** ship as a factory-calibrated set with their own clamp: class and model are already set and are part of the calibration. **Do not overwrite them** — the libraries refuse the change on factory-paired modules (a service *force* call exists for re-pairing a replacement sensor; see [Behaviour with the current client libraries](#behaviour-with-the-current-client-libraries)). The table below is reference, not a setup step — the user selects nothing on a CT- series module.
+Modules of the **CT- series** ship as a factory-calibrated set with their own clamp: class and model are already set and are part of the calibration — see [CT-series modules: start-up without configuration](#ct-series-modules-start-up-without-configuration). **Do not write them.** The table below is reference for reading the applied model; the user selects nothing on a CT- series module.
 
-| Code | Clamp | Rated current | RMS clip onset | Peak limit | Status |
-|:---:|---|:---:|:---:|:---:|---|
-| `0x01..0x05` | legacy wired CT presets | — | — | — | factory / legacy use only |
-| `0x06` | CT clamp, 1 A (6 mm window) | 1.0 A | 1.27 A | 1.8 A | available |
-| `0x07` | CT clamp, 5 A (6 mm window) | 4.6 A | 5.75 A | 8.2 A | available |
-| `0x08` | CT clamp, 10 A (6 mm window) | 10.2 A | 12.7 A | 18 A | available |
-| `0x09` | CT clamp, 20 A (10 mm window) | 20.4 A | 25.5 A | 36 A | available |
-| `0x0A` | CT clamp, 30 A (16 mm window) | 30 A | 37.4 A | 52.9 A | available |
-| `0x0B` | CT clamp, 50 A (10 mm window) | 50.9 A | 63.6 A | 90 A | reserved |
-| `0x0C` | CT clamp, 80 A (16 mm window) | 76.8 A | 95.9 A | 135 A | available |
-| `0x0D` | CT clamp, 100 A (16 mm window) | 101.8 A | 127.3 A | 180 A | reserved |
+| Code | Clamp | Rated current | Window |
+|:---:|---|:---:|:---:|
+| `0x01..0x05` | legacy wired CT presets | — | — |
+| `0x06` | CT clamp, 1 A | 1 A | 6 mm |
+| `0x07` | CT clamp, 5 A | 5 A | 6 mm |
+| `0x08` | CT clamp, 10 A | 10 A | 6 mm |
+| `0x09` | CT clamp, 20 A | 20 A | 10 mm |
+| `0x0A` | CT clamp, 30 A | 30 A | 10 mm |
+| `0x0B` | CT clamp, 50 A | 50 A | 10 mm |
+| `0x0D` | CT clamp, 100 A | 100 A | 16 mm |
 
-> The window size follows from the rated current (a thicker conductor needs a bigger window) — it is a consequence of the nominal, not a separate choice.
+> The window size follows from the rated current (6 mm for 1–10 A, 10 mm for 20–50 A, 16 mm for 100 A) and does not affect the calibration.
 
 ---
 
@@ -248,7 +281,7 @@ Modules of the **CT- series** ship as a factory-calibrated set with their own cl
 
 ### Procedure
 
-1. Plug the CT clamp(s) into the module's jack(s) (arrow toward the load — see [01_hardware.md](hardware-connection.md)).
+1. Plug the CT clamp(s) into the module's jack(s) (arrow toward the load — see [hardware-connection.md](hardware-connection.md)).
 2. **Set the sensor class** (once, if not already set):
    ```cpp
    rb_write_u8(0x50, 0x25, 0x01);    // SCT_013
@@ -284,8 +317,8 @@ The rbAmp client libraries (Arduino, ESP-IDF, ESPHome, Python) wrap this procedu
   safe.
 - **Factory-paired modules refuse class and model changes.** On SKUs shipped as a factory-calibrated
   set with their own current sensor (the CT- series), the sensor class and model are part of the
-  calibration and a change is refused. A service *force* call exists for re-pairing a replacement
-  sensor.
+  calibration: the module (firmware 1.4.22 and later) refuses the write with `ERR_PARAM (0xFE)` in normal operation, and the libraries refuse
+  it before sending on all firmware. Re-pairing a replacement sensor is a factory service.
 - **Per-model limits.** For each CT model the libraries expose its nominal current, the RMS level
   where clipping sets in, and the peak limit — use them to validate readings against the connected
   sensor.
@@ -303,7 +336,7 @@ uint8_t ch2 = rb_read_u8(0x50, 0x53);  // applied on ch2
 Serial.printf("Applied: ch0=0x%02X ch1=0x%02X ch2=0x%02X\n", ch0, ch1, ch2);
 ```
 
-> ⚠ **Readback ≠ persistence.** A successful read of `0x51..0x53` confirms the value is **live in RAM**, not that it survived to flash. To verify persistence, issue `CMD_RESET` (or power-cycle) and re-read after the boot window. The full pattern is in [04_period_metering.md](period-metering.md).
+> ⚠ **Readback ≠ persistence.** A successful read of `0x51..0x53` confirms the value is **live in RAM**, not that it survived to flash. To verify persistence, issue `CMD_RESET` (or power-cycle) and re-read after the boot window. The full pattern is in [period-metering.md](period-metering.md).
 
 > When commissioning a new module, perform a sanity check with a known resistive load (for example a 100 W incandescent lamp): `I_rms ≈ 100 W / U_rms ≈ 0.43 A` and `P_real ≈ 100 W`. If readings are off by a large factor, the model code is probably wrong.
 
@@ -329,7 +362,7 @@ scaling until the model is committed again. The rule for any master (and for a h
 fleet, keyed by module UID):
 
 1. Detect the restart — `UPTIME_S` / `RESET_OCCURRED` event bit, see
-   [04_period_metering.md → Detecting a module restart](period-metering.md).
+   [period-metering.md → Detecting a module restart](period-metering.md).
 2. Re-stage and re-commit the CT model on every channel (`CT_MODEL` + `CMD_SET_CT_MODEL_CHn`), then
    re-apply any RAM-only configuration.
 
@@ -352,11 +385,11 @@ unaffected on every image — the factory scaling is the correct one.
 
 ## Single-module workflow
 
-1. Wire the module according to [01_hardware.md](hardware-connection.md).
+1. Wire the module according to [hardware-connection.md](hardware-connection.md).
 2. For BASIC SCT-series modules, write the sensor model once (previous section).
 3. Flash the master with the smoke-test sketch.
 4. Open the serial monitor — you should see U/I/P every second.
-5. If readings look wrong, see [05_troubleshooting.md](troubleshooting.md).
+5. If readings look wrong, see [troubleshooting.md](troubleshooting.md).
 
 ---
 
@@ -444,7 +477,6 @@ Module AC   (0x52): OK
 The factory address `0x50` is stored in the user-config block in flash. v1.3 uses a **two-phase commit** sequence to make accidental address changes hard: a candidate address goes into a RAM staging register first, has to be armed with a magic byte, and only then is committed to flash by an explicit command. A reset re-enumerates the module at the new address.
 
 ![The two-phase address change: stage the candidate address, arm it, commit it, then reset.](images/init-addr-2phase.png)
-
 ### Registers and commands
 
 | Name | Address / opcode | Type | Purpose |
@@ -656,7 +688,7 @@ Step 2: For each module, one at a time:
 
 Step 3: After readdressing all modules, connect them in parallel.
         If more than one module is on the bus, cut the built-in pull-up
-        jumpers on all but one (see 01_hardware.md → I2C pull-ups).
+        jumpers on all but one (see hardware-connection.md → I2C pull-ups).
 
 Step 4: At master boot, run a scan loop and verify every readdressed
         module responds at its expected address.
@@ -732,5 +764,5 @@ VariantInfo detect_variant(uint8_t addr) {
 
 ## Next
 
-- [03_realtime_polling.md](realtime-polling.md) — real-time polling in depth (100 ms window, DRDY)
-- [04_period_metering.md](period-metering.md) — tariff energy accumulation
+- [realtime-polling.md](realtime-polling.md) — real-time polling in depth (100 ms window, DRDY)
+- [period-metering.md](period-metering.md) — tariff energy accumulation

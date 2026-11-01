@@ -1,6 +1,6 @@
 # 16 · Python on Linux SBC Examples
 
-This chapter is the SBC equivalent of [10_arduino_examples.md](arduino-examples.md), [12_micropython_examples.md](micropython-examples.md), [13_esp_idf_examples.md](esp-idf-examples.md), [14_stm32_hal_examples.md](stm32-hal-examples.md) and [15_pico_sdk_examples.md](pico-sdk-examples.md): the same ten scenarios, ported to **CPython on Linux** (Raspberry Pi OS, Armbian, generic ARM/x86 Linux).
+This chapter is the SBC equivalent of [arduino-examples.md](arduino-examples.md), [micropython-examples.md](micropython-examples.md), [esp-idf-examples.md](esp-idf-examples.md), [stm32-hal-examples.md](stm32-hal-examples.md) and [pico-sdk-examples.md](pico-sdk-examples.md): the same ten scenarios, ported to **CPython on Linux** (Raspberry Pi OS, Armbian, generic ARM/x86 Linux).
 
 > **These examples talk to rbAmp directly through the raw I2C register API.** They are intended for service-style integrations on Linux — Home Assistant gateways, OpenWrt routers, Docker / k3s containers, custom IoT bridges — where Python is the right tool for the job and direct register access is fine.
 >
@@ -47,7 +47,7 @@ Or edit the device tree manually:
 sudo nano /boot/firmware/config.txt          # /boot/config.txt on older releases
 # Add or uncomment the next line:
 dtparam=i2c_arm=on
-# For 400 kHz (Fast mode) — see also chapter 01:
+# Bus speed 100 kHz (recommended) — see also chapter 01:
 dtparam=i2c_arm=on,i2c_arm_baudrate=100000
 
 sudo reboot
@@ -655,7 +655,7 @@ with SMBus(I2C_BUS) as bus:
 ## Example 6 — Home energy balance
 
 **Goal**: full balance dashboard. Three modules:
-- rbAmp #1 on the main feed (STANDARD (STD) — bidirectional)
+- rbAmp #1 on the main feed (STD — bidirectional)
 - rbAmp #2 on the solar inverter output (BASIC OK)
 - rbAmp #3 UI3 on three large loads (HP, AC, EV)
 
@@ -676,13 +676,13 @@ from rbamp_io import (
 )
 
 I2C_BUS    = 1
-ADDR_MAINS = 0x50                # bidirectional (STANDARD (STD))
+ADDR_MAINS = 0x50                # bidirectional (STD)
 ADDR_SOLAR = 0x51                # generation only (BASIC ok)
 ADDR_LOADS = 0x52                # UI3
 MQTT_HOST  = "192.168.1.10"
 
 # PERIOD_AVG_P_NEG register for the mains module — see the SKU datasheet
-# of the STANDARD (STD) product. Set to None on BASIC modules.
+# of the STD product. Set to None on BASIC modules.
 from typing import Optional
 REG_PERIOD_AVG_P_NEG_MAINS: Optional[int] = None     # Optional[int] for Py 3.9+ compat
 
@@ -1329,7 +1329,7 @@ with SMBus(I2C_BUS) as bus:
 - `zoneinfo` is the modern Python 3.9+ stdlib timezone API. On Debian / Raspberry Pi OS it pulls IANA data from the system `tzdata` package — DST transitions are handled correctly.
 - For older Pythons (3.8 and earlier) substitute `pytz`: `import pytz; TZ = pytz.timezone("Europe/Berlin")`.
 - ISO 8601 timestamps with offset are produced by `datetime.isoformat(timespec="seconds")` — for example, `2026-05-22T18:30:00+02:00`.
-- For STANDARD (STD) bidirectional metering, call `accumulate()` twice — once for consumption and once for export — and publish both peak/off-peak buckets.
+- For STD bidirectional metering, call `accumulate()` twice — once for consumption and once for export — and publish both peak/off-peak buckets.
 
 ---
 
@@ -1369,11 +1369,11 @@ with SMBus(I2C_BUS) as bus:
 
 After working through these ten examples:
 
-- For Arduino-style ESP32 development, see [10_arduino_examples.md](arduino-examples.md).
-- For MicroPython / CircuitPython on the embedded side, see [12_micropython_examples.md](micropython-examples.md).
-- For native ESP-IDF firmware, see [13_esp_idf_examples.md](esp-idf-examples.md).
-- For STM32 HAL, see [14_stm32_hal_examples.md](stm32-hal-examples.md).
-- For Raspberry Pi Pico SDK (C, not the Linux-on-Pi case), see [15_pico_sdk_examples.md](pico-sdk-examples.md).
+- For Arduino-style ESP32 development, see [arduino-examples.md](arduino-examples.md).
+- For MicroPython / CircuitPython on the embedded side, see [micropython-examples.md](micropython-examples.md).
+- For native ESP-IDF firmware, see [esp-idf-examples.md](esp-idf-examples.md).
+- For STM32 HAL, see [stm32-hal-examples.md](stm32-hal-examples.md).
+- For Raspberry Pi Pico SDK (C, not the Linux-on-Pi case), see [pico-sdk-examples.md](pico-sdk-examples.md).
 - For the high-level `rbamp` Python package, see the [client-libraries table in the README](README.md#client-libraries).
-- For ESPHome integration (declarative YAML), see [`tools/esphome-rbamp/docs/en/`](https://rbamp.com/docs/modules-basic-standard-esphome-overview).
-- The formal I2C register specification used here lives in [11_api_reference.md](api-reference.md).
+- For ESPHome integration (declarative YAML), see [`tools/esphome-rbamp/docs/en/`](https://github.com/rb-amp/rbamp-esphome).
+- The formal I2C register specification used here lives in [api-reference.md](api-reference.md).

@@ -7,15 +7,15 @@ to check. The command-polling rules used everywhere here are defined once in
 ## D1 — Power-up / discovery
 
 1. Read **12 bytes at 0x0000 in one transaction**: `ID` = 'S','T' · `VERSION` ≥ 0x36 ·
-   `CAPABILITIES` (expect bit 9 set; on current builds THD bit 2 = 0, snapshot-bank bit 8 = 0, on-device
+   `CAPABILITIES` (expect bit 9 set; THD bit 2 = 0, snapshot-bank bit 8 = 1 when banks are present, on-device
    energy bit 13 = 1) · `STATUS` · `N_VOLTAGE` / `N_CURRENT` · `VARIANT` (UI1 0x11 = 1/1,
-   0x63 = 3/3, reserved code) · `HW_REV` / `FW_VERSION`.
+   0x63 = 3/3) · `HW_REV` / `FW_VERSION`.
 2. Read `UID` 0x00F4 (12 B) — the device identity for your database; `FW_VER` 0x0114 (u32 image
    version); `BOARD_ID` 0x017C.
 3. Wait for live data: `WIN_SEQ` (0x0016) ≠ 0 and stepping, `STATUS` bit 1 (sensor_ok) = 1 — allow
    ~1 s after a boot ([boot readiness](16_measurement_energy.md#boot-readiness)).
 4. If `STATUS` bit 4 (time_valid) = 0 → set the clock ([D2](#d2--executing-a-command), SET_TIME).
-5. Health gate: cal_ok (image 0x79+) or `CAL_SRC` (0x0872) ∈ {1, 2}; `LTA_STATUS` (0x0870) ≤ 1.
+5. Health gate: cal_ok or `CAL_SRC` (0x0872) ∈ {1, 2}; `LTA_STATUS` (0x0870) ≤ 1.
 6. Re-arm RAM state: `EVENT_MASK` (0x00C1), `THRESH_I/P` (0x00C4/0x00C8); acknowledge the boot by
    clearing RESET_OCCURRED — write 0x20 to `EVENT_FLAGS` (0x00C0).
 
@@ -85,10 +85,10 @@ sets immediately.
 **Read (each interval boundary, your clock):**
 1. One I²C transaction ≤ 128 B over 0x0800–0x0843: Wh counters, mWh counters, `LT_GEN`
    (coherent snapshot). Plus `UPTIME` 0x08A0. Modbus: input 0x6B00/0x6B14 + holding 0x8140.
-   Capability bit 15 (image 0x7A+): the same counters at µWh resolution — grand at 0x08D0
+   Capability bit 15: the same counters at µWh resolution — grand at 0x08D0
    (3×i64; Modbus input 0x6BB0), per channel at 0x0C80 + g·0x10 (Modbus 0x6BC0 + g·8) — same
    snapshot as the mWh fields (imp/exp mWh = floor(µWh/1000); net = imp − exp in the same unit),
-   same delta/generation/restart rules. Image 0x7B+ adds grand reactive µvarh at 0x08E8/0x08F0
+   same delta/generation/restart rules. The module also publishes grand reactive µvarh at 0x08E8/0x08F0
    (Modbus 0x6BAC/0x6BBC, not contiguous): the coherent fine-resolution read is one transaction
    over 0x08D0–0x08F7 (40 B).
 2. Interval energy = delta of the mWh counters (µWh counters where finer resolution is wanted).
@@ -99,8 +99,8 @@ sets immediately.
 **Reset (deliberate, logged):** `LT_KEY` 0x0844 = `0x4C545253` ("LTRS"; Modbus FC16 0x8142–43, high
 word first) → **immediately** `COMMAND` 0x0A (any command consumes the key) →
 [D2](#d2--executing-a-command). `ERROR` 0xFB = key wrong/missing · 0xFA = store FAULT. No Modbus
-UNLOCK needed — the key is the gate. (The family opcode 0x07 ENERGY_RESET is not implemented on
-current builds: 0xFE / exception 03.)
+UNLOCK needed — the key is the gate. (The family opcode 0x07 ENERGY_RESET is not used:
+0xFE / exception 03.)
 
 **Adopt (board swap / migration):** stage 4×i64 into `LT_ADOPT` 0x0848 (Modbus 0x8144–0x8153) in the
 order import Wh · export Wh · reactive import varh · reactive export varh → `LT_KEY` = `0x4C544150`
@@ -119,7 +119,7 @@ event log with before/after values.
    event) / `HIST_OLDEST` / `HIST_NEWEST` to map timestamps to indices.
 5. Read the record at 0x0C20 (`HIST_RECSZ` bytes, one transaction; Modbus holding 0x8180+ byte
    pairs). Layouts: [Measurement & energy](16_measurement_energy.md#history-records).
-6. Iterate `HIST_BACK` = 0 … COUNT−1 for a back-fill; diff rules per the record FLAGS.
+6. Iterate `HIST_BACK` = 0 … COUNT−1 to read the records; diff rules per the record FLAGS.
 
 ---
 

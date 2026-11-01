@@ -5,7 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## 2026-11-01
+
+### Added
+- **STD user documentation** (`std/`): family overview, STD-UI1 and STD-U3I3 pages with measured characteristics for the 60 A and 100 A kits, hardware and wiring, getting started over I²C and Modbus RTU, real-time polling, energy and periods (counters, hourly history, snapshot banks), troubleshooting, examples.
+- **STD technical reference**: hardware interface chapter (`std/reference/20_hardware.md`).
+- **BASIC CT series** (CT-UI1 / UI2 / UI3 / UI5 / UI7, factory-paired CT clamps) in the overview and hardware pages.
+
+### Changed
+- README: one index for both lines (BASIC and STD), raw-register examples and client libraries.
+- Diagrams replace the remaining ASCII drawings in the BASIC pages.
+- Wording: tariff-accounting and metering terms unified across the BASIC pages.
+
+## 2026-10-23
 
 ### Added
 - **STD technical reference** (`std/reference/`): register map, transports, commands, measurement and energy model, firmware update, diagnostics and host integration for the STANDARD (STD) module line.

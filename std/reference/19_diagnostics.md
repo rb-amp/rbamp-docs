@@ -7,7 +7,7 @@ if not — why".
 
 | Bit | Name | Meaning |
 |---|---|---|
-| 0 | CAL_OK | every channel calibrated. Image 0x7A+: set from a marker stored with the calibration when it is saved — a unit calibrated under older firmware keeps the 0x79 rule until its calibration is saved once more. Image 0x79: non-default gains and the stored calibration matches this firmware. Before 0x79 judge by `CAL_SRC` instead |
+| 0 | CAL_OK | every channel calibrated. set from a marker stored with the calibration when it is saved; see also `CAL_SRC` |
 | 1 | SENSOR_OK | measurement path alive (measurement frames arriving) |
 | 2 | MAINS_OK | mains present: channel-0 voltage above ~50 V (not a frequency check; FREQ reads 0 out of band) |
 | 3 | LOCKED | reserved (production lock) |
@@ -35,7 +35,7 @@ if not — why".
 | FRAME_CNT (0x0020) | strictly increasing | frozen = acquisition stopped (SENSOR_OK will drop) |
 | LOST_FRAMES (0x012E) | flat (small constant steps during firmware updates are normal and energy-compensated) | growing in normal operation = acquisition problem |
 | RING_DROP (0x0106) | 0 | sample loss under load — report it |
-| WIN_NSAMP / WIN_PERIOD (0x0110/0x0112) | stable; WIN_NSAMP ≈ 5 mains periods per window at 50 Hz / 6 at 60 Hz on image 0x7C+ (≈8 up to 0x7B) | unstable = mains lock problems |
+| WIN_NSAMP / WIN_PERIOD (0x0110/0x0112) | stable; WIN_NSAMP ≈ 5 mains periods per window at 50 Hz / 6 at 60 Hz | unstable = mains lock problems |
 | CRC_ERR (0x0024) / FRAME_OK (0x0104) | 0 / 1 | measurement-link errors |
 
 ---
@@ -51,7 +51,7 @@ if not — why".
 | EE_RD_ERR / EE_WR_ERR / EE_RECOVER (0x0874–0x0879) | store I/O error/recovery counters |
 | LTA_AGE_S (0x087A) | seconds since the last successful energy write. A write happens only when the counters changed, so **large values at idle / very low load are normal** (saturates at 65535) — judge store health by LTA_STATUS / LTA_FAIL_CNT, not by age |
 | NVM_REJ_CNT / NVM_REJ_ADDR (0x0898/0x089A) | records rejected as not written by this device |
-| SEC_ROLLBACK (0x0BED) | reserved — rollback-anchor detection not implemented on current firmware (reads 0) |
+| SEC_ROLLBACK (0x0BED) | reserved (reads 0) |
 
 ---
 
@@ -83,7 +83,7 @@ if not — why".
 
 Poll cheap, alert on:
 
-1. `STATUS`: cal_ok (0x79+), sensor_ok, mains_ok set; nvm_fault clear; time_valid set (else re-feed
+1. `STATUS`: cal_ok, sensor_ok, mains_ok set; nvm_fault clear; time_valid set (else re-feed
    time).
 2. `FRAME_CNT` advancing; `RING_DROP` = 0; `LOST_FRAMES` flat.
 3. `BOOT_COUNT` / `UPTIME` — unexpected restarts; after one: re-arm EVENT_MASK/thresholds, re-set

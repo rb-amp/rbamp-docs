@@ -5,7 +5,6 @@ This chapter is a quick reference for common problems and their solutions. Each 
 - **Symptom** — what the user observes
 - **Causes** — why it can happen
 - **What to check / do** — concrete actions
-
 ![Flowchart for narrowing down a problem from the symptom.](images/troubleshoot-flowchart.png)
 
 ## I2C bus
@@ -18,10 +17,10 @@ This chapter is a quick reference for common problems and their solutions. Each 
 
 - ❌ **Module power is missing or unstable** — measure VCC with a multimeter; it must be within 4.5…5.5 V.
 - ❌ **No common ground** — the single most frequent mistake. Master GND and module GND **must** be tied together.
-- ❌ **SDA and SCL swapped** — verify against the wiring diagram in [01_hardware.md](hardware-connection.md).
+- ❌ **SDA and SCL swapped** — verify against the wiring diagram in [hardware-connection.md](hardware-connection.md).
 - ❌ **No pull-ups on the bus** — if the built-in pull-ups have been cut on a module and no external ones are installed, the bus is dead. With everything unpowered, measure SDA↔VCC: it must read 1.5–4.7 kΩ.
 - ❌ **Too many pull-ups in parallel** — built-in pull-ups still active on every module, plus master pull-ups, dropping the equivalent below ~1 kΩ. The master cannot pull the bus to LOW. Cut the built-in pull-ups on all but one module.
-- ❌ **Long cable without twisted pair or buffer** — past ~0.15 m, parallel wires couple capacitively and edges round off. Use UTP cat-5 (up to 1 m) or a PCA9515 buffer (up to 3 m). See [01_hardware.md → Bus length](hardware-connection.md).
+- ❌ **Long cable without twisted pair or buffer** — past ~0.15 m, parallel wires couple capacitively and edges round off. Use UTP cat-5 (up to 1 m) or a PCA9515 buffer (up to 3 m). See [hardware-connection.md → Bus length](hardware-connection.md).
 - ❌ **Wrong slave address** — the module may have been readdressed. Run an I2C scan:
 
 ```cpp
@@ -106,10 +105,10 @@ void i2c_scan() {
 **Causes** (in decreasing order of frequency):
 
 - ❌ **CT clamp not on the wire** — the conductor goes past the clamp instead of through it.
-- ❌ **CT clamp on both L and N at the same time** — fluxes from line and neutral cancel, the sensor reads near zero. See [01_hardware.md → Current sensor](hardware-connection.md). The clamp must be on **one** conductor (line/L).
+- ❌ **CT clamp on both L and N at the same time** — fluxes from line and neutral cancel, the sensor reads near zero. See [hardware-connection.md → Current sensor](hardware-connection.md). The clamp must be on **one** conductor (line/L).
 - ❌ **Clamp not fully closed** — a gap > 0.1 mm between the core halves dramatically increases magnetic reluctance, so the sensor output drops well below normal. Unclip and re-clip until it clicks shut. Dirt or oxide in the gap is a common culprit — wipe the mating surfaces.
 - ❌ **Loose 3.5 mm jack** — remove and reinsert the plug.
-- ❌ **`REG_CT_MODEL` not set** — the module does not know the sensor's sensitivity. See [02_initialization.md → Setting the sensor class and CT model](initialization.md#setting-the-sensor-class-and-ct-model). Register `0x05` must contain the correct model code.
+- ❌ **`REG_CT_MODEL` not set** — the module does not know the sensor's sensitivity. See [initialization.md → Setting the sensor class and CT model](initialization.md#setting-the-sensor-class-and-ct-model). Register `0x05` must contain the correct model code.
 - ❌ **Wrong model code written** — for example, an SCT-013-030 sensor with the SCT-013-010 code → current shown will be **~3× lower** than reality (and conversely, a too-large code reads high). Verify the sensor's case marking against the model code.
 - ❌ **Current below the noise floor** — for very small loads (< ~10 mA on a 30 A clamp) the sensor output is close to the noise floor. The firmware applies quadrature noise subtraction: `I_corrected = √(I_raw² − NF²)`. If `I_raw ≤ NF`, the result is clamped to 0. This is intended behaviour.
 
@@ -134,7 +133,7 @@ void i2c_scan() {
 
 **Causes and solutions**:
 
-- ❌ **L and N swapped on the voltage terminals** — the most common cause. See [01_hardware.md → Voltage sensor](hardware-connection.md). De-energise the circuit first, then swap L and N on the PCB.
+- ❌ **L and N swapped on the voltage terminals** — the most common cause. See [hardware-connection.md → Voltage sensor](hardware-connection.md). De-energise the circuit first, then swap L and N on the PCB.
 - ❌ **CT clamp installed backwards** — the arrow on the clamp must point **in the direction of current** toward the load (panel → load). If it points the other way, unclip and reverse the clamp.
 - ❌ **Physical reversal is impractical** — on BASIC the period accumulator (`PERIOD_AVG_P_W`) clamps
   negative samples to zero, so with inverted polarity **the energy register stays 0 until the
@@ -166,8 +165,7 @@ void i2c_scan() {
 
 - ❌ The load is actually intermittent (cycling thermostat, pulsing element) — `avg_P_W` correctly reports the time average. Cross-check with `PERIOD_MAX_P_W` (`0xE0`) to see the peak inside any measurement window.
 - ❌ If the load is steady and RT `P_real ≈ avg_P_W` does not hold:
-  - On **BASIC tier**: check the RT sign of `P_real`. If `P` is occasionally negative (a solar inverter is feeding back, for example), negative samples are excluded from `PERIOD_AVG_P_W`, dragging the average down. See [04_period_metering.md → BASIC tier](period-metering.md).
-  - On **STANDARD (STD)**: compute `total_avg = avg_P_consume + avg_P_export` (export taken as magnitude) to see the channel's true activity.
+  - On **BASIC tier**: check the RT sign of `P_real`. If `P` is occasionally negative (a solar inverter is feeding back, for example), negative samples are excluded from `PERIOD_AVG_P_W`, dragging the average down. See [period-metering.md → BASIC tier](period-metering.md).
 
 ---
 
@@ -180,7 +178,7 @@ void i2c_scan() {
 - ❌ **Snapshots too close together** — no RT window (~100 ms on current firmware; 200 ms before v1.2) completed between two snapshots. The accumulator is empty, the snapshot is discarded.
 - ❌ **Race with an RT commit** — rare: the master wrote the command at the exact instant the firmware was committing the live accumulator. Possible on very fast masters.
 
-**Solution** — the retry pattern (see [04_period_metering.md → Basic cycle](period-metering.md)):
+**Solution** — the retry pattern (see [period-metering.md → Basic cycle](period-metering.md)):
 
 ```cpp
 if ((rb_read_u8(0x50, 0x07) & 0x01) == 0) {
@@ -218,7 +216,7 @@ if ((rb_read_u8(0x50, 0x07) & 0x01) == 0) {
 2. Reconnect **one at a time** — never readdress with two factory-default modules on the bus; readdress each to a unique address.
 3. After readdressing all modules, reconnect them in parallel and verify each address by reading its UID.
 
-See [02_initialization.md → Recommended workflow](initialization.md).
+See [initialization.md → Recommended workflow](initialization.md).
 
 > **In the client libraries** — the same task without register access:
 >
@@ -240,7 +238,7 @@ See [02_initialization.md → Recommended workflow](initialization.md).
 **This is normal.** Solutions:
 
 - Ignore "double" triggers: after the first trigger, read all modules; suppress further triggers within ~10 ms.
-- Use broadcast snapshot (see [04_period_metering.md → Approach 2](period-metering.md)) for precise synchronisation — but only for period snapshots, not for RT.
+- Use broadcast snapshot (see [period-metering.md → Approach 2](period-metering.md)) for precise synchronisation — but only for period snapshots, not for RT.
 - Move to DRDY-per-module — each module on its own GPIO.
 
 ---
@@ -277,7 +275,7 @@ printf("Chip drift: %.3f (1.000 = perfect)\n", ratio);
 
 The legacy 3 % threshold from earlier documentation is **wrong** for v1.3 and will mass-reject healthy modules; do not use it.
 
-This drift only affects the chip-side diagnostic register; **energy accuracy is unaffected** because Wh is computed master-side as `avg_P × master_dt` (see [04_period_metering.md](period-metering.md)). If `master_dt` itself wanders (master MCU clock drifts), apply the master's own NTP/SNTP correction — `PERIOD_LATCH_MS` is not the right reference.
+This drift only affects the chip-side diagnostic register; **energy accuracy is unaffected** because Wh is computed master-side as `avg_P × master_dt` (see [period-metering.md](period-metering.md)). If `master_dt` itself wanders (master MCU clock drifts), apply the master's own NTP/SNTP correction — `PERIOD_LATCH_MS` is not the right reference.
 
 > **In the client libraries** — the same task without register access:
 >
@@ -354,11 +352,20 @@ Before powering up a module in a production system:
 - [ ] CT clamp fully closed (no gap, no slack — clip until it clicks)
 - [ ] CT cable intact, jack fully seated in the socket
 - [ ] Power VCC within 4.5…5.5 V, clean ground
-- [ ] I2C pull-ups verified (see [01_hardware.md → I2C pull-ups](hardware-connection.md))
+- [ ] I2C pull-ups verified (see [hardware-connection.md → I2C pull-ups](hardware-connection.md))
 - [ ] For BASIC SCT-series modules: `REG_CT_MODEL` written and saved to match the installed sensor
 - [ ] Smoke test with a resistive load completed — all five values (U, I, P, PF, Q) within the expected ranges
 
 If any item is unchecked, expect strange readings. The most common causes of metering errors are sensor installation issues, not firmware or electronics faults.
+
+---
+
+### CT series (factory-paired clamps)
+
+- ❌ **Readings look wrong on one channel** — the clamp is not on its own channel or has been replaced. Reconnect the clamp marked with that channel number; a clamp that belongs to another channel gives a wrong value.
+- ❌ **A write of the sensor class or model returns `ERR_PARAM` (0xFE)** — expected on firmware 1.4.22 and later: a CT-series module refuses these writes. Do not write them (see [start-up without configuration](initialization.md#ct-series-modules-start-up-without-configuration)).
+- ❌ **A clamp or a channel is damaged** — they are not replaceable in the field; contact the factory service.
+- ❌ **Current is negative / energy goes the wrong way** — the clamp is reversed: the arrow must point toward the load.
 
 ---
 
@@ -409,5 +416,5 @@ Symptoms that warrant service:
 
 ## Next
 
-- [10_arduino_examples.md](arduino-examples.md) — examples with error handling
+- [arduino-examples.md](arduino-examples.md) — examples with error handling
 - For smart-home integrations (ESPHome / Home Assistant, Python), see the [client-libraries table in the README](README.md#client-libraries)

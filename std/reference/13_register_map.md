@@ -23,15 +23,15 @@ after SAVE_CONFIG / SAVE_CAL; *RAM* regs reset to defaults at every boot.
 | 0x000A | HW_REV | u8 | r | hardware revision |
 | 0x000B | FW_VERSION | u16 | r | firmware line marker (not the image version) |
 | 0x0010 | FREQ | u16 | r | mains frequency, cHz |
-| 0x0012 | PHASE_SEQ | u8 | r | image 0x7A+: phase sequence from the voltage angles — 0 not available (fewer than 3 voltage inputs, or one below 50 V) · 1 forward L1-L2-L3 · 2 reverse · 3 abnormal (no 120° pattern, e.g. two inputs on one phase) |
+| 0x0012 | PHASE_SEQ | u8 | r | phase sequence from the voltage angles — 0 not available (fewer than 3 voltage inputs, or one below 50 V) · 1 forward L1-L2-L3 · 2 reverse · 3 abnormal (no 120° pattern, e.g. two inputs on one phase) |
 | 0x0014 | WINDOW_MS | u16 | r | measurement window, ms (reads 0 on builds that do not publish it) |
-| 0x0016 | WIN_SEQ | u16 | r | publish counter: +1 per published snapshot — once per measurement window, ~100 ms on image 0x7C+ (every 200 ms up to 0x7B); keeps stepping without mains on a slower fallback tick; steps in the same instant as the DRDY pulse ([DRDY](15_drdy_events.md)) |
+| 0x0016 | WIN_SEQ | u16 | r | publish counter: +1 per published snapshot — once per measurement window, ~100 ms; keeps stepping without a new window on a slower (500 ms) fallback publish; steps in the same instant as the DRDY pulse, except on a fallback publish (no pulse — [DRDY](15_drdy_events.md)) |
 | 0x0020 | FRAME_CNT | u32 | r | measurement frames since boot (liveness) |
 | 0x0024 | CRC_ERR | u32 | r | frame CRC errors (reads 0 on builds that report a per-frame flag instead) |
 | 0x0060 | COMMAND | u8 | w | command opcode ([Commands](14_commands.md)) |
-| 0x0062 | LATCH_BANK | u8 | rw | target bank for LATCH_PERIOD (builds with snapshot banks) |
-| 0x0063 | PERIOD_ARM | u8 | rw | snapshot-bank arm mask (RAM) |
-| 0x0066 | PD_VALID | u8 | r | snapshot-bank valid mask (sticky) |
+| 0x0062 | LATCH_BANK | u8 | rw | target bank 0..7 for LATCH_PERIOD (capability bit 8) |
+| 0x0063 | PERIOD_ARM | u8 | rw | snapshot-bank arm mask: bit b = bank b accumulates; a newly armed bank starts empty (RAM) |
+| 0x0066 | PD_VALID | u8 | r | snapshot-bank valid mask: bit b = bank b holds a snapshot (sticky — not a freshness flag) |
 | 0x0067 | CMD_SEQ | u16 | r | completed-command counter |
 | 0x006A | CMD_STATE | u8 | r | bit0 BUSY · bit1 OVERRUN |
 | 0x0090 | SCRATCH | 16 B | w | master scratch window |
@@ -61,12 +61,12 @@ after SAVE_CONFIG / SAVE_CAL; *RAM* regs reset to defaults at every boot.
 | 0x0079 | CFG_MB_FRAME | u8 | rw | 0 | 0=8N1 · 1=8E1 · 2=8O1 · 3=8N2 |
 | 0x007A | CFG_TX_DELAY | u8 | rw | 0 | RS-485 response hold-off, 0..100 ms |
 | 0x007B | CFG_WORD_ORDER | u8 | rw | 0 | 0=ABCD · 1=word-swapped (native profile only) |
-| 0x007C | CFG_TIME_AUTH | u8 | rw | 0 | 0=master clock · 1=device clock (stored; not applied on current builds) |
-| 0x007D | CFG_ENERGY_PERSIST_S | u16 | rw | auto: 60 without battery clock / 3600 with | energy milestone period, s (stored + persisted; not applied on current builds) |
+| 0x007C | CFG_TIME_AUTH | u8 | rw | 0 | 0=master clock · 1=device clock (stored) |
+| 0x007D | CFG_ENERGY_PERSIST_S | u16 | rw | auto: 60 without battery clock / 3600 with | energy milestone period, s (stored + persisted) |
 | 0x007F | CFG_TZ_OFFSET_MIN | i16 | rw | 0 | timezone offset, min, −720..+840 (stored for future tariffs) |
 | 0x0081 | CFG_VIRTUAL_IDS | u8 | rw | 0 | publish per-channel virtual Modbus unit ids (applied at boot; [Modbus](12_transport_modbus.md#virtual-unit-ids)) |
 | 0x0082 | CFG_LED | u8 | rw | 1 | status LEDs: 1 = on, 0 = off (IDENTIFY still works) |
-| 0x0084 | CFG_START_UA | u16 | rw | 400 | image 0x7B+: starting current for energy, µA — while a channel's current is below it, that channel adds no active or reactive energy to any counter; readings (I/P/Q/S/PF) unaffected. 0 = off; 10 µA steps, max 2540 (out of range → rejected); applies at once, SAVE_CONFIG persists |
+| 0x0084 | CFG_START_UA | u16 | rw | 400 | starting current for energy, µA — while a channel's current is below it, that channel adds no active or reactive energy to any counter; readings (I/P/Q/S/PF) unaffected. 0 = off; 10 µA steps, max 2540 (out of range → rejected); applies at once, SAVE_CONFIG persists |
 
 ---
 
@@ -117,9 +117,9 @@ ADS_ID, RING_DROP, WIN_NSAMP, WIN_PERIOD. Gate on `VARIANT` before interpreting 
 | Off | Name | Type | Unit |
 |---|---|---|---|
 | +0x00 | U_RMS | i32 | mV |
-| +0x04 | U_PEAK | i32 | mV (reads 0 — not computed on current builds) |
+| +0x04 | U_PEAK | i32 | mV (reads 0) |
 | +0x08 | THD_U | u16 | centi-% (THD capability = 0: reads 0 on I²C, sentinel on Modbus native) |
-| +0x0A | ANGLE | i16 | centi-degree (image 0x7A+): fundamental phase angle vs voltage 0, range (−18000, +18000]; voltage 0 reads 0; `0x8000` = no angle (that input, or voltage 0, below 50 V). Forward sequence: v1 ≈ −12000, v2 ≈ +12000 |
+| +0x0A | ANGLE | i16 | centi-degree: fundamental phase angle vs voltage 0, range (−18000, +18000]; voltage 0 reads 0; `0x8000` = no angle (that input, or voltage 0, below 50 V). Forward sequence: v1 ≈ −12000, v2 ≈ +12000 |
 
 ---
 
@@ -132,7 +132,7 @@ ADS_ID, RING_DROP, WIN_NSAMP, WIN_PERIOD. Gate on `VARIANT` before interpreting 
 | +0x08 | Q | i32 | mvar, signed |
 | +0x0C | S | i32 | mVA |
 | +0x10 | PF | i16 | Q10, signed |
-| +0x14 | I_PEAK | i32 | µA (reads 0 — not computed on current builds) |
+| +0x14 | I_PEAK | i32 | µA (reads 0) |
 | +0x18 | E_POS | i64 | per-window import energy, mW·samples |
 | +0x20 | E_NEG | i64 | per-window export energy, mW·samples (≤0) |
 | +0x28 | THD_I | u16 | centi-% (gated: 0 on I²C / sentinel on Modbus native) |
@@ -159,19 +159,34 @@ Over Modbus the totals P/Q/S are i64.
 |---|---|---|---|
 | CAL_V | 0x0400 | 0x08, v=0..7 | U_GAIN i32 (codes→mV, Q16.16) · NF_U u16 · THD_FLOOR_U u16 |
 | CAL_I | 0x0440 | 0x08, c=0..63 | I_GAIN i32 (codes→µA, Q16.16) · NF_I u16 · THD_FLOOR_I u16 |
-| CHMAP_ASSOC | 0x0640 | 1, c=0..63 | reserved — current channel → voltage channel index (reads 0 on current builds) |
-| CHMAP_MODEL | 0x0680 | 1, c=0..63 | reserved — per-channel CT model metadata (reads 0 on current builds) |
+| CHMAP_ASSOC | 0x0640 | 1, c=0..63 | reserved — current channel → voltage channel index (reads 0) |
+| CHMAP_MODEL | 0x0680 | 1, c=0..63 | reserved — per-channel CT model metadata (reads 0) |
 
 ---
 
-### Snapshot banks — base 0x2000, **stride 0x800**, b = 0..7 *(capability-gated: bit 8)*
+### Snapshot banks (0x2000)
 
-Period snapshots armed by `PERIOD_ARM` and taken by command 0x03; banks are read **directly** at
-`0x2000 + b·0x800` (LATCH_BANK selects the command target only, it is not a read multiplexer).
-Fields: P/Q/S (i32, period averages) · E_POS/E_NEG (i64, mW·samples) · NSAMP u32 · WIN_CNT u32 ·
-MAX_P/MAX_I/MAX_U/MIN_U (i32) · per-channel energy sub-block at +0x40 + c·0x10 (E_POS/E_NEG i64).
-**Current firmware reports CAPABILITIES bit 8 = 0 — the block is unmapped (command 0x03 → unknown
-command) and energy accounting uses the cumulative counters below.**
+Base 0x2000, **stride 0x800**, b = 0..7 *(capability bit 8)*.
+
+Period snapshots armed by `PERIOD_ARM` and taken by command 0x03 (`LATCH_BANK` = target bank); banks
+are read **directly** at `0x2000 + b·0x800` (LATCH_BANK selects the command target only, it is not a
+read multiplexer). Only the part below is mapped; the rest of each 0x800 bank reads 0xFF.
+
+| Offset | Name | Type | Unit |
+|---|---|---|---|
+| +0x00 | P | i32 | mW, period average |
+| +0x04 | Q | i32 | mvar, period average |
+| +0x08 | S | i32 | mVA |
+| +0x0C | E_POS | i64 | mW × measurement samples (see below) |
+| +0x14 | E_NEG | i64 | mW × measurement samples (see below) |
+| +0x1C | NSAMP | u32 | samples in the period |
+| +0x20 | WIN_CNT | u32 | measurement windows in the period |
+| +0x24 / +0x28 | MAX_P / MAX_I | i32 | mW / µA |
+| +0x2C / +0x30 | MAX_U / MIN_U | i32 | mV |
+| +0x40 + c·0x10 | CHE(c) | 2 × i64 | per-current-channel signed energy: E_POS at +0, E_NEG at +8 (c < N_CURRENT; other c reads 0xFF) |
+
+E_POS / E_NEG are signed i64 in mW × samples (sampling rate 3 kHz): Wh = value / 10 546 875. The starting-current suppression (`CFG_START_UA`) applies to the energy counters, not to banks. A bank changes only when a snapshot is taken. See [Snapshot banks](16_measurement_energy.md#snapshot-banks-capability-bit-8)
+for arming, snapshots and timing. A command with `LATCH_BANK` ≥ 8 answers `ERROR` 0xFD.
 
 ---
 
@@ -193,10 +208,10 @@ command) and energy accounting uses the cumulative counters below.**
 | 0x08A4 | RTC_EPOCH | u32 | unix epoch (read = live clock) |
 | 0x08A8 | RTC_BCD | 14 B | calendar mirror (reads 0 on modules without a battery clock) |
 | 0x08C0 | TIME_SET | u32 (w) | write epoch, then COMMAND 0x06; epoch < 1 600 000 000 (2020-09-13) → ERROR 0xFC |
-| 0x08D0 | E_ACT_IMP_UWH | i64 | µWh (image 0x7A+, capability bit 15) |
+| 0x08D0 | E_ACT_IMP_UWH | i64 | µWh (capability bit 15) |
 | 0x08D8 | E_ACT_EXP_UWH | i64 | µWh (magnitude ≥ 0) |
 | 0x08E0 | E_ACT_NET_UWH | i64 | µWh; = IMP − EXP (the floor-to-mWh rule applies to IMP/EXP only) |
-| 0x08E8 | E_REA_IMP_UVARH | i64 | µvarh (image 0x7B+; varh = floor(µvarh / 1 000 000)) |
+| 0x08E8 | E_REA_IMP_UVARH | i64 | µvarh (varh = floor(µvarh / 1 000 000)) |
 | 0x08F0 | E_REA_EXP_UVARH | i64 | µvarh (magnitude ≥ 0). Grand only — there is no per-channel reactive energy |
 
 ---
@@ -231,14 +246,14 @@ command) and energy accounting uses the cumulative counters below.**
 
 ### GROUP_ENERGY — base 0x0900 (Wh) and 0x0A80 (mWh), stride 0x10, g = 0..15 / 0..7
 
-Per-group cumulative energy (E_IMP i64 / E_EXP i64). On current firmware the groups are implicit:
+Per-group cumulative energy (E_IMP i64 / E_EXP i64). The groups are implicit:
 **group g = current channel g** (on three-phase members — phase L(g+1)), g < N_CURRENT. Persisted
 every second; **informative** — the grand ENERGY block is the canonical cumulative counter; the per-channel
 counters restart at 0 with `LT_GEN` or on new/foreign storage (`LTG_STATUS` = 3).
 
 ---
 
-### GROUP_ENERGY_UWH — base 0x0C80, stride 0x10, g = 0..7 *(image 0x7A+, capability bit 15)*
+### GROUP_ENERGY_UWH — base 0x0C80, stride 0x10, g = 0..7 *(capability bit 15)*
 
 The same per-group counters at µWh resolution: +0x00 E_IMP (i64 µWh) · +0x08 E_EXP (i64 µWh).
 Published in the same snapshot as the mWh fields (mWh = floor(µWh / 1000)); the same restart and
@@ -248,9 +263,9 @@ generation rules apply ([Measurement & energy](16_measurement_energy.md#cumulati
 
 ### METER_GROUP (group configuration) — base 0x0A00, stride 0x08, g = 0..15 *(reserved)*
 
-**Not implemented on current firmware** (reads 0, not writable): reserved group configuration —
+**Reserved** (reads 0, not writable): group configuration —
 CH_A/CH_B/CH_C (channel indices, 0xFF unused) · V_ASSOC · VIRT_ID · FLAGS (enable, per-channel
-invert). Today's virtual unit ids are derived per channel from `CFG_VIRTUAL_IDS`
+invert). Virtual unit ids are derived per channel from `CFG_VIRTUAL_IDS`
 ([Modbus](12_transport_modbus.md#virtual-unit-ids)).
 
 ---
@@ -259,19 +274,18 @@ invert). Today's virtual unit ids are derived per channel from `CFG_VIRTUAL_IDS`
 
 | Addr | Name | Type | Meaning |
 |---|---|---|---|
-| 0x0B00 | SEC_CERT | 128 B | device certificate (0xFF when absent): magic `CRT1` · version · variant · hw_rev · UID · batch · issue date · device public key · manufacturer key id · signature (covers certificate bytes 0..63) |
+| 0x0B00 | SEC_CERT | 128 B | device certificate (0xFF when absent): version · variant · hw_rev · UID · issue date · device public key · manufacturer key id · signature (covers certificate bytes 0..63) |
 | 0x0B80 | SEC_CHALLENGE_SIG | 64 B rw | write a 32-B challenge → COMMAND 0x0F → read the 64-B signature |
 | 0x0BC0 | SEC_ATT_DATA | 24 B | attested data: firmware version · LT generation · import Wh · export Wh |
 | 0x0BE0 | SEC_CERT_STATE | u8 | 0 none · 1 OK · 2 bad · 3 not checked yet (check runs ~3 s after boot) |
 | 0x0BE1 | SEC_ATT_STATE | u8 | 0 none · 1 done · 2 refused |
 | 0x0BE2 | SEC_ATT_MS | u16 | last attestation duration, ms (~55) |
 | 0x0BE4 / 0x0BE8 | SEC_IMG_KEY_ID / SEC_MFR_KEY_ID | u32 | image / manufacturer key ids |
-| 0x0BEC–0x0BF3 | SEC_ANCHOR_* / SEC_ROLLBACK | — | **reserved — rollback-anchor mechanism not implemented on current firmware** (read 0) |
+| 0x0BEC–0x0BF3 | SEC_ANCHOR_* / SEC_ROLLBACK | — | **reserved** (read 0) |
 | 0x0BF4 | SEC_CERT_MS | u16 | certificate check duration, ms |
 
-Attestation: the device signs a fixed ASCII domain-separation tag (the `ATTEST_MSG_TAG` constant of the register header) `‖ challenge(32) ‖ UID(12) ‖ attested-data(24)` with
-Ed25519; the host verifies the certificate against the manufacturer public key, then the signature
-against the device public key from the certificate.
+Attestation: the module signs a host challenge together with its UID; the host verifies the certificate
+against the manufacturer key, then the signature against the device key from the certificate.
 
 ---
 
@@ -298,14 +312,15 @@ Record layouts (history and event records) are in
 
 | Content | I²C | Modbus |
 |---|---|---|
-| Discovery block | 0x0000-core | input 0x6000–0x601F (0x6019–1C CPU diag · 0x601D–1E LOST_FRAMES · 0x601F WIN_SEQ) · 0x6020 PHASE_SEQ (image 0x7A+) |
-| Voltage channels | 0x0200 + v·0x20 | input 0x6100 + v·0x10: +0 U_RMS (2 regs) · +2 U_PEAK (2) · +4 THD_U · +5 ANGLE (image 0x7A+) |
+| Discovery block | 0x0000-core | input 0x6000–0x601F (0x6019–1C CPU diag · 0x601D–1E LOST_FRAMES · 0x601F WIN_SEQ) · 0x6020 PHASE_SEQ |
+| Voltage channels | 0x0200 + v·0x20 | input 0x6100 + v·0x10: +0 U_RMS (2 regs) · +2 U_PEAK (2) · +4 THD_U · +5 ANGLE |
 | Current channels | 0x1000 + c·0x40 | input 0x6200 + c·0x20: +0 I (2) · +2 P (2) · +4 Q (2) · +6 S (2) · +8 PF · +9 I_PEAK (2) · +0xB THD_I · +0xC PF1 · +0xD Q1 (2). Per-channel E_POS/E_NEG are **not** on Modbus; reserved slots read 0 |
-| Cumulative energy + time | 0x0800 block | input 0x6B00 (Wh) · 0x6B14 (mWh) · 0x6BB0/0x6BB4/0x6BB8 (µWh imp/exp/net, 4 regs each, image 0x7A+) · 0x6BAC / 0x6BBC (µvarh imp / exp, image 0x7B+ — **not contiguous** with the µWh regs) · UPTIME 0x6BA0 · RTC 0x6BA2+ |
+| Cumulative energy + time | 0x0800 block | input 0x6B00 (Wh) · 0x6B14 (mWh) · 0x6BB0/0x6BB4/0x6BB8 (µWh imp/exp/net, 4 regs each) · 0x6BAC / 0x6BBC (µvarh imp / exp — **not contiguous** with the µWh regs) · UPTIME 0x6BA0 · RTC 0x6BA2+ |
+| Snapshot banks | 0x2000 + b·0x800 | input 0x7000 + b·0x100 (also holding 0xB000 + b·0x100, read-only mirror), b = 0..7, read-only: +0x00 P (2) · +0x02 Q (2) · +0x04 S (2) · +0x06 E_POS (4) · +0x0A E_NEG (4) · +0x0E NSAMP (2) · +0x10 WIN_CNT (2) · +0x12 MAX_P (2) · +0x14 MAX_I (2) · +0x16 MAX_U (2) · +0x18 MIN_U (2) · +0x1A..0x1F reserved (0) · CHE(c) at +0x20 + c·8: E_POS (4), E_NEG (4), c < 28 (c ≥ N_CURRENT reads the i64 sentinel). Addresses past 0x77FF (holding: 0xB7FF) → exception 02 |
 | Per-group energy | 0x0900 / 0x0A80 | input 0x6B20 + g·0x10 (+0/+4 Wh · +8/+0xC mWh), g=0..7 |
-| Per-group energy, µWh | 0x0C80 + g·0x10 | input 0x6BC0 + g·8: +0 E_IMP · +4 E_EXP (i64), g=0..7 (image 0x7A+) |
+| Per-group energy, µWh | 0x0C80 + g·0x10 | input 0x6BC0 + g·8: +0 E_IMP · +4 E_EXP (i64), g=0..7 |
 | Totals (P/Q/S as i64) | 0x0300 + k·0x40 | input 0x6C00 + k·0x20: +0 I (2) · +2 P (4) · +6 Q (4) · +0xA S (4) · +0xE PF |
-| Config | 0x0070–0x0085 | holding 0x8000–0x800C (order: unit id · baud · frame · tx-delay · word order · time-auth · persist-s · virtual-ids · class · ct-model · tz-offset · LED · starting current, image 0x7B+). `CFG_I2C_ADDR` has **no** Modbus register |
+| Config | 0x0070–0x0085 | holding 0x8000–0x800C (order: unit id · baud · frame · tx-delay · word order · time-auth · persist-s · virtual-ids · class · ct-model · tz-offset · LED · starting current). `CFG_I2C_ADDR` has **no** Modbus register |
 | Time set | 0x08C0 + cmd 0x06 | holding 0x8100 (hi) / 0x8101 (lo) + COMMAND 0x06 |
 | Command window | 0x0060-block | holding 0x8110 LATCH_BANK · 0x8111 PERIOD_ARM · 0x8112 UNLOCK · 0x8113 COMMAND · 0x8114 ERROR_RB (0xFFFF = busy) · 0x8115 PD_VALID · 0x8116 CMD_STATE · 0x8117 CMD_SEQ |
 | Address by UID | 0x00E0–0x00ED | holding 0x8118–0x811D (UID byte pairs) · 0x811E (new I²C addr hi / unit lo) |

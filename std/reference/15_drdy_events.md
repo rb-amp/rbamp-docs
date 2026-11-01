@@ -6,26 +6,22 @@ family.
 
 ## DRDY line contract
 
-- **Electrical:** open-drain output, idle **released HIGH** (master provides the pull-up).
-  Wired-OR safe: several modules may share one DRDY line.
-- **Pulse:** **~10 µs LOW pulse** on every publish tick — the module publishes a complete snapshot
+- **Electrical:** open-drain output without a pull-up on the module — when DRDY is used, fit a pull-up on the master side (10 kΩ to the master's 3.3 V logic supply is recommended); idle **HIGH**.
+- **Pulse:** **~10 µs LOW pulse** for every **new measurement window** — the module publishes a complete snapshot
   **once per finalized measurement window**: whole mains cycles nearest 100 ms (5 at 50 Hz, 6 at
-  60 Hz), i.e. about **10 pulses a second** (image 0x7C+; images up to 0x7B publish every 200 ms,
-  window = 8 mains cycles). Without mains the module keeps publishing on a slower fixed fallback
-  tick, so the pulse and WIN_SEQ keep stepping. The pulse fires *after* the registers are updated —
+  60 Hz), i.e. about **10 pulses a second**. Without a new window the module still publishes on a slower fixed fallback
+  tick (500 ms) that refreshes status and clock; that fallback publish steps `WIN_SEQ` but
+  gives **no DRDY edge**. The pulse fires *after* the registers are updated —
   a read triggered by the falling edge always sees the fresh snapshot.
-- **`WIN_SEQ` (0x0016, u16)** increments by exactly 1 in the same instant. Pairing rule:
+- **`WIN_SEQ` (0x0016, u16)** increments by exactly 1 in the same instant as the pulse (and also on a fallback publish, which has no pulse). Pairing rule:
   - with the DRDY line: on each serviced edge check WIN_SEQ stepped by 1 — a larger step means
     missed edges;
-  - with several modules on one line: the module whose WIN_SEQ stepped is the one that published;
   - without the line: poll WIN_SEQ; a change means a fresh snapshot.
 - **Alarm mode:** any event bit that is set in both `EVENT_FLAGS` and `EVENT_MASK` holds DRDY
   **solid LOW** until the flag is cleared or unmasked. The alarm asserts at the next publish
   tick and releases immediately on write-1-to-clear or unmask (NVM_FAULT re-asserts every publish
   while the fault persists). A host distinguishes pulse from alarm by level: still LOW after
   ~100 µs = alarm → read EVENT_FLAGS.
-
-Firmware support: from image `0x00010075` (earlier images did not drive the family contract).
 
 ---
 
@@ -37,7 +33,7 @@ every module reset**, so a host re-arms its mask after any reboot it detects.
 
 | Bit | Name | Set when |
 |---|---|---|
-| 0 | PERIOD_READY | a 15-minute history period was finalized |
+| 0 | PERIOD_READY | a 15-minute summary was finalized |
 | 1 | THRESH_I | any current channel exceeded `THRESH_I` |
 | 2 | THRESH_P | \|total active power\| exceeded `THRESH_P` |
 | 3 | ERROR | a command finished with a non-OK result |

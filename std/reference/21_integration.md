@@ -8,19 +8,15 @@ master.
 One client library per platform covers the whole line; channel count and features are discovered at
 run time:
 
-- **Arduino** — STD support: discovery, realtime, config, events/DRDY, OTA, history; the
-  micro-resolution energy, starting-current and phase-angle/sequence features from v1.6.1.
-- **ESP-IDF** — component with STD support from v1.6.0; the image 0x7A/0x7B features from v1.7.0.
-- **ESPHome / Home Assistant** — external component; on-device energy counters, starting current
-  and phase diagnostics from v1.8.0.
-- **Python** — STD support from v1.6.0: one client class, the module line is detected at connect.
-  Validated on standard Linux Python (smbus2); the MicroPython STD path is implemented but not yet
-  hardware-validated.
+- **Arduino** ([rbamp-arduino](https://github.com/rb-amp/rbamp-arduino)) — STD support: discovery, realtime, config, events/DRDY, OTA, history, micro-resolution energy, starting current, phase angle and sequence. On a module with snapshot banks and energy counters use v1.6.2 or later (earlier versions take the period from bank 0 instead of the counters; [energy source and minimum version](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#energy-source-and-minimum-library-version)).
+- **ESP-IDF** ([rbamp-esp-idf](https://github.com/rb-amp/rbamp-esp-idf)) — component with STD support, including micro-resolution energy and starting current. On a module with snapshot banks and energy counters use v1.7.3 or later (earlier versions take the period from bank 0 instead of the counters; [minimum version](https://github.com/rb-amp/rbamp-esp-idf#std-line-minimum-version)).
+- **ESPHome / Home Assistant** ([rbamp-esphome](https://github.com/rb-amp/rbamp-esphome)) — external component: on-device energy counters, starting current and phase diagnostics. Use v1.9.0 or later.
+- **Python** ([rbamp-python](https://github.com/rb-amp/rbamp-python)) — STD support: one client class, the module line is detected at connect. Use v1.6.0 or later. Validated on standard Linux Python (smbus2).
 
 The libraries cover these flows (discovery gating, busy/err polling, prepared-image OTA,
 energy-delta accounting), so prefer them where the platform allows.
 
-The image 0x7A/0x7B features at a glance — every call degrades gracefully on modules that do not
+The micro-resolution energy and starting-current features at a glance — every call degrades gracefully on modules that do not
 publish the feature (no bus traffic, or values derived from the coarse counters):
 
 | Feature | Arduino | ESP-IDF | ESPHome (YAML) | Python |
@@ -52,7 +48,7 @@ ver  = read(0x0003, 1)            # map version, expect >= 0x36
 caps = read_u16(0x0004)
 nv   = read(0x0007, 1); ni = read(0x0008, 1)
 uid  = read(0x00F4, 12)           # device identity for your database
-fwv  = read_u32(0x0114)           # running image version
+fwv  = read_u32(0x0114)           # firmware version: high word . low word (1.126)
 
 # clock (after every module reset: STATUS bit4 == 0)
 write_u32(0x08C0, unix_epoch)     # TIME_SET
@@ -91,7 +87,7 @@ persisted; your integral is neither. Details: [Measurement & energy](16_measurem
 
 ---
 
-### History back-fill after your own outage
+### Reading the hourly records
 
 ```
 write(0x0C00, 1)                  # HIST_PERIOD = hourly
@@ -103,8 +99,8 @@ flags = read(0x0C02, 1)           # bit0 = record valid
 rec   = read(0x0C20, 80)          # one transaction; see record layout
 ```
 
-Records carry the **absolute** life-time Wh at period end plus per-phase period energy, so gaps
-close exactly ([layout](16_measurement_energy.md#history-records)).
+Records carry the **absolute** life-time Wh at period end plus per-phase period energy
+([layout](16_measurement_energy.md#history-records)).
 
 ---
 
@@ -117,9 +113,9 @@ reads cover liveness, storage health, restarts and counter generations.
 
 ## Modbus integration without libraries
 
-- **As a ready meter (SDM profile):** point the inverter/SCADA at the module as an Eastron-type
-  SDM630 meter — per-phase V/I/P, total P, frequency, import/export kWh at the canonical float32
-  input addresses. No register programming needed.
+- **SDM profile:** point the inverter/SCADA at the module for the points it publishes — per-phase V/I/P,
+  total P, frequency, import/export kWh at the float32 input addresses of the SDM630 layout
+  ([list](12_transport_modbus.md#sdm630-compatible-profile-input-0x0000)). Other points of that meter read 0.
 - **Native profile:** FC04 reads at 0x6000 (discovery), 0x6100/0x6200 (channels), 0x6B00+ (energy),
   0x6C00 (totals); configuration and commands over FC16 at 0x8000+ with UNLOCK for state-changing
   commands. Full map: [register map](13_register_map.md#modbus-mapping); rules:

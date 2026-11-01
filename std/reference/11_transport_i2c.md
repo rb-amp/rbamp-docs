@@ -1,11 +1,11 @@
 # I²C transport
 
 The module is an I²C slave with the full register map. Default 7-bit address **0x50**
-(configurable, see below). 100 kHz is safe on any build; the slave supports clock stretching and a
+(configurable, see below). recommended bus speed is 50 kHz on ESP32 and ESP8266 hosts and 100 kHz on other hosts (not 400 kHz); the slave supports clock stretching and a
 master must tolerate it (see limits below).
 
-The active transport (I²C or Modbus RTU) is selected once per boot by the transport jumper — see
-Hardware interface. On the I²C setting the Modbus register space is not served,
+The active transport (I²C or Modbus RTU) is selected once per boot by the interface mode switch — see
+[Hardware interface](20_hardware.md). On the I²C setting the Modbus register space is not served,
 and vice versa; commands and data are the same on both.
 
 ## Register pointer

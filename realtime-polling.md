@@ -8,10 +8,9 @@ Real-time polling — reading instantaneous values of U, I, P, PF, flow directio
 - Mains-quality monitoring (frequency, PF)
 - **Determining current direction — consumption or export** (from the sign of P_real)
 
-For **tariff energy accumulation** (Wh over a period) use the period-snapshot mechanism described in [04_period_metering.md](period-metering.md).
+For **tariff energy accumulation** (Wh over a period) use the period-snapshot mechanism described in [period-metering.md](period-metering.md).
 
 ## The measurement window (100 ms)
-
 ![Timing of the measurement window and when its result set is published.](images/rt-window-timing.png)
 
 ### What it is
@@ -44,7 +43,6 @@ At 50 Hz mains a 100 ms window covers exactly 5 cycles; at 60 Hz, 6 cycles (10 a
 ### When the next window starts
 
 Immediately after the previous one is published. There is no gap between windows — measurement is continuous.
-
 ![How the measurement window relates to the period snapshot.](images/window-period-latch-concept.png)
 
 ---
@@ -144,7 +142,7 @@ void classify_flow(float p) {
 }
 ```
 
-> On BASIC-tier firmware the tariff accumulator **ignores** export (see [04_period_metering.md](period-metering.md)). The RT registers, however, always carry the real-time sign of P — so even on a BASIC SKU the master can detect export events from RT reads, log them, or build a master-side bidirectional accumulator on top of BASIC firmware.
+> On BASIC-tier firmware the tariff accumulator **ignores** export (see [period-metering.md](period-metering.md)). The RT registers, however, always carry the real-time sign of P — so even on a BASIC SKU the master can detect export events from RT reads, log them, or build a master-side bidirectional accumulator on top of BASIC firmware.
 
 ---
 
@@ -304,7 +302,7 @@ Three rules that avoid silently wrong numbers:
 
 ```cpp
 // UI5 / UI7: read current and power on every channel.
-// rb_read_u8 / rb_read_float_le / rb_write_u8 are the helpers from 02_initialization.md.
+// rb_read_u8 / rb_read_float_le / rb_write_u8 are the helpers from initialization.md.
 
 float rb_read_channel(uint8_t addr, uint8_t field, uint8_t ch) {
   rb_write_u8(addr, 0x32, (field << 4) | ch);   // REG_CHANNEL_SELECT: choose field + channel
@@ -330,7 +328,7 @@ void read_ui7(uint8_t addr) {
 }
 ```
 
-The window also works for channels 0..2, so you can use it for every channel if you prefer a single code path (one extra small write per value). Details and all field codes: [11_api_reference.md → Channel access window](api-reference.md#414-channel-access-window-0x32--0x3c0x3f).
+The window also works for channels 0..2, so you can use it for every channel if you prefer a single code path (one extra small write per value). Details and all field codes: [api-reference.md → Channel access window](api-reference.md#414-channel-access-window-0x32--0x3c0x3f).
 
 ---
 
@@ -360,7 +358,6 @@ This assumes all CT clamps are on conductors of the **same phase**.
 ## Multi-module polling — three strategies
 
 ![The three strategies for polling several modules: round-robin, DRDY per module and wired-OR DRDY.](images/rt-multimodule-strategies.png)
-
 ### Strategy 1 — round-robin polling (simple)
 
 The master reads the modules in turn, e.g. every window (~100 ms) or every second:
@@ -550,5 +547,5 @@ I-only variants are intended for:
 
 ## Next
 
-- [04_period_metering.md](period-metering.md) — atomic period snapshot for tariff accumulation
-- [05_troubleshooting.md](troubleshooting.md) — what to do if values look wrong
+- [period-metering.md](period-metering.md) — atomic period snapshot for tariff accumulation
+- [troubleshooting.md](troubleshooting.md) — what to do if values look wrong

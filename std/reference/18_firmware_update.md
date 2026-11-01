@@ -1,7 +1,7 @@
 # Firmware update (host-side protocol)
 
 Firmware updates run **over the working bus** — I²C or Modbus RTU — with no programmer and no
-removal. The device keeps two firmware banks; the host writes the new image into the inactive bank,
+removal (OTA). The firmware version is shown as `major.minor` of `FW_VER` (0x0114), for example STD firmware 1.126. The device keeps two firmware banks; the host writes the new image into the inactive bank,
 the device verifies and *arms* it, and a separate activation reboots into it. A bad or crashing new
 image **rolls back automatically** to the previous working one.
 

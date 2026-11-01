@@ -112,7 +112,7 @@ E2_Wh = avg_p × (t2 − t1) / 3600
 
 ### The first snapshot is a primer (discard)
 
-The first snapshot after boot captures whatever the accumulator collected from power-on until the master's first call — an undefined-length window unsuitable for billing. **Discard its result**. From the second snapshot onward, data is clean and usable.
+The first snapshot after boot captures whatever the accumulator collected from power-on until the master's first call — an undefined-length window unsuitable for metering. **Discard its result**. From the second snapshot onward, data is clean and usable.
 
 > **In the client libraries** — the same task without register access:
 >
@@ -140,13 +140,13 @@ The first snapshot after boot captures whatever the accumulator collected from p
 | `0xEC..0xEF` | `PERIOD_LATCH_MS` | u32 LE | diagnostic only | Chip's view of dt between snapshots — can read short under load; use `PERIOD_COMMIT_COUNT` × the commit length for the module-side window length |
 | `0xBE..0xC1` | `PERIOD_COMMIT_COUNT` | u32 LE | window measure | Number of RT commits in the closed period. One commit = **0.1 s** on current firmware; 0.2 s on older images — `count × 0.1 s` (or `× 0.2 s`) is the module's own measure of the window length. See the clock-drift section for how to tell which applies |
 
-### STANDARD (STD) additions for bidirectional accounting
+### Export accumulators
 
 | Address | Name | Type | Description |
 |---:|---|---|---|
-| — | — | Export (negative-direction) accumulators exist on the **rbAmp STD line** only — a different, 16-bit register map (see the STD reference documentation) |
+| — | — | The BASIC map has no export (negative-direction) accumulators; on STD the energy is kept differently — see the [STD documentation](std/overview.md) |
 
-> On BASIC modules there are no export registers; reads from an unmapped address return `0x00` (firmware never NACKs on reads — see chapter 11 §5.2). A master that needs export tracking on BASIC falls back to RT-based accounting (see [10_arduino_examples.md → Example 5](arduino-examples.md)).
+> On BASIC modules there are no export registers; reads from an unmapped address return `0x00` (firmware never NACKs on reads — see chapter 11 §5.2). A master that needs export tracking on BASIC falls back to RT-based accounting (see [arduino-examples.md → Example 5](arduino-examples.md)).
 
 > **In the client libraries** — the same task without register access:
 >
@@ -237,12 +237,11 @@ void loop() {
 
 ---
 
-## Bidirectional accounting (STANDARD (STD))
+## <a id="bidirectional-accounting-standard-std"></a>Bidirectional accounting
 
-> This section applies to **the STANDARD (STD) product tier** only. On a BASIC module the `PERIOD_AVG_P_NEG_W` registers are not allocated (reads return `0x00`), and `PERIOD_AVG_P_W` is always ≥ 0 (negative samples are dropped from the accumulator).
+> On a BASIC module the `PERIOD_AVG_P_NEG_W` registers are not allocated (reads return `0x00`), and `PERIOD_AVG_P_W` is always ≥ 0 (negative samples are dropped from the accumulator).
 
 ![How energy is accounted on BASIC versus STANDARD (STD) modules.](images/energy-basic-vs-std.png)
-
 ### What bidirectional accounting means
 
 The chip integrates two separate accumulators per period:
@@ -300,8 +299,7 @@ void loop() {
 
 If you own a BASIC-tier module and need bidirectional accounting, you have two options:
 
-1. **Master-side integration** — read RT `P_real` (`0xA6`) every measurement window (~100 ms on current firmware, 200 ms before v1.2) and integrate positive and negative samples separately on the master side. See Example 5 in [10_arduino_examples.md](arduino-examples.md). Accuracy is slightly lower (due to sampling discretisation), but works on any firmware.
-2. **Upgrade the hardware** to a STANDARD (STD) product tier. Contact your supplier — bidirectional support is a hardware + firmware combination, not a firmware-only flag.
+1. **Master-side integration** — read RT `P_real` (`0xA6`) every measurement window (~100 ms on current firmware, 200 ms before v1.2) and integrate positive and negative samples separately on the master side. See Example 5 in [arduino-examples.md](arduino-examples.md). Accuracy is slightly lower (due to sampling discretisation), but works on any firmware.
 
 > **In the client libraries** — the same task without register access:
 >
@@ -343,7 +341,7 @@ setInterval(60 * 60 * 1000, [](){
 });
 ```
 
-Suitable for classical billing (1-min, 15-min, 1-hour).
+Suitable for classical tariff metering (1-min, 15-min, 1-hour).
 
 ---
 
@@ -405,7 +403,7 @@ Treat `UPTIME_S` strictly as this restart discriminator, not as a time source.
 
 On a detected restart, **discard that period's snapshot** (treat the snapshot as a new primer),
 re-commit the CT model if you run a non-factory model on firmware before 1.4.20 (`CAPABILITY` bit 12 clear)
-([02_initialization.md → What persists across a restart](initialization.md#what-persists-across-a-restart)),
+([initialization.md → What persists across a restart](initialization.md#what-persists-across-a-restart)),
 and re-initialise any RAM-only configuration — see chapter 11 (`RESET_OCCURRED` event bit).
 `RESET_CAUSE` does not change the handling; log it and move on.
 
@@ -464,10 +462,9 @@ void loop() {
 
 ### Approach 2 — broadcast snapshot via general call (precise, opt-in)
 
-The I²C **general-call address `0x00`** is a packet that all slaves receive simultaneously. rbAmp accepts a canonical 5-byte frame on the general-call address that triggers `CMD_LATCH_PERIOD` on every module that has GC reception **enabled**. GC is **opt-in per module** via `FLEET_CONFIG.bit0` (default OFF) — see [02_initialization.md](initialization.md) for the enable sequence and frame format.
+The I²C **general-call address `0x00`** is a packet that all slaves receive simultaneously. rbAmp accepts a canonical 5-byte frame on the general-call address that triggers `CMD_LATCH_PERIOD` on every module that has GC reception **enabled**. GC is **opt-in per module** via `FLEET_CONFIG.bit0` (default OFF) — see [initialization.md](initialization.md) for the enable sequence and frame format.
 
 ![A broadcast snapshot reaching all modules at the same moment through the general-call address.](images/period-broadcast-latch.png)
-
 ```cpp
 // Canonical 5-byte GC frame: A5 27 group tick_lo tick_hi.
 // Returns true on ACK, false on bus-level NACK (no module has GC enabled).
@@ -525,7 +522,7 @@ void loop() {
 
 **Use case**: critical for instantaneous balancing (for example `house_consume − solar_export` at one moment in time).
 
-> **Broadcast snapshot is opt-in** per module via `FLEET_CONFIG.bit0` (default OFF on a fresh module). When OFF, the slave NACKs the general-call frame and the master falls back to per-module sequential snapshot automatically. See [02_initialization.md](initialization.md) — *General Call (broadcast at address 0x00)* — for the enable sequence and frame format.
+> **Broadcast snapshot is opt-in** per module via `FLEET_CONFIG.bit0` (default OFF on a fresh module). When OFF, the slave NACKs the general-call frame and the master falls back to per-module sequential snapshot automatically. See [initialization.md](initialization.md) — *General Call (broadcast at address 0x00)* — for the enable sequence and frame format.
 
 > **One accumulator, two triggers.** The addressed snapshot (`0x27` at the module's own address) and the broadcast snapshot reset the **same** period accumulator — there is only one per module. Pick one method per module for the regular cycle; an extra snapshot by the other method cuts the running period short. The fallback patterns above are safe because they fire only when the broadcast did not land on that module.
 
@@ -547,7 +544,7 @@ void loop() {
 | Live UI dashboard | 1 s (or read RT P_real directly) |
 | Trend chart, 1-minute resolution | 60 s |
 | 15-minute peak-demand metering | 900 s |
-| Hourly billing | 3600 s |
+| Hourly metering | 3600 s |
 | Daily totals | Accumulate hourly snapshots on the master; do not let a single period exceed 1 hour |
 
 > Periods longer than 1 hour are allowed and nothing overflows — the accumulator keeps averaging for as long as no snapshot arrives. What degrades over a very long window is **precision** of the average: worst case ≈ 0.2 % at 1 hour, 1.3 % at 6 hours, 5 % at 24 hours. Keep single periods at ≤ 1 hour for that reason, and accumulate longer totals on the master.
@@ -594,7 +591,7 @@ if (ratio < 0.70f || ratio > 1.05f) {
 }
 ```
 
-**Acceptance: up to 30 % undercount under load is normal** (ratio as low as ~0.70). This is by design — see [05_troubleshooting.md](troubleshooting.md) §13. Do not use a tight 3 %–5 % threshold; it will mass-reject healthy modules.
+**Acceptance: up to 30 % undercount under load is normal** (ratio as low as ~0.70). This is by design — see [troubleshooting.md](troubleshooting.md) §13. Do not use a tight 3 %–5 % threshold; it will mass-reject healthy modules.
 
 This drift **does not** affect Wh accuracy (Wh uses the master clock); `PERIOD_LATCH_MS` is for surfacing severe chip-side anomalies only.
 
@@ -608,5 +605,5 @@ images older than v1.2 used 0.2 s. No version table is needed to tell them apart
 
 ## Next
 
-- [05_troubleshooting.md](troubleshooting.md) — what to do when values look wrong
-- [10_arduino_examples.md](arduino-examples.md) — Example 5 (master-side bidirectional on BASIC firmware)
+- [troubleshooting.md](troubleshooting.md) — what to do when values look wrong
+- [arduino-examples.md](arduino-examples.md) — Example 5 (master-side bidirectional on BASIC firmware)

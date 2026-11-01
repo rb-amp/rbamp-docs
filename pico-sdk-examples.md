@@ -1,6 +1,6 @@
 # 15 · Raspberry Pi Pico SDK Examples
 
-This chapter is the Raspberry Pi Pico equivalent of [10_arduino_examples.md](arduino-examples.md), [12_micropython_examples.md](micropython-examples.md), [13_esp_idf_examples.md](esp-idf-examples.md) and [14_stm32_hal_examples.md](stm32-hal-examples.md): the same ten scenarios, ported to **Pico SDK** (`pico-sdk` 1.5+ / 2.x) native C with LwIP-based networking.
+This chapter is the Raspberry Pi Pico equivalent of [arduino-examples.md](arduino-examples.md), [micropython-examples.md](micropython-examples.md), [esp-idf-examples.md](esp-idf-examples.md) and [stm32-hal-examples.md](stm32-hal-examples.md): the same ten scenarios, ported to **Pico SDK** (`pico-sdk` 1.5+ / 2.x) native C with LwIP-based networking.
 
 > **These examples talk to rbAmp directly through the raw I2C register API.** They are intended for production embedded firmware on RP2040 / RP2350 — direct control of the dual-core Cortex-M0+ / M33, integration with the LwIP MQTT client, FATFS, and the SDK's sleep / persistence primitives.
 >
@@ -738,7 +738,7 @@ int main(void) {
 ## Example 6 — Home energy balance
 
 **Goal**: full balance dashboard. Three modules:
-- rbAmp #1 on the main feed (STANDARD (STD) — bidirectional)
+- rbAmp #1 on the main feed (STD — bidirectional)
 - rbAmp #2 on the solar inverter output (BASIC OK)
 - rbAmp #3 UI3 on three large loads (HP, AC, EV)
 
@@ -755,7 +755,7 @@ Master uses `rbamp_io_broadcast_latch()` for synchronous snapshots and publishes
 #define ADDR_MAINS  0x50U
 #define ADDR_SOLAR  0x51U
 #define ADDR_LOADS  0x52U
-#define REG_PERIOD_AVG_P_NEG_MAINS  0xFFU   /* set per SKU datasheet on STANDARD (STD) */
+#define REG_PERIOD_AVG_P_NEG_MAINS  0xFFU   /* set per SKU datasheet on STD */
 
 extern void net_init(void);                  /* same boilerplate as Ex. 4 */
 extern mqtt_client_t *s_mqtt;
@@ -804,7 +804,7 @@ int main(void) {
         float dt_s = (float)(t_now_ms - t_prev_ms) / 1000.0f;
         t_prev_ms = t_now_ms;
 
-        /* ----- MAINS (bidirectional, STANDARD (STD)) ----- */
+        /* ----- MAINS (bidirectional, STD) ----- */
         uint8_t valid;
         if (rbamp_io_read_u8(ADDR_MAINS, RB_REG_PERIOD_VALID, &valid) == PICO_OK
             && (valid & 0x01U)) {
@@ -1482,7 +1482,7 @@ int main(void) {
 
 - `pico_lwip_sntp` plugs into the LwIP SNTP client; the SDK wires it to the C library `time(NULL)` so `gmtime_r()` works out of the box.
 - For full DST handling, store the TZ offset in a small lookup, or compile-in a POSIX TZ string via the newlib `tzset()` mechanism if your build includes it.
-- For STANDARD (STD) bidirectional metering, call `accumulate()` twice — once for consumption and once for export — and publish both peak/off-peak buckets.
+- For STD bidirectional metering, call `accumulate()` twice — once for consumption and once for export — and publish both peak/off-peak buckets.
 
 ---
 
@@ -1522,9 +1522,9 @@ int main(void) {
 
 After working through these ten examples:
 
-- For Arduino-style ESP32 development, see [10_arduino_examples.md](arduino-examples.md) (raw).
-- For MicroPython / CircuitPython (including on the Pico itself), see [12_micropython_examples.md](micropython-examples.md) (raw).
-- For native ESP-IDF, see [13_esp_idf_examples.md](esp-idf-examples.md) (raw).
-- For STM32 HAL, see [14_stm32_hal_examples.md](stm32-hal-examples.md).
-- For ESPHome integration (declarative YAML), see [`tools/esphome-rbamp/docs/en/`](https://rbamp.com/docs/modules-basic-standard-esphome-overview).
-- The formal I2C register specification used here lives in [11_api_reference.md](api-reference.md).
+- For Arduino-style ESP32 development, see [arduino-examples.md](arduino-examples.md) (raw).
+- For MicroPython / CircuitPython (including on the Pico itself), see [micropython-examples.md](micropython-examples.md) (raw).
+- For native ESP-IDF, see [esp-idf-examples.md](esp-idf-examples.md) (raw).
+- For STM32 HAL, see [stm32-hal-examples.md](stm32-hal-examples.md).
+- For ESPHome integration (declarative YAML), see [`tools/esphome-rbamp/docs/en/`](https://github.com/rb-amp/rbamp-esphome).
+- The formal I2C register specification used here lives in [api-reference.md](api-reference.md).

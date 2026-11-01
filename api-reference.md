@@ -8,15 +8,16 @@
 >
 > **NOT in scope**: integration with any specific library / OS / framework — read the library documentation for that.
 
+
 ---
 
 ## 1 · Introduction
 
-**rbAmp** is a compact hardware module for precision measurements of AC mains parameters over an I²C interface. The module behaves as a standard I²C slave with a fixed register map (page-0, 0x00..0xFF). This document describes the **wire protocol** at the level of registers, commands, and sequences.
+**rbAmp** is a compact hardware module for measurements of AC mains parameters over an I²C interface. The module behaves as a standard I²C slave with a fixed register map (page-0, 0x00..0xFF). This document describes the **wire protocol** at the level of registers, commands, and sequences.
 
 ### 1.1 SKU lineup
 
-The module variants (SCT-UI1 … SCT-I3, with their voltage and current channels) are listed in [00_overview.md → Module variants](overview.md#module-variants).
+The module variants (SCT-UI1 … SCT-I3, with their voltage and current channels) are listed in [overview.md → Module variants](overview.md#module-variants).
 
 I-variants (`I1`/`I2`/`I3`) have **no voltage hardware** — `U_RMS`, `U_PEAK`, and `P` registers return `0.0`. Frequency (`AC_FREQ`) is available on all variants (ZC-sourced).
 
@@ -67,9 +68,9 @@ I-variants (`I1`/`I2`/`I3`) have **no voltage hardware** — `U_RMS`, `U_PEAK`, 
 
 | Speed | Applicability | Note |
 |---|---|---|
-| **50 kHz** | recommended | The ESP-IDF host-side driver shows ~20 % NACK rate at 100 kHz; 50 kHz + 3× retry gives < 0.8 % error rate. |
-| **100 kHz** | workable with retry | application-level 3× retry is mandatory. |
-| **400 kHz** | **not validated** | do not advertise as supported. |
+| **50 kHz** | recommended on ESP32 and ESP8266 hosts | The ESP-IDF I²C driver shows ~20 % NACK rate at 100 kHz — a limitation of the host driver, not of the module; 50 kHz + 3× retry gives < 0.8 % error rate. |
+| **100 kHz** | recommended on other hosts | also workable on ESP32/ESP8266 with application-level 3× retry. |
+| **400 kHz** | not recommended | the speed is the user's choice. |
 
 ---
 
@@ -267,14 +268,13 @@ return UNKNOWN_DEVICE
 ## 4 · Register map (production v1.3)
 
 **Filter applied**: `build: production` (cal-build registers excluded). Factory-calibration registers (NF, GAIN, PHASE) are **not documented** — they belong to the factory bench, not the consumer surface.
-
 ![Overview of the rbAmp register map and its address blocks.](images/api-register-map.png)
 
 ### 4.0 Reserved ranges (internal)
 
 The following ranges are reserved for internal/factory use and are **not described** in this document. Reads return either data that is not relevant to consumer logic or `0x00` for non-existent addresses (see §5.2). Writes to these addresses are either silently dropped or answered with `ERR_PARAM`:
 
-- `0x04` — internal mode indicator (factory strap, not consumer-settable).
+- `0x04` — internal mode indicator (factory-controlled, not consumer-settable).
 - `0x06`, `0x26` — internal calibration parameters (factory bench).
 - `0x08..0x0F` — LUT debug view (factory diagnostic).
 - `0x1B..0x1F` — reserved page-0 (`0x18..0x1A` are production diag, see §4.2).
@@ -332,7 +332,7 @@ The following ranges are reserved for internal/factory use and are **not describ
 | `0x21` | `AC_PERIOD` | 2 | u16 LE | r | ram | Mains half-period, µs |
 | `0x23` | `CALIBRATION` | 1 | u8 | r | ram | Legacy calibration status byte |
 | `0x24` | `TOPOLOGY` | 1 | u8 | r | rom | Number of current channels (= `V03_N_I`): 1, 2 or 3; 5 = UI5, 7 = UI7 |
-| `0x25` | `SENSOR_CLASS` | 1 | u8 | rw | user_config | `0 = UNSET`, `1 = SCT_013`, `2 = WIRED_CT` (CT clamp series, models 1..13: 1..5 legacy, 11 and 13 reserved → `ERR_PARAM`; factory-paired on CT- SKUs), `3 = BUILTIN_CT` (per-unit factory cal, model code unused). A class change resets `CT_MODEL = 0`. **Not a variant discriminator** (see §3.4) |
+| `0x25` | `SENSOR_CLASS` | 1 | u8 | rw | user_config | `0 = UNSET`, `1 = SCT_013`, `2 = WIRED_CT` (CT clamp series, models 1..13: 1..5 legacy; factory-paired on CT- SKUs — on firmware 1.4.22 and later the module refuses class and model writes in normal operation with `ERR_PARAM (0xFE)`; the client libraries refuse them on all firmware), `3 = BUILTIN_CT` (per-unit factory cal, model code unused). A class change resets `CT_MODEL = 0`. **Not a variant discriminator** (see §3.4) |
 
 > **In the client libraries** — the same task without register access:
 >
@@ -664,7 +664,6 @@ The window covers channels **0..6** — you can use it as a **single unified pat
 ## 5 · Wire protocol
 
 ### 5.1 READ / WRITE asymmetry
-
 ![Burst reads auto-increment, while multi-byte writes go one byte at a time.](images/api-rw-asymmetry.png)
 
 **Canonical by-design behavior**:
@@ -1026,7 +1025,7 @@ for module in modules:
     read_period_snapshot(module)   # skip_latch=true
 ```
 
-Skew between modules: ~1 ms per module at 50 kHz. Over 16 modules relative to a 60-second period that is 0.027 %. **Negligible** for billing.
+Skew between modules: ~1 ms per module at 50 kHz. Over 16 modules relative to a 60-second period that is 0.027 %. **Negligible** for tariff accounting.
 
 **Settle window after `CMD_LATCH_PERIOD`**:
 - Minimum **50 ms** before reading `V03_PERIOD_VALID (0x07)` or the period snapshot — this covers worst-case snapshot latency (1 mains period @ 50 Hz = 20 ms + RT commit + I²C peripheral settling).
@@ -1256,7 +1255,7 @@ length — it counts whole RT commits and is not affected by the timer starvatio
 `V03_PERIOD_LATCH_MS` read short. One commit = **0.1 s on current firmware** (since v1.2); older
 images used 0.2 s. To tell which applies without a version table: the ratio
 `V03_PERIOD_LATCH_MS / V03_PERIOD_COMMIT_CNT` comes out close to 100 or close to 200. Use it for
-cross-checks; the master wall-clock stays authoritative for billing.
+cross-checks; the master wall-clock stays authoritative for tariff accounting.
 
 > **In the client libraries** — the same task without register access:
 >

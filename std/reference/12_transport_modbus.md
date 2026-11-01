@@ -1,7 +1,6 @@
 # Modbus RTU transport
 
-On the Modbus setting of the transport jumper the module is a Modbus RTU slave on RS-485 — a
-ready-to-poll electricity meter. The Modbus layer is a **translation onto the same register file**
+On the Modbus setting of the interface mode switch the module is a Modbus RTU slave on its UART lines (an external transceiver adapts them to RS-485). The Modbus layer is a **translation onto the same register file**
 as I²C: same quantities, same commands, one command queue; only the wire format differs.
 
 ## Serial
@@ -11,8 +10,8 @@ as I²C: same quantities, same commands, one command queue; only the wire format
 - **Unit id:** 1..247, default **1** (`CFG_MODBUS_ADDR`). 0 = broadcast (whitelisted writes only,
   see below). Ids 248..255 are rejected on configuration.
 - **Baud:** default **9600**. Codes in `CFG_MB_BAUD`: 0=2400 · 1=4800 · 2=9600 · 3=19200 · 4=38400 ·
-  5=57600 · 6=115200 · 7=230400 · 8=460800 · 9=921600 · 10=1 000 000. All current builds accept
-  codes 0–10. If the stored code is ever invalid, the module boots at 9600.
+  5=57600 · 6=115200 · 7=230400 · 8=460800 · 9=921600 · 10=1 000 000. The module accepts
+  codes 0–10; the line speed over RS-485 is set by the external transceiver. If the stored code is ever invalid, the module boots at 9600.
 - **Frame format:** `CFG_MB_FRAME` 0=8N1 · 1=8E1 · 2=8O1 · 3=8N2.
 - **Response hold-off:** `CFG_TX_DELAY` 0..100 ms — for auto-direction RS-485 adapters that need
   time to release the line.
@@ -59,7 +58,7 @@ The per-block native and holding addresses are listed with the I²C map in the
 
 Fixed-scale integers, same units as I²C. **Word order ABCD** (high word first) by default;
 `CFG_WORD_ORDER` = 1 swaps to low-word-first for all multi-register numbers in the native input
-profile (i64 = all four words reversed), and — from image 0x79 — the absent-channel sentinels swap
+profile (i64 = all four words reversed), and the absent-channel sentinels swap
 the same way. **The holding windows (0x81xx/0x83xx) are always high-word-first**, regardless of
 `CFG_WORD_ORDER`. i32 = 2 registers, i64 = 4 registers. Totals P/Q/S are published as i64 over
 Modbus (sign-extended from the device values).
@@ -68,8 +67,8 @@ Modbus (sign-extended from the device values).
 
 ### SDM630-compatible profile (input 0x0000)
 
-IEEE-754 float32, ABCD always, physical units (V/A/W/kWh), export as positive magnitude — a drop-in
-for inverters and SCADA that expect an Eastron-type meter. **Live points (13):**
+IEEE-754 float32, ABCD always, physical units (V/A/W/kWh), export as positive magnitude, at the addresses an
+inverter or SCADA reads from an Eastron-type meter. **Live points (13):**
 
 | Input addr | Point |
 |---|---|
@@ -80,8 +79,7 @@ for inverters and SCADA that expect an Eastron-type meter. **Live points (13):**
 | 0x0046 | frequency, Hz |
 | 0x0048 / 0x004A | import / export energy, kWh |
 
-Every other address in 0x0000–0x03FF reads 0. Phases the module does not have read 0.0 (from image
-0x79). Single-phase members publish their channel as L1. There are no SDM configuration aliases —
+Every other address in 0x0000–0x03FF reads 0; an inverter or SCADA that needs registers outside the list above does not get them from this profile. Phases the module does not have read 0.0 (STD-UI1 publishes its channel as L1; its L1 addresses coincide with the SDM120 points for voltage, current, power, frequency, import and export energy). S, Q, PF and total energy points read 0. Single-phase members publish their channel as L1. There are no SDM configuration aliases —
 configuration is done through the native holding registers.
 
 ---
@@ -95,7 +93,7 @@ total power = that channel's power, frequency; energy points read 0. Any write t
 exception 02. Pick the base unit id so the derived ids do not collide with other meters on the bus.
 
 (The METER_GROUP configuration table in the map is **reserved** — group composition is not
-configurable on current firmware.)
+configurable.)
 
 ---
 
@@ -107,7 +105,7 @@ response on broadcast, per the Modbus standard):
 - time set — **two frames**: FC16 to 0x8100–0x8101 (epoch, high word first), then FC06
   `COMMAND` 0x8113 = 0x0006 — bus-wide clock sync;
 - `LATCH_BANK` / `PERIOD_ARM` 0x8110–11 and `COMMAND` 0x03 — synchronized snapshot across modules
-  (on builds with snapshot banks);
+  (capability bit 8);
 - address-by-UID staging 0x8118–0x811E + `COMMAND` 0x16 — commissioning on a shared bus.
 
 A broadcast FC16 must stay within the whitelisted registers — a frame that touches anything else is

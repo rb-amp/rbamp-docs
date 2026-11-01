@@ -1,6 +1,6 @@
 # 12 · MicroPython & CircuitPython Examples
 
-This chapter is the Python equivalent of [10_arduino_examples.md](arduino-examples.md): the same ten scenarios, ported to MicroPython on ESP32 / RP2040 / ESP8266 / Pyboard, with CircuitPython deltas where the two dialects differ.
+This chapter is the Python equivalent of [arduino-examples.md](arduino-examples.md): the same ten scenarios, ported to MicroPython on ESP32 / RP2040 / ESP8266 / Pyboard, with CircuitPython deltas where the two dialects differ.
 
 > **These examples talk to rbAmp directly through the raw I2C register API.** They are intended for native, embedded, or otherwise resource-constrained integrations where direct control is required and every byte on the bus matters.
 >
@@ -460,7 +460,7 @@ while True:
 ## Example 6 — Home energy balance
 
 **Goal**: a full balance dashboard. Three modules:
-- rbAmp #1 on the main feed (STANDARD (STD) — bidirectional)
+- rbAmp #1 on the main feed (STD — bidirectional)
 - rbAmp #2 on the solar inverter output
 - rbAmp #3 UI3 on three large loads (HP, AC, EV)
 
@@ -473,12 +473,12 @@ import network, time, ujson as json
 from umqtt.simple import MQTTClient
 
 i2c = I2C(0, scl=Pin(22), sda=Pin(21), freq=50000)
-ADDR_MAINS = 0x50        # bidirectional (STANDARD (STD))
+ADDR_MAINS = 0x50        # bidirectional (STD)
 ADDR_SOLAR = 0x51        # generation only
 ADDR_LOADS = 0x52        # UI3
 
 # PERIOD_AVG_P_NEG address for the mains module — see the SKU datasheet
-# of the STANDARD (STD) product. Set to None on BASIC modules.
+# of the STD product. Set to None on BASIC modules.
 REG_PERIOD_AVG_P_NEG_MAINS = None
 
 wlan = network.WLAN(network.STA_IF); wlan.active(True); wlan.connect("ssid", "password")
@@ -519,7 +519,7 @@ while True:
     dt_s = time.ticks_diff(t_now_ms, t_prev_ms) / 1000.0
     t_prev_ms = t_now_ms
 
-    # --- MAINS (bidirectional, STANDARD (STD)) ---
+    # --- MAINS (bidirectional, STD) ---
     if rb_read_u8(i2c, ADDR_MAINS, 0x07) & 0x01:
         avg_p_consume = rb_read_float_le(i2c, ADDR_MAINS, 0xDC)
         avg_p_export  = (rb_read_float_le(i2c, ADDR_MAINS, REG_PERIOD_AVG_P_NEG_MAINS)
@@ -881,7 +881,7 @@ deepsleep(SLEEP_MS)
 
 **Goal**: bill energy under a time-of-use schedule (different rates for peak and off-peak hours). The ESP32 keeps a real wall-clock via NTP, splits each closed period into the right tariff bucket, resets daily totals at midnight, and publishes payloads with ISO timestamps.
 **Hardware**: ESP32 + one rbAmp UI1 + WiFi.
-**Accounting**: unidirectional. The bucket logic works on STANDARD (STD) — just feed both accumulators through it.
+**Accounting**: unidirectional. The bucket logic works on STD — just feed both accumulators through it.
 
 ```python
 from machine import I2C, Pin
@@ -1027,8 +1027,8 @@ while True:
 **Notes**:
 
 - MicroPython's `time` module is UTC-based on most ports — convert with `time.gmtime(time.time() + offset_seconds)`. For full DST handling, a small TZ table or the `utimezone` library can replace `TZ_OFFSET_HOURS`.
-- Boundary error: a 60 s period that crosses 22:00 is attributed entirely to off-peak (timestamp at the snapshot instant). At most ~30 s of misattribution per day — negligible for residential billing.
-- For STANDARD (STD) bidirectional metering, call `accumulate()` twice — once on the consumption side and once on the export side — and publish both sets of peak/off-peak totals.
+- Boundary error: a 60 s period that crosses 22:00 is attributed entirely to off-peak (timestamp at the snapshot instant). At most ~30 s of misattribution per day — negligible for residential tariff accounting.
+- For STD bidirectional metering, call `accumulate()` twice — once on the consumption side and once on the export side — and publish both sets of peak/off-peak totals.
 
 > **CircuitPython delta**: use `adafruit_ntp.NTP(socketpool, server="pool.ntp.org", tz_offset=2)` + `rtc.RTC().datetime = ntp.datetime` to set the system clock, then read it via `time.localtime()`. The bucket logic is identical.
 
@@ -1068,7 +1068,7 @@ while True:
 After working through these ten examples:
 
 - For the high-level `rbamp` package, see the [client-libraries table in the README](README.md#client-libraries).
-- For ESPHome integration (declarative YAML), see [`tools/esphome-rbamp/docs/en/`](https://rbamp.com/docs/modules-basic-standard-esphome-overview).
+- For ESPHome integration (declarative YAML), see [`tools/esphome-rbamp/docs/en/`](https://github.com/rb-amp/rbamp-esphome).
 - For a richer SBC environment (Raspberry Pi, full CPython), see the README client-libraries table.
 - Tasmota Berry driver — deferred (no library shipped).
-- The formal I2C register specification used here lives in [11_api_reference.md](api-reference.md).
+- The formal I2C register specification used here lives in [api-reference.md](api-reference.md).

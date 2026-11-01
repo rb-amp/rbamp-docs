@@ -3,15 +3,12 @@
 Full technical reference for the **rbAmp STD module line**: register map, transports, commands,
 measurement and energy model, firmware update, diagnostics and host integration.
 
-> Figures and behaviour reflect firmware image `0x0001007C`, register-map version
-> `0x36` (differences of older images are flagged inline as "before 0x79" / "image 0x7A+" /
-> "image 0x7B+" / "image 0x7C+" — 0x7C changes the measurement window to ~100 ms; no register changes).
+> Register-map version `0x36`.
 
-This reference describes the **current firmware core** shared by every STD module. Built and
-validated member today: **STD-UI1** (1 voltage + 1 current channel). Further members (more
-channels, three-phase) run the same map — they
-differ only in `N_VOLTAGE` / `N_CURRENT` and the variant code, so everything here is written
-generically by channel count. 
+This reference describes the **firmware core** shared by every STD module. Members: **STD-UI1**
+(1 voltage + 1 current channel) and **STD-U3I3** (3 voltage + 3 current channels, three-phase).
+They run the same map and differ only in `N_VOLTAGE` / `N_CURRENT` and the variant code, so
+everything here is written generically by channel count.
 
 ## Contents
 
@@ -27,7 +24,7 @@ generically by channel count.
 | 8 | [Configuration, persistence & calibration](17_config_calibration.md) | what survives reset/power-off, how to save, user-visible calibration |
 | 9 | [Firmware update](18_firmware_update.md) | host-side OTA protocol over I²C and Modbus |
 | 10 | [Diagnostics](19_diagnostics.md) | status flags, reset cause, counters, health checklist, LEDs |
-| 11 | Hardware interface | signals, wiring, transport jumper, DRDY, reset |
+| 11 | [Hardware interface](20_hardware.md) | signals, wiring, interface mode switch, DRDY, reset |
 | 12 | [Host integration](21_integration.md) | raw register sequences without our libraries; library pointers |
 | 13 | [Sequences](22_sequences.md) | canonical step-by-step flows: init, commands, config, address change, energy, history, OTA, unlock |
 
@@ -51,8 +48,8 @@ generically by channel count.
   | Apparent power | mVA | ÷1000 → VA |
   | Power factor | Q10 (signed) | ÷1024 → PF |
   | Frequency | cHz | ÷100 → Hz |
-  | Cumulative energy | Wh / varh (i64, signed) and mWh (i64); µWh (i64) on image 0x7A+, µvarh (i64) on image 0x7B+ | — |
-  | Voltage phase angle | centi-degree (i16, signed, image 0x7A+) | ÷100 → ° |
+  | Cumulative energy | Wh / varh (i64, signed) and mWh (i64); µWh (i64) and µvarh (i64) counters | — |
+  | Voltage phase angle | centi-degree (i16, signed) | ÷100 → ° |
   | Per-window energy | mW·samples (i64, signed) | see measurement model |
   | THD | centi-percent | ÷100 → % |
 

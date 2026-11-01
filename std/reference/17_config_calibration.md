@@ -7,9 +7,9 @@
 | Calibration (per channel, with its sensor) | ✓ | ✓ | ✓ | factory |
 | Configuration (`CFG_*` flash rows) | ✓ | ✓ | ✓ | command 0x04 SAVE_CONFIG |
 | Cumulative energy + generation | ✓ (resumes from about the last publish window) | ✓ (about the last second of energy lost on an ungraceful cut) | ✓ | automatic, every second ([rules](16_measurement_energy.md#cumulative-counters)) |
-| Hourly history + event log | ✓ | ✓ | ✓ (back-fill path exists for store migration) | automatic |
+| Hourly history + event log | ✓ | ✓ | ✓ | automatic |
 | Boot counter | ✓ | ✓ | ✓ | automatic |
-| 15-min history record | ✗ | ✗ | ✗ | RAM only |
+| Last 15-minute summary | ✗ | ✗ | ✗ | RAM only |
 | `CFG_RATE`, `CFG_HARM` | ✗ | ✗ | ✗ | RAM only |
 | `EVENT_MASK`, `THRESH_I/P`, `PERIOD_ARM` | ✗ | ✗ | ✗ | RAM — re-arm after any reset ([DRDY](15_drdy_events.md)) |
 | Device clock | ✗ | ✗ | ✗ | master re-feeds time after every reset |
@@ -29,8 +29,8 @@
    - **after the next restart:** `CFG_I2C_ADDR`, Modbus unit/baud/frame/tx-delay,
      `CFG_VIRTUAL_IDS` — save, then `COMMAND` 0x02 (on Modbus RESET is UNLOCK-gated);
    - **immediately on write** (but reverting at boot unless saved): `CFG_LED`, `CFG_WORD_ORDER`,
-     `CFG_START_UA` (image 0x7B+ — [starting current](16_measurement_energy.md#cumulative-counters));
-   - **metadata only** (stored, no behaviour today): `CFG_CLASS`, `CFG_CT_MODEL`,
+     `CFG_START_UA` ([starting current](16_measurement_energy.md#cumulative-counters));
+   - **stored values** (labels, no effect on measurement): `CFG_CLASS`, `CFG_CT_MODEL`,
      `CFG_TZ_OFFSET_MIN`, `CFG_TIME_AUTH`, `CFG_ENERGY_PERSIST_S`.
 
 Defaults after factory/fresh state: `CFG_CLASS` = 0 (unset), `CFG_CT_MODEL` = 0 (unset),
@@ -51,15 +51,11 @@ after installation.
 
 What a user/master *can* do:
 
-- **Read health:** `STATUS` bit 0 (cal_ok). From image **0x7A**: cal_ok is set from a **marker
-  stored with the calibration** when it is saved — a unit calibrated under older firmware keeps the
-  0x79 rule below until its calibration is saved once more. On image **0x79**: cal_ok = 1 only when
-  **every** channel carries a measured (non-default) gain and the stored calibration matches the
-  running firmware; built-in defaults → 0. On modules **before 0x79** cal_ok could read 1 even on
-  defaults — there, judge by `CAL_SRC`. `CAL_SRC` (0x0872) says where the calibration came from:
+- **Read health:** `STATUS` bit 0 (cal_ok): set when every channel carries a measured calibration, recorded by a
+  marker stored with the calibration when it is saved. `CAL_SRC` (0x0872) says where the calibration came from:
   1/2 = stored calibration · 0 = built-in defaults · **3 = the stored calibration does not match
   this firmware's measurement range — defaults in use**. 0 or 3 means the module needs service —
-  readings are not to calibrated accuracy.
+  readings are uncalibrated.
 - **Set metadata:** `CFG_CLASS` (sensor class) and `CFG_CT_MODEL` (sensor model code) are
   **reference metadata** — they label what is connected for fleet inventory and do **not** change
   gains. Persist with SAVE_CONFIG.
