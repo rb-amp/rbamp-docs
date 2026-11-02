@@ -1,6 +1,6 @@
 # rbAmp — User Documentation
 
-Hosted version: <https://www.rbamp.com/docs/modules-basic-standard-overview> (BASIC) · <https://www.rbamp.com/docs/modules-std-overview> (STD)
+Hosted version: <https://www.rbamp.com/docs/modules-basic-standard-overview?utm_source=github&utm_medium=referral&utm_campaign=rbamp-docs&utm_content=basic> (BASIC) · <https://www.rbamp.com/docs/modules-std-overview?utm_source=github&utm_medium=referral&utm_campaign=rbamp-docs&utm_content=std> (STD)
 
 **rbAmp** modules measure AC mains parameters — voltage, current, active and reactive power, power factor, line frequency and energy — and report them to a host over I²C (and, on STD, Modbus RTU). The documentation is organised by product line; each line has its own complete set of pages, including its own I²C description, because the register maps and commands differ.
 
