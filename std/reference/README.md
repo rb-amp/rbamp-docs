@@ -36,7 +36,7 @@ everything here is written generically by channel count.
   a **separate namespace** (see [Modbus transport](12_transport_modbus.md)); a Modbus address never
   equals "the I²C address of the same value" — mapping tables are given explicitly.
 - **Byte order.** Multi-byte values on I²C are **little-endian**. On Modbus the native profile is
-  big-endian word order **ABCD** (configurable), the SDM profile is always ABCD.
+  big-endian word order **ABCD** (configurable), the float32 profile is always ABCD.
 - **Units** (fixed-scale integers, never float, on I²C and the Modbus native profile):
 
   | Quantity | Unit | To SI |
@@ -56,7 +56,7 @@ everything here is written generically by channel count.
 - **Signs.** P > 0 = import (consumption); export is negative. Q follows IEC 62053-23
   (Q > 0 inductive). PF carries the sign of P. Import/export energy is kept in separate counters.
 - **Sentinels — per transport.** A field a given build does not offer reads, on the **Modbus native
-  profile**, a sentinel: `0x8000` (i16), `0x80000000` (i32), `0xFFFF` (u16); in the **SDM profile**
+  profile**, a sentinel: `0x8000` (i16), `0x80000000` (i32), `0xFFFF` (u16); in the **float32 profile**
   it reads 0; on **I²C** such fields simply read 0, and unmapped I²C addresses read `0xFF`.
 - **Gating rule.** A master must gate channel access on `N_VOLTAGE` / `N_CURRENT` and feature access
   on `CAPABILITIES` — registers of channels ≥ N and of absent features are not data.

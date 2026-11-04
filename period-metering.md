@@ -237,7 +237,9 @@ void loop() {
 
 ---
 
-## <a id="bidirectional-accounting-standard-std"></a>Bidirectional accounting
+<a id="bidirectional-accounting-standard-std"></a>
+
+## Bidirectional accounting
 
 > On a BASIC module the `PERIOD_AVG_P_NEG_W` registers are not allocated (reads return `0x00`), and `PERIOD_AVG_P_W` is always ≥ 0 (negative samples are dropped from the accumulator).
 

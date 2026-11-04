@@ -61,8 +61,8 @@ integers: voltage in mV, current in µA, power in mW / mvar / mVA.
 
 Defaults: unit 1, 9600 8N1. The discovery block is readable as input registers from `0x6000` (magic,
 map version, capabilities, channel counts, variant, UID). Live values are in the native profile (input
-`0x6000+`) or, for an inverter or SCADA that reads Eastron-type meter points, in the SDM630-compatible
-float profile (input `0x0000`: voltage, current and power per phase, total power, frequency, import and
+`0x6000+`) or, for an inverter or SCADA, in the float32
+profile (input `0x0000`: voltage, current and power per phase, total power, frequency, import and
 export energy). Details: [Modbus transport](reference/12_transport_modbus.md).
 
 ---

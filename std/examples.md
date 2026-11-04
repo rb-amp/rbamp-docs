@@ -1,6 +1,6 @@
 # 08 · STD examples
 
-Minimum library versions: Arduino [1.6.2](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#energy-source-and-minimum-library-version) and ESP-IDF [1.7.3](https://github.com/rb-amp/rbamp-esp-idf#std-line-minimum-version) on a module with snapshot banks and energy counters; Python 1.6.0; ESPHome 1.9.0. Snapshot banks in the libraries: [Arduino](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#period-snapshot-banks), [ESP-IDF](https://github.com/rb-amp/rbamp-esp-idf#std-snapshot-banks).
+Minimum library versions: Arduino [1.6.2](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#energy-source-and-minimum-library-version) and ESP-IDF [1.7.3](https://github.com/rb-amp/rbamp-esp-idf#std-line-minimum-version) on a module with snapshot banks and energy counters; Python 1.6.0; ESPHome 1.9.0. Snapshot-bank calls need Python 1.6.1 and ESPHome 1.9.1. Snapshot banks in the libraries: [Arduino](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#period-snapshot-banks), [ESP-IDF](https://github.com/rb-amp/rbamp-esp-idf#std-snapshot-banks), [ESPHome](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#period_banks) (`period_banks:`); Python has the `std_arm_banks`, `std_latch`, `std_read_latch`, `std_latch_wh` calls.
 
 The client libraries read STD and BASIC modules with the same calls; the STD-only quantities (reactive and
 apparent power, health counters, snapshot banks) are available behind a line check.
@@ -94,16 +94,16 @@ print("I =", i32(c, 0) / 1e6, "A  P =", i32(c, 2) / 1000, "W  Q =", i32(c, 4) / 
 e = client.read_input_registers(0x6B00, count=32, device_id=UNIT).registers
 print("import", i64(e, 0), "Wh  export", i64(e, 4), "Wh  net", i64(e, 8), "Wh")
 
-# 5. The same quantities as SDM-layout float32 (input 0x0000)
-sdm = client.read_input_registers(0x0000, count=76, device_id=UNIT).registers
-print("SDM: V L1", f32(sdm, 0x00), "I L1", f32(sdm, 0x06), "P total", f32(sdm, 0x34),
-      "f", f32(sdm, 0x46), "import kWh", f32(sdm, 0x48), "export kWh", f32(sdm, 0x4A))
+# 5. The same quantities as float32 profile values (input 0x0000)
+flt = client.read_input_registers(0x0000, count=76, device_id=UNIT).registers
+print("float32: V L1", f32(flt, 0x00), "I L1", f32(flt, 0x06), "P total", f32(flt, 0x34),
+      "f", f32(flt, 0x46), "import kWh", f32(flt, 0x48), "export kWh", f32(flt, 0x4A))
 client.close()
 ```
 
 The power factor is meaningful only with load current; at no load it can read any value.
 
-In the SDM layout a single-phase module publishes its channel as L1; L2 and L3 read 0.0, as do the S and PF
+In the float32 profile a single-phase module publishes its channel as L1; L2 and L3 read 0.0, as do the S and PF
 points and every address outside the list in the [Modbus transport](reference/12_transport_modbus.md).
 The configuration registers (`0x8000`: unit id, baud code, frame format, virtual ids) read the same way
 with `read_holding_registers`.
@@ -127,13 +127,13 @@ mbpoll -m rtu -b 9600 -P none -a 1 -0 -1 -o 2 -t 3:int -B -r 24832 -c 1 <port>
 # current channel 0, input 0x6200: I (µA), P (mW), Q (mvar), S (mVA) as four 32-bit values
 mbpoll -m rtu -b 9600 -P none -a 1 -0 -1 -o 2 -t 3:int -B -r 25088 -c 4 <port>
 
-# SDM layout: V L1, V L2, V L3 (single-phase modules read 0 for L2/L3), I L1 (float)
+# float32 profile: V L1, V L2, V L3 (single-phase modules read 0 for L2/L3), I L1 (float)
 mbpoll -m rtu -b 9600 -P none -a 1 -0 -1 -o 2 -t 3:float -B -r 0 -c 4 <port>
 
-# SDM layout: total P (float)
+# float32 profile: total P (float)
 mbpoll -m rtu -b 9600 -P none -a 1 -0 -1 -o 2 -t 3:float -B -r 52 -c 1 <port>
 
-# SDM layout: frequency, import kWh, export kWh (float)
+# float32 profile: frequency, import kWh, export kWh (float)
 mbpoll -m rtu -b 9600 -P none -a 1 -0 -1 -o 2 -t 3:float -B -r 70 -c 3 <port>
 
 # energy in Wh, input 0x6B00: 64-bit values as 4 words each (import, export, ...)
@@ -145,7 +145,7 @@ What the answers look like:
 - **Configuration:** ten registers; on a module with default settings the first three read `1` (unit id), `2` (baud code for 9600) and `0` (frame 8N1).
 - **Identity:** `[24576]` reads `0x5354` (`'S','T'`), `[24577]` the register-map version (`0x0036`), `[24583]` the variant (`0x0011` for STD-UI1), `[24585]` the status, `[24595]` the frequency in 0.01 Hz (`0x1388` = 50.00 Hz).
 - **32-bit integer reads** (`:int -B`) print one value per two registers: `[24832]` the voltage in mV; `[25088]`, `[25090]`, `[25092]`, `[25094]` the current in µA and the power, reactive power and apparent power in mW, mvar and mVA.
-- **SDM float reads** print one value per two registers; the SDM layout and its points are listed in the [Modbus transport](reference/12_transport_modbus.md#sdm630-compatible-profile-input-0x0000).
+- **Float32 profile reads** print one value per two registers; the points are listed in the [Modbus transport](reference/12_transport_modbus.md#float32-profile-input-0x0000).
 - **Energy** is a 64-bit value: `mbpoll` has no 64-bit type, so read four 16-bit words and combine them high word first.
 
 ---
@@ -234,7 +234,7 @@ modbus_controller:
     update_interval: 10s
 
 sensor:
-  # SDM-layout float32 points (input registers, ABCD)
+  # float32 profile points (input registers, ABCD)
   - platform: modbus_controller
     modbus_controller_id: std_meter
     name: "Voltage L1"
@@ -269,7 +269,7 @@ sensor:
     accuracy_decimals: 2
   - platform: modbus_controller
     modbus_controller_id: std_meter
-    name: "Energy import (SDM)"
+    name: "Energy import (float profile)"
     register_type: read
     address: 0x0048
     value_type: FP32
@@ -277,7 +277,7 @@ sensor:
     accuracy_decimals: 3
   - platform: modbus_controller
     modbus_controller_id: std_meter
-    name: "Energy export (SDM)"
+    name: "Energy export (float profile)"
     register_type: read
     address: 0x004A
     value_type: FP32
@@ -294,11 +294,11 @@ sensor:
     accuracy_decimals: 0
 ```
 
-The SDM points and the native import energy report the same energy. If your serial adapter is RS-485, put an external transceiver between the master UART and the module (see [Hardware](hardware.md)).
+The float32 profile points and the native import energy report the same energy. If your serial adapter is RS-485, put an external transceiver between the master UART and the module (see [Hardware](hardware.md)).
 
 ---
 
 ## Without a library
 
-Over Modbus any Modbus stack can read the module's native map or the SDM630-compatible points
+Over Modbus any Modbus stack can read the module's native map or the float32 profile points
 (input `0x0000`); see [Getting started](getting-started.md).

@@ -2,11 +2,10 @@
 
 This chapter describes the physical connection of rbAmp to a master device and the power requirements. The module arrives ready to operate: everything on its mains side is wired up and isolated inside the enclosure. The user works only with the low-voltage (LV) side — four wires for I2C, an optional DRDY line, and (for SKUs with an external CT) a 3.5 mm jack for the clamp.
 
-> ⚠ **Mains side — read before installing.** Disconnect and lock out the circuit before connecting
-> the `L`/`N` terminals or fitting the clamp. Wiring `L`/`N`, and clamping a conductor inside a
-> panel, must be done by a qualified person. Fuse the `L` tap per local rules. Clamp **one**
-> conductor only (`L`) — never the whole cable. The sensor clamp is contactless, but it needs a
-> conductor with intact insulation.
+> ⚠ **Mains side.** For work inside an electrical panel, call a qualified electrician.
+>
+> The clamp goes on **one** conductor only (`L`) — never on the whole cable. It is contactless, but it needs a
+> conductor with intact insulation. The `L` tap needs a fuse (see *Wire and fuse* below).
 
 ## LV-side pinout
 
@@ -29,17 +28,17 @@ The module runs on 3.3 V logic and is tolerant to 5 V logic on the I2C lines. Al
 
 ### When to disable the built-in pull-ups
 
-If several rbAmp modules (or other I2C devices with their own pull-ups) are on the bus, their parallel combination yields too low an effective resistance, which:
+With four or more rbAmp modules (or other I2C devices with their own pull-ups) on the bus, or on a longer bus, their parallel combination yields too low an effective resistance, which:
 
 - Increases bus power consumption
 - Can exceed the maximum sink current of the I2C-master output stage (typically ≤ 3 mA on 3.3 V logic)
 - Adds capacitive load on long buses, while contributing little to noise immunity
 
-Solution: each module has **solder-jumper cuts** on the bottom of the PCB next to the pull-up resistors. The silkscreen reads `Pull-Up`. Cut the trace with a sharp blade to disconnect the pull-up:
+With two or three modules on a bus up to 15 cm, leave the built-in pull-ups alone (see the table below). Otherwise: each module has **solder-jumper cuts** on the bottom of the PCB next to the pull-up resistors. The silkscreen reads `Pull-Up`. Cut the trace with a sharp blade to disconnect the pull-up:
 
-- Leave the pull-ups enabled on **only one** module on the bus (or relocate them to a single point near the master).
+- With four or more modules, or on a longer bus, leave the pull-ups enabled on **only one** module on the bus (or relocate them to a single point near the master).
 - Cut the jumpers on the remaining modules.
-- If the master board already provides bus pull-ups, cut the jumpers on **all** rbAmp modules.
+- If the master board already provides bus pull-ups and the bus has four or more modules (or is longer), cut the jumpers on **all** rbAmp modules. With two or three modules, measure first (see *In doubt* below) and cut only if the reading is below ~1 kΩ.
 
 ---
 
@@ -48,15 +47,18 @@ Solution: each module has **solder-jumper cuts** on the bottom of the PCB next t
 | rbAmp modules on bus | Pull-ups |
 |:---:|---|
 | 1 | Leave alone (built-in 4.7 kΩ work) |
-| 2 | Leave on one module, cut on the other |
-| 3 | Cut on all modules, install one external pair of **2.7…3.3 kΩ** near the master |
+| 2 | Leave alone on both (bus up to 15 cm) |
+| 3 | Leave alone on all three (bus up to 15 cm) |
 | 4…6 | Cut on all modules, external pair **2.2…2.7 kΩ** near the master |
 | 7…16 | Cut on all modules, external pair **1.5…2.2 kΩ** near the master; check the total bus capacitance (≤ 400 pF) and lower the bus speed if needed |
 
 > These are **recommended values** calculated from the I²C specification (pull-up sink current ≤ 3 mA at 3.3 V, bus capacitance ≤ 400 pF) — not a measured guarantee for every cable and master. Connect the external pull-ups to **3.3 V** (the logic level of the bus), not to the 5 V `VCC` supply. A 5 V master: see *I2C voltage compatibility* below.
+>
+> The 3-module row is measured (15 cm leads, 50 kHz); the other rows are calculated from the I²C specification.
+
 ![Which I2C pull-ups to keep or cut depending on how many rbAmp modules share the bus.](images/i2c-pullup-rules.png)
 
-> **In doubt**: measure the resistance between SDA and VCC with all devices unpowered. For a single-module bus the typical value is ~4.7 kΩ (one built-in pull-up); on a multi-module bus the parallel combination drops to the **1.5–4.7 kΩ** range depending on how many built-in pull-ups remain active. Anything below ~1 kΩ means too many active pull-ups in parallel — cut the built-in pull-ups on all but one module.
+> **In doubt**: measure the resistance between SDA and VCC with all devices unpowered. For a single-module bus the typical value is ~4.7 kΩ (one built-in pull-up); on a multi-module bus the parallel combination drops to the **1.5–4.7 kΩ** range depending on how many built-in pull-ups remain active. Anything below ~1 kΩ means too many active pull-ups in parallel — see the table above.
 
 ---
 
@@ -142,7 +144,8 @@ Multiple rbAmp modules can share a single I2C bus:
 ![Several rbAmp modules sharing one I2C bus with a single master.](images/hw-multimodule-bus.png)
 - **Module count**: up to ~16 (limited by total bus capacitance — ≤ 400 pF at 100 kHz)
 - **Addresses**: every module has its own 7-bit address. All modules ship from the factory on `0x50`; readdress them one at a time before connecting in parallel (see [initialization.md → Address change](initialization.md)).
-- **Pull-ups**: follow the module-count table above (recommended values) — with 3+ modules cut the built-in pull-ups on all of them and use one external pair sized for the module count.
+- **Pull-ups**: follow the module-count table above (recommended values) — with 2–3 modules on a bus up to 15 cm leave the built-in pull-ups alone; with 4+ modules cut them on all and use one external pair sized for the module count.
+- **Removing a module**: to remove a module from a shared bus, disconnect its bus wires (or the whole module), not only its power: an unpowered module loads SDA and SCL and can stop the bus for the other modules.
 
 ---
 
@@ -163,7 +166,7 @@ Correct polarity is critical for:
 - Accurate BASIC-tier accounting (BASIC counts only `max(P, 0)`; swapped polarity zeros out the energy total).
 - Correct separation of consumption and generation on the STD line.
 
-> **Quick check**: with a purely resistive load (electric kettle, heater, incandescent bulb), `P > 0` and `PF ≈ 1.0`. If P is negative while the load is consuming, de-energise the circuit first, then swap L and N on the PCB.
+> **Quick check**: with a purely resistive load (electric kettle, heater, incandescent bulb), `P > 0` and `PF ≈ 1.0`. If P is negative while the load is consuming, swap L and N on the PCB.
 
 ---
 
@@ -199,7 +202,7 @@ Each jack on the PCB is labeled with the channel name (`I0`, `I1`, `I2`, …) an
 ### Current clamps — CT series
 
 
-Each channel of a CT-series module has its own clamp on a 1 m cable. The cable arrives connected to the module and is marked with the channel number; connect it to the plug-in connector of that channel.
+Each channel of a CT-series module has its own clamp on a 1 m cable. The cable arrives connected to the module and is marked with the channel number; connect it to the plug-in connector of that channel. Keep each clamp on its own channel, also when you rewire the panel later: a clamp on another channel gives wrong readings, and the module does not report it.
 
 - **Do not move a clamp to another channel and do not connect another clamp**: the calibration belongs to the pair.
 - Fit the clamp on the L conductor with the arrow pointing toward the load (the consumer); the conductor must go through the window and the clamp must close fully.

@@ -90,7 +90,7 @@ Current BASIC product line: **SCT-UI1, SCT-UI2, SCT-UI3, SCT-UI5, SCT-UI7, SCT-I
 | **CT-UI3** | yes | 3 | yes | three flows on one phase |
 | **CT-UI5 / CT-UI7** | yes | 5 / 7 | yes | high-channel-count per-phase metering |
 
-A CT-series module is delivered with a current clamp on every channel. The clamp and the channel are calibrated together at the factory and marked with the channel number: there is nothing to select or configure. All channels of a module have the same clamp rating (1, 5, 10, 20, 30, 50 or 100 A). The voltage input is the same as on the SCT series. See [CT-series modules: start-up without configuration](initialization.md#ct-series-modules-start-up-without-configuration).
+A CT-series module is delivered with a current clamp on every channel. The clamp and the channel are calibrated together at the factory and marked with the channel number: there is nothing to select or configure. Clamp ratings are 1, 5, 10, 20, 30, 50 or 100 A. The voltage input is the same as on the SCT series. See [CT-series modules: start-up without configuration](initialization.md#ct-series-modules-start-up-without-configuration).
 
 > On I-only variants, active power is not computed (`P_real = 0`), and `PERIOD_AVG_P_W` returns 0. The master must either provide its own voltage source for power calculation, or use the current data alone.
 

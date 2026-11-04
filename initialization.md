@@ -687,8 +687,8 @@ Step 2: For each module, one at a time:
    g) Disconnect and move to the next module.
 
 Step 3: After readdressing all modules, connect them in parallel.
-        If more than one module is on the bus, cut the built-in pull-up
-        jumpers on all but one (see hardware-connection.md → I2C pull-ups).
+        With four or more modules (or a longer bus), cut the built-in
+        pull-up jumpers on all but one (see hardware-connection.md → I2C pull-ups).
 
 Step 4: At master boot, run a scan loop and verify every readdressed
         module responds at its expected address.

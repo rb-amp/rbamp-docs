@@ -44,7 +44,7 @@ Modbus addresses are **their own namespace** — independent of I²C addresses. 
 
 | Space | Range | Content |
 |---|---|---|
-| Input | 0x0000–0x03FF | **SDM630-compatible float32 profile** (13 live points, below) |
+| Input | 0x0000–0x03FF | **Float32 profile** (13 live points, below) |
 | Input | 0x6000–0x6FFF | **native integer-scale profile** (discovery, channels, energy, totals) |
 | Holding | 0x8000–0x83FF | native config · time/commands · firmware update |
 | Holding | 0x8400–0x847F | security window (device certificate / attestation; byte stream) |
@@ -65,10 +65,13 @@ Modbus (sign-extended from the device values).
 
 ---
 
-### SDM630-compatible profile (input 0x0000)
+<a id="sdm630-compatible-profile-input-0x0000"></a>
 
-IEEE-754 float32, ABCD always, physical units (V/A/W/kWh), export as positive magnitude, at the addresses an
-inverter or SCADA reads from an Eastron-type meter. **Live points (13):**
+### Float32 profile (input 0x0000)
+
+Modbus RTU with a float32 register profile of 13 values. The register addresses and the ABCD word order follow the publicly documented SDM register map. We have not tested the module against any SDM device, or against third-party SDM software, an inverter, a PLC or a SCADA system.
+
+IEEE-754 float32, ABCD always, physical units (V/A/W/kWh), export as positive magnitude. **Live points (13):**
 
 | Input addr | Point |
 |---|---|
@@ -79,7 +82,7 @@ inverter or SCADA reads from an Eastron-type meter. **Live points (13):**
 | 0x0046 | frequency, Hz |
 | 0x0048 / 0x004A | import / export energy, kWh |
 
-Every other address in 0x0000–0x03FF reads 0; an inverter or SCADA that needs registers outside the list above does not get them from this profile. Phases the module does not have read 0.0 (STD-UI1 publishes its channel as L1; its L1 addresses coincide with the SDM120 points for voltage, current, power, frequency, import and export energy). S, Q, PF and total energy points read 0. Single-phase members publish their channel as L1. There are no SDM configuration aliases —
+Every other address in 0x0000–0x03FF reads 0; an inverter or SCADA that needs registers outside the list above does not get them from this profile. Phases the module does not have read 0.0 (STD-UI1 publishes its channel as L1; its L1 addresses carry voltage, current, power, frequency, import and export energy). S, Q, PF and total energy points read 0. Single-phase members publish their channel as L1. This profile has no configuration aliases —
 configuration is done through the native holding registers.
 
 ---
@@ -88,7 +91,7 @@ configuration is done through the native holding registers.
 
 With `CFG_VIRTUAL_IDS` = 1 (saved + restart; takes effect at boot) a module with more than one
 current channel also answers on unit ids **base+1 … base+N_CURRENT** (clamped at 247): each id is a
-**read-only single-channel SDM-style view** of one current channel — its voltage, current, power,
+**read-only single-channel float32 view** of one current channel — its voltage, current, power,
 total power = that channel's power, frequency; energy points read 0. Any write to a virtual id →
 exception 02. Pick the base unit id so the derived ids do not collide with other meters on the bus.
 
@@ -145,7 +148,7 @@ use a different, single-shot key mechanism (`LT_KEY`), not UNLOCK — see [Comma
   exception 03; the same value over I²C is refused at SAVE_CONFIG with `ERROR` 0xFD — in both cases
   nothing is persisted.
 - Fields the build does not offer (absent channels; THD and displacement quantities with
-  CAPABILITIES bit 2 = 0) read the sentinel in the native profile (`0xFFFF` / `0x8000…`); in the SDM
+  CAPABILITIES bit 2 = 0) read the sentinel in the native profile (`0xFFFF` / `0x8000…`); in the float32
   profile they read 0.
 
 ---

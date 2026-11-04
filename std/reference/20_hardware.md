@@ -4,8 +4,8 @@ Signals a host or installer deals with; this chapter defines the signals and the
 
 The enclosure covers the lower part of the board, where the AC circuits are. The upper part of the board with the interface connector (VIN, GND, bus) is open; it is galvanically isolated from the AC part. The only terminal that comes out of the enclosure is the AC voltage-sensor terminal, in a plastic housing.
 
-> ⚠ **Safety.** The measurement inputs connect to mains. Installation in a closed electrical cabinet by
-> qualified personnel only.
+> ⚠ **Safety.** The measurement inputs connect to mains. Install the module in a closed electrical cabinet.
+> For work inside an electrical panel, call a qualified electrician.
 
 ## Signal set
 
@@ -34,13 +34,13 @@ The switch is read only at start-up.
 
 The module has a JST XH 7-position connector (2.54 mm), pin 1 → 7: VIN (4.5–5.5 V; 50 mA maximum, 30 mA typical), GND, SDA/TX, SCL/RX (names as printed on the board),
 DRDY, DE (driver enable for an external RS-485 transceiver), RST (reset input of the module, for a hardware reset by the master; may be left unconnected). SDA/SCL are shared with
-the Modbus UART lines: in Modbus mode pin 3 (SDA) is the module's UART RX and pin 4 (SCL) is the module's UART TX — connect the master's TX to pin 3 and the master's RX to pin 4. Two PCB jumpers enable 4.7 kΩ I²C pull-ups to 3.3 V; the connector logic is 3.3 V and VIN feeds only the on-board regulator.
+the Modbus UART lines: in Modbus mode pin 3 (SDA) is the module's UART RX and pin 4 (SCL) is the module's UART TX — connect the master's TX to pin 3 and the master's RX to pin 4. In a Modbus mode pins 3 and 4 are the module's UART, not I²C: connect a module set to Modbus to a Modbus line only. The module has 4.7 kΩ I²C pull-ups to 3.3 V, enabled from the factory. To disable them, cut the two solder jumpers on the PCB. On a bus up to 15 cm with two or three modules, leave them as they are; with four or more modules, cut them on all but one (see the table in the BASIC wiring guide). The connector logic is 3.3 V and VIN feeds only the on-board regulator.
 
 ---
 
 ## I²C wiring
 
-- Standard open-drain bus; master provides pull-ups. Recommended bus speed: 50 kHz on ESP32 and ESP8266 hosts (a limitation of the ESP-IDF I²C driver, not of the module), 100 kHz on other hosts; do not use 400 kHz. The speed is the user's choice.
+- Standard open-drain bus; the pull-ups are on the module (enabled from the factory, two solder jumpers disable them) or on the master. Recommended bus speed: 50 kHz on ESP32 and ESP8266 hosts (a limitation of the ESP-IDF I²C driver, not of the module), 100 kHz on other hosts; do not use 400 kHz. The speed is the user's choice.
 - Budget the master's SCL timeout for ≥ 10 ms of clock stretching (worst case during firmware-update
   flash writes) — see [I²C transport](11_transport_i2c.md#timing-and-robustness).
 - DRDY is an open-drain output without a pull-up on the module; when you use DRDY, fit a pull-up on the master side — 10 kΩ to the master's 3.3 V logic supply is recommended. It is a separate line (idle high, a short low pulse per new window, held low on alarm), paired with the module's `WIN_SEQ`.

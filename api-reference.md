@@ -79,7 +79,7 @@ I-variants (`I1`/`I2`/`I3`) have **no voltage hardware** — `U_RMS`, `U_PEAK`, 
 Several rbAmp modules can share one bus:
 
 - **Up to ~16 modules** (limited by total bus capacitance ≤ 400 pF at 100 kHz).
-- **Pull-ups**: the on-board 4.7 kΩ pull-ups on every module in parallel overload the sink. **Cut the on-board pull-ups** on every module except one (or use a PCA9515/9615 I²C buffer).
+- **Pull-ups**: with 2–3 modules on a bus up to 15 cm leave the on-board pull-ups alone; with four or more, or on a longer bus, the 4.7 kΩ pull-ups in parallel overload the sink. **Cut the on-board pull-ups** on every module except one (or use a PCA9515/9615 I²C buffer).
 - **Length**: up to 0.15 m plain → 100 kHz; 0.15–1 m twisted pair (SDA+GND and SCL+GND in **separate** pairs) → 100 kHz; > 1 m — I²C buffer; > 3 m — differential bus (PCA9615 / LTC4332).
 
 ---

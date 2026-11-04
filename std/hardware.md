@@ -5,8 +5,8 @@ rules are in the [hardware reference](reference/20_hardware.md); this page is th
 
 The enclosure covers the lower part of the board, where the AC circuits are. The upper part of the board with the interface connector (VIN, GND, bus) is open; it is galvanically isolated from the AC part. The only terminal that comes out of the enclosure is the AC voltage-sensor terminal, in a plastic housing.
 
-> **⚠ Safety.** The measurement inputs connect to mains. Install the module in a closed electrical cabinet,
-> by qualified personnel only. Switch the mains off before connecting or moving any wire.
+> **⚠ Safety.** The measurement inputs connect to mains. Install the module in a closed electrical cabinet.
+> For work inside an electrical panel, call a qualified electrician.
 
 ## Signal set
 
@@ -38,7 +38,7 @@ enough; a fuse in the L line is **mandatory**, rated up to 0.1 A.
 
 Every current channel ships with its own sensor, calibrated together with the channel and labelled with
 it. **Connect each sensor to the channel it is labelled for.** Moving a sensor to another channel, or
-connecting another sensor, loses the calibration. The sensors and the board are marked and the kit comes pre-connected; for the import direction follow the arrow marking on the sensor and the board.
+connecting another sensor, loses its factory calibration; the module does not report it. This also applies when you rewire the panel later. The sensors and the board are marked and the kit comes pre-connected; for the import direction follow the arrow marking on the sensor and the board.
 
 ---
 
@@ -71,6 +71,8 @@ A **3-position interface mode switch** on the board selects the transport **at b
 
 The switch is read **only at start-up**, so a change applies after a restart (power cycle or RST).
 
+In a Modbus mode pins 3 and 4 are the module's UART, not I²C: connect a module set to Modbus to a Modbus line only.
+
 ---
 
 ## Sharing a bus with BASIC modules
@@ -81,17 +83,18 @@ BASIC and STD modules both answer at `0x50` by default. Change the address of on
 
 ## I²C pull-ups
 
-Two jumpers on the PCB enable 4.7 kΩ I²C pull-ups to 3.3 V on the module. The connector logic is 3.3 V; VIN (5 V) feeds only the on-board regulator.
+The module has 4.7 kΩ I²C pull-ups to 3.3 V, enabled from the factory. To disable them, cut the two solder jumpers on the PCB. On a bus up to 15 cm with two or three modules, leave them as they are; with four or more modules, cut them on all but one (see the table in the BASIC wiring guide). The connector logic is 3.3 V; VIN (5 V) feeds only the on-board regulator.
 
 ---
 
 ## I²C wiring
 
-- Open-drain bus; the pull-ups come from the master or from the two PCB jumpers. Recommended bus speed: 50 kHz on ESP32 and ESP8266 hosts (a limitation of the ESP-IDF I²C driver, not of the module), 100 kHz on other hosts; do not use 400 kHz. The speed is the user's choice.
+- Open-drain bus; the pull-ups are on the module (see *I²C pull-ups*) or on the master. Recommended bus speed: 50 kHz on ESP32 and ESP8266 hosts (a limitation of the ESP-IDF I²C driver, not of the module), 100 kHz on other hosts; do not use 400 kHz. The speed is the user's choice.
 - Set the master's SCL timeout to at least 10 ms: during firmware-update flash writes the module may
   stretch the clock for several milliseconds.
 - DRDY is an open-drain output without a pull-up on the module; when you use DRDY, fit a pull-up on the master side — 10 kΩ to the master's 3.3 V logic supply is recommended. It idles high, a short low pulse for each new measurement window, held low on an
   alarm. Pair each pulse with the module's `WIN_SEQ`.
+- To remove a module from a shared bus, disconnect its bus wires (or the whole module), not only its power: an unpowered module loads SDA and SCL and can stop the bus for the other modules.
 
 ---
 

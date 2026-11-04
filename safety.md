@@ -6,9 +6,8 @@ the wire**, and the only mains reference at all (on voltage-sensing variants) is
 isolated** tap. Everything *you* wire — the I²C bus to an ESP32, Arduino or Raspberry Pi — is
 **never at mains potential.**
 
-This page collects, in one place, the isolation architecture, what you may safely touch, what belongs
-to a qualified electrician, and how an isolated design differs from the shunt-based meters common in
-DIY energy monitoring.
+This page collects, in one place, the isolation architecture, what you wire, and how an isolated design
+differs from the shunt-based meters common in DIY energy monitoring.
 
 
 ## The architecture: an all-low-voltage module
@@ -58,25 +57,9 @@ safe as before. There are two ways to bring L/N in:
    with a proper mains **plug**) from the module's `L`–`N` terminal, and plug it into a wall socket —
    exactly like plugging in any appliance. You never handle bare conductors; the plug and socket do
    the mains connection for you. This is the recommended path for a desk or single-outlet setup.
-2. **The permanent way — an electrician.** For a panel install or a hardwired feed, a **qualified
-   electrician** connects L/N at the panel to local electrical code.
+2. **A hardwired feed in a panel.** For work inside an electrical panel, call a qualified electrician.
 
-> ⚠️ The isolation protects the *measurement* side — but the L/N feed itself is still mains. Use a
-> proper plug, or a qualified electrician. **Never connect bare mains conductors yourself unless you
-> are qualified to do so.**
-
----
-
-## Who does what
-
-| Task | You | Electrician |
-|---|---|---|
-| I²C bus + DRDY to your controller | ✅ | |
-| Clamp the CT on an **insulated** conductor | ✅ | |
-| Plug-in L–N voltage pigtail into a socket | ✅ | |
-| Hardwired L/N at the panel / consumer unit | | ✅ |
-| CTs around panel busbars / inside a live panel | | ✅ |
-| Any work on bare or exposed mains conductors | | ✅ |
+> ⚠️ The isolation protects the *measurement* side — the L/N feed itself is still mains.
 
 ---
 
@@ -98,16 +81,16 @@ an **isolated** divider. There is **no shunt in the mains path and no live logic
 wire, handle and debug is low-voltage by construction. That's what "safe by design" means — not a
 sticker, an **architecture.**
 
-*(rbAmp is designed for isolation as described here; it is not a substitute for following your local
-electrical code, and it is not sold as a certified metering instrument.)*
+*(Isolation is a design property, not a certification; rbAmp is not sold as a certified metering
+instrument.)*
 
 ---
 
 ## In short
 
 - The module is **all low-voltage** — the CT clamps the wire without touching it, and voltage (UI* variants) comes in through an **isolated** tap; the side you touch is never at mains potential.
-- Current is sensed by a **CT** (no contact); voltage (UI* variants) via an **isolated divider** — bring L/N in with a **plug into a socket**, or an electrician.
-- **Don't open the enclosure.** For panel work, kill the main, verify dead, and use a qualified electrician.
+- Current is sensed by a **CT** (no contact); voltage (UI* variants) via an **isolated divider** — bring L/N in with a **plug into a socket**.
+- **Don't open the enclosure.** For work inside an electrical panel, call a qualified electrician.
 - Isolation is in the design — unlike a bare shunt meter, the side you handle is never live.
 
 ---
@@ -116,5 +99,5 @@ electrical code, and it is not sold as a certified metering instrument.)*
 
 - [01 · Hardware Connection](https://www.rbamp.com/docs/modules-basic-standard-hardware-connection) — pinout, wiring, CT install.
 - [FAQ — Is the rbAmp module isolated from mains?](https://www.rbamp.com/blog/faq-13/is-the-rbamp-module-isolated-from-mains-57)
-- [Three-Phase Energy Monitoring in Home Assistant](https://www.rbamp.com/blog/projects-and-tutorials-11/three-phase-energy-monitoring-in-home-assistant-3-rbamp-ui-on-one-esp32-49) — panel-level safety in a real build.
+- [Three-Phase Energy Monitoring in Home Assistant](https://www.rbamp.com/blog/projects-and-tutorials-11/three-phase-energy-monitoring-in-home-assistant-3-rbamp-ui-on-one-esp32-49) — a real three-phase build.
 

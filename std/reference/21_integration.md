@@ -10,8 +10,8 @@ run time:
 
 - **Arduino** ([rbamp-arduino](https://github.com/rb-amp/rbamp-arduino)) — STD support: discovery, realtime, config, events/DRDY, OTA, history, micro-resolution energy, starting current, phase angle and sequence. On a module with snapshot banks and energy counters use v1.6.2 or later (earlier versions take the period from bank 0 instead of the counters; [energy source and minimum version](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#energy-source-and-minimum-library-version)).
 - **ESP-IDF** ([rbamp-esp-idf](https://github.com/rb-amp/rbamp-esp-idf)) — component with STD support, including micro-resolution energy and starting current. On a module with snapshot banks and energy counters use v1.7.3 or later (earlier versions take the period from bank 0 instead of the counters; [minimum version](https://github.com/rb-amp/rbamp-esp-idf#std-line-minimum-version)).
-- **ESPHome / Home Assistant** ([rbamp-esphome](https://github.com/rb-amp/rbamp-esphome)) — external component: on-device energy counters, starting current and phase diagnostics. Use v1.9.0 or later.
-- **Python** ([rbamp-python](https://github.com/rb-amp/rbamp-python)) — STD support: one client class, the module line is detected at connect. Use v1.6.0 or later. Validated on standard Linux Python (smbus2).
+- **ESPHome / Home Assistant** ([rbamp-esphome](https://github.com/rb-amp/rbamp-esphome)) — external component: on-device energy counters, starting current and phase diagnostics. Use v1.9.0 or later; snapshot banks (`period_banks:`) from v1.9.1.
+- **Python** ([rbamp-python](https://github.com/rb-amp/rbamp-python)) — STD support: one client class, the module line is detected at connect. Use v1.6.0 or later; snapshot-bank calls from v1.6.1. Validated on standard Linux Python (smbus2).
 
 The libraries cover these flows (discovery gating, busy/err polling, prepared-image OTA,
 energy-delta accounting), so prefer them where the platform allows.
@@ -113,9 +113,9 @@ reads cover liveness, storage health, restarts and counter generations.
 
 ## Modbus integration without libraries
 
-- **SDM profile:** point the inverter/SCADA at the module for the points it publishes — per-phase V/I/P,
-  total P, frequency, import/export kWh at the float32 input addresses of the SDM630 layout
-  ([list](12_transport_modbus.md#sdm630-compatible-profile-input-0x0000)). Other points of that meter read 0.
+- **Float32 profile:** the points the module publishes — per-phase V/I/P, total P, frequency,
+  import/export kWh — at the float32 input addresses
+  ([list](12_transport_modbus.md#float32-profile-input-0x0000)). Other addresses of the profile read 0.
 - **Native profile:** FC04 reads at 0x6000 (discovery), 0x6100/0x6200 (channels), 0x6B00+ (energy),
   0x6C00 (totals); configuration and commands over FC16 at 0x8000+ with UNLOCK for state-changing
   commands. Full map: [register map](13_register_map.md#modbus-mapping); rules:

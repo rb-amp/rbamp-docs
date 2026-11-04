@@ -38,9 +38,8 @@ line with full galvanic isolation; STD is the precision / three-phase line.
   Energy is saved every second: a power cut loses about a second at most.
 - **Standalone from first power-up.** Metering starts by itself; energy accumulates and the event log is
   kept without any master.
-- **A Modbus meter.** An SDM630/SDM120-compatible float profile publishes per-phase voltage, current and
-  power, total power, frequency, and import and export energy at the addresses an inverter or SCADA reads
-  from an Eastron-type meter; other points of that meter read 0.
+- **A Modbus meter.** A float32 register profile of 13 values publishes per-phase voltage, current and
+  power, total power, frequency, and import and export energy; other addresses of the profile read 0.
 - **Update without a screwdriver.** Firmware is updated over the working bus; a failed image rolls back by
   itself and metering continues during the update. The image is signed and encrypted.
 - **Provable authenticity.** Each module carries a unique device certificate and answers a challenge from
@@ -52,13 +51,13 @@ line with full galvanic isolation; STD is the precision / three-phase line.
 
 - **The main meter of a home, a building, a production floor or a workshop:** whole-site consumption,
   import and export energy, per-phase readings on three-phase sites.
-- **A home with solar:** separate import and export energy, the SDM points for a Modbus master,
+- **A home with solar:** separate import and export energy, the float32 profile points for a Modbus master,
   a grid-minus-solar balance in Home Assistant.
 - **Sub-metering of tenants or workshops:** per-channel measurements and energy for every line.
 - **An EV charging site:** three-phase metering for each charger, import and export energy.
-- **Integration into an existing control system:** any Modbus master that supports the listed SDM points can read the module.
+- **Integration into an existing control system:** a Modbus master can read the float32 profile points listed in the [Modbus transport](reference/12_transport_modbus.md).
 - **A smart home:** ESPHome / Home Assistant component, MQTT through the master, per-channel load
-  monitoring. Over Modbus the listed SDM points can be read by any Modbus master that supports them.
+  monitoring. Over Modbus a master can read the float32 profile points.
 
 ---
 
@@ -99,8 +98,8 @@ line with full galvanic isolation; STD is the precision / three-phase line.
 - **I²C** — the full register map (16-bit addressing; address `0x50` by default, configurable).
 - **Modbus RTU** — the module is a Modbus meter:
   - UART from 2400 baud up to 1 Mbaud (over RS-485 the line speed is set by the external transceiver), frames 8N1 / 8E1 / 8O1 / 8N2, configurable word order;
-  - **three register views:** the native STD map (fixed-scale integers) · an SDM630/SDM120-compatible
-    float profile · per-channel virtual meters, where each current channel of a multi-channel member
+  - **three register views:** the native STD map (fixed-scale integers) · a float32
+    register profile of 13 values · per-channel virtual meters, where each current channel of a multi-channel member
     answers as its own single-phase meter on its own unit id;
   - a discovery block (type, channel counts, serial number, firmware version);
   - settings writes are validated; reset, calibration and update commands need an explicit unlock.
@@ -140,9 +139,6 @@ run time. Arduino, ESP-IDF, ESPHome / Home Assistant and Python are available. W
 module works too: over Modbus it is a standard meter, and the register protocol is published in the
 [technical reference](reference/README.md).
 
-SDM630, SDM120 and Eastron are names of a third-party manufacturer's meters, used here only to state
-compatibility with their Modbus register protocol and interface.
-
 ---
 
 ## Documentation
@@ -165,5 +161,5 @@ The enclosure has a DIN clip and can be installed in a cabinet (DIN rail). The s
 
 The enclosure covers the lower part of the board, where the AC circuits are. The upper part of the board with the interface connector (VIN, GND, bus) is open; it is galvanically isolated from the AC part. The only terminal that comes out of the enclosure is the AC voltage-sensor terminal, in a plastic housing.
 
-> **⚠ Safety.** The measurement inputs connect to mains. Install the module in a closed electrical cabinet,
-> by qualified personnel only.
+> **⚠ Safety.** The measurement inputs connect to mains. Install the module in a closed electrical cabinet.
+> For work inside an electrical panel, call a qualified electrician.

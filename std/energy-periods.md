@@ -73,5 +73,7 @@ Banks are RAM: a reset clears them. A bank snapshotted during the first 3 window
 > |---|---|---|
 > | Arduino | [`stdArmBanks`, `stdLatch`, `stdReadLatch`, `stdLatchWh`](https://github.com/rb-amp/rbamp-arduino/blob/main/docs/09_api_reference.md#period-snapshot-banks) | arm banks, take a snapshot, read it and convert it to Wh; available when the module reports banks (bit 8) |
 > | ESP-IDF | [`rbamp_std_arm_banks`, `rbamp_std_latch`, `rbamp_std_read_latch`, `rbamp_std_latch_wh`](https://github.com/rb-amp/rbamp-esp-idf#std-snapshot-banks) | the same in the ESP-IDF component; bank 0 belongs to the library, use banks 1 and up (example `std_meter`) |
+> | ESPHome | [`period_banks:`, `rbamp.latch_bank`](https://github.com/rb-amp/rbamp-esphome/blob/main/docs/09_api_reference.md#period_banks) | declare the banks to latch in YAML, on an `interval:` and/or by the action (from v1.9.1) |
+> | Python | `std_arm_banks`, `std_latch`, `std_read_latch`, `std_latch_wh` | the same calls in the Python client (from v1.6.1); a bank's valid flag is sticky, read a bank at least 300 ms after latching it |
 
 See [Examples](examples.md).

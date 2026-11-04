@@ -19,7 +19,7 @@ This chapter is a quick reference for common problems and their solutions. Each 
 - ❌ **No common ground** — the single most frequent mistake. Master GND and module GND **must** be tied together.
 - ❌ **SDA and SCL swapped** — verify against the wiring diagram in [hardware-connection.md](hardware-connection.md).
 - ❌ **No pull-ups on the bus** — if the built-in pull-ups have been cut on a module and no external ones are installed, the bus is dead. With everything unpowered, measure SDA↔VCC: it must read 1.5–4.7 kΩ.
-- ❌ **Too many pull-ups in parallel** — built-in pull-ups still active on every module, plus master pull-ups, dropping the equivalent below ~1 kΩ. The master cannot pull the bus to LOW. Cut the built-in pull-ups on all but one module.
+- ❌ **Too many pull-ups in parallel** — built-in pull-ups still active on many modules (four or more), plus master pull-ups, dropping the equivalent below ~1 kΩ. The master cannot pull the bus to LOW. Cut the built-in pull-ups on all but one module.
 - ❌ **Long cable without twisted pair or buffer** — past ~0.15 m, parallel wires couple capacitively and edges round off. Use UTP cat-5 (up to 1 m) or a PCA9515 buffer (up to 3 m). See [hardware-connection.md → Bus length](hardware-connection.md).
 - ❌ **Wrong slave address** — the module may have been readdressed. Run an I2C scan:
 
@@ -133,12 +133,12 @@ void i2c_scan() {
 
 **Causes and solutions**:
 
-- ❌ **L and N swapped on the voltage terminals** — the most common cause. See [hardware-connection.md → Voltage sensor](hardware-connection.md). De-energise the circuit first, then swap L and N on the PCB.
+- ❌ **L and N swapped on the voltage terminals** — the most common cause. See [hardware-connection.md → Voltage sensor](hardware-connection.md). Swap L and N on the PCB.
 - ❌ **CT clamp installed backwards** — the arrow on the clamp must point **in the direction of current** toward the load (panel → load). If it points the other way, unclip and reverse the clamp.
 - ❌ **Physical reversal is impractical** — on BASIC the period accumulator (`PERIOD_AVG_P_W`) clamps
   negative samples to zero, so with inverted polarity **the energy register stays 0 until the
   physical polarity is corrected** — negating in master code (`p_corrected = -p_raw`) only fixes
-  your own RT integration, never the on-module period data. Fix the wiring (de-energised!).
+  your own RT integration, never the on-module period data. Fix the wiring.
 
 ---
 

@@ -9,8 +9,8 @@ A single-phase precision energy meter module: **one voltage and one current inpu
 sampling, the full STD feature set, and a choice of I²C or Modbus RTU. Variant code `0x11`.
 
 It works as a sub-meter / smart-meter front end for a master (ESP32, Arduino, Raspberry Pi, PLC), or
-directly on a Modbus RTU network (through an external RS-485 transceiver) as a meter, including the SDM-compatible profile for inverters and
-monitoring systems that read the points of an Eastron-type meter.
+directly on a Modbus RTU network (through an external RS-485 transceiver) as a meter, including a float32 register profile of 13 values for inverters and
+monitoring systems ([Modbus transport](reference/12_transport_modbus.md)).
 
 ---
 
@@ -30,21 +30,16 @@ monitoring systems that read the points of an Eastron-type meter.
 
 ## Measured characteristics
 
-Measured on one production module per kit (60 A and 100 A), each individually calibrated together with its sensor, against a
-reference meter on a resistive load. Current is given as the primary current with one pass of the wire
-through the sensor.
+Measured on one production module per kit (60 A and 100 A), each channel individually calibrated together with its sensor, against a reference meter on a resistive load. Current is given as the primary current with one pass of the wire through the sensor; on STD-U3I3 the figures cover all three channels.
 
 | Parameter | 60 A kit | 100 A kit |
 |---|---|---|
-| Current error | ±0.19 % from 1.14 A to 79.85 A | ±0.22 % from 1.13 A to 97.2 A |
-| Upper end of the range | the reading saturates near 80 A (−1 % at 82–84 A) | linear up to 128.9 A (±0.23 %) |
-| Voltage error | ±0.24 % (measured at 200–224 V) | ±0.14 % (measured at 199–224 V) |
+| Current error | ±0.2 % in range 0.005 A – 75 A | ±0.2 % in range 0.005 A – 100 A |
+| Upper end of the range | 75 A | 129 A |
+| Voltage error | ±0.2 % | ±0.2 % |
 | Power factor, resistive load | 0.999–1.000 | 0.999–1.000 |
-| Energy, one 15-minute run (deviation from the reference) | +0.157 % | +0.14 % |
 | Reads from | 4.8 mA | 4.8 mA |
-| Noise with no current | 0.25 mA | 0.29 mA |
-
-The 100 A figure for the upper end is the limit of the test setup (about 131 A), not a limit of the module.
+| Noise with no current | 0.2 mA | 0.35 mA |
 
 ---
 
@@ -52,7 +47,7 @@ The 100 A figure for the upper end is the limit of the test setup (about 131 A),
 
 - The main meter of a single-phase home, apartment or workshop.
 - Sub-metering of a circuit, a heater, an EV charger or a heat pump.
-- Solar self-consumption: separate import and export energy, SDM points for a Modbus master.
+- Solar self-consumption: separate import and export energy, the float32 profile points for a Modbus master.
 - A measuring node in a Home Assistant / ESPHome installation.
 
 ---

@@ -4,7 +4,7 @@ Hosted version: <https://www.rbamp.com/docs/modules-basic-standard-overview?utm_
 
 **rbAmp** modules measure AC mains parameters — voltage, current, active and reactive power, power factor, line frequency and energy — and report them to a host over I²C (and, on STD, Modbus RTU). The documentation is organised by product line; each line has its own complete set of pages, including its own I²C description, because the register maps and commands differ.
 
-> ⚠ **Mains safety**: connecting the measurement inputs and fitting a current sensor on a panel conductor must be done by a qualified person with the circuit de-energised — see the hardware page of the line you use and [Safety — Safe by Design](safety.md).
+> ⚠ **Mains safety**: For work inside an electrical panel, call a qualified electrician. See the hardware page of the line you use.
 
 ## Product lines
 
