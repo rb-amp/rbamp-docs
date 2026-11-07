@@ -379,7 +379,7 @@ void loop() {
 
 ## Example 5 — Master-side bidirectional accounting on a BASIC module
 
-**Goal**: implement bidirectional accounting on the master when the module's tier is BASIC (period accumulator clamps negative samples). The master reads RT `P_real` every measurement window (~100 ms on current firmware) and separates consumption / export itself.
+**Goal**: implement bidirectional accounting on the master when the module's tier is BASIC (period accumulator clamps negative samples). The master reads RT `P_real` every measurement window (~100 ms, v1.2 and later) and separates consumption / export itself.
 **Hardware**: ESP32 + rbAmp UI1 on a load with a solar inverter.
 **Applicability**: for BASIC owners who need export visibility. Works on BASIC modules today.
 
@@ -443,7 +443,7 @@ void loop() {
 
 **Notes**:
 
-- DRDY synchronises reads with each RT window (~100 ms on current firmware).
+- DRDY synchronises reads with each RT window (~100 ms, v1.2 and later).
 - Accuracy depends on DRDY interval stability (typically ±1 ms).
 - A small error accumulates near P zero-crossings but is negligible for household loads.
 
@@ -595,7 +595,7 @@ void loop() {
 
 ## Example 7 — Power-event detection
 
-**Goal**: on every RT window (~100 ms on current firmware), compare P against an exponentially-weighted moving average (EMA). Log significant deviations to an SD card.
+**Goal**: on every RT window (~100 ms, v1.2 and later), compare P against an exponentially-weighted moving average (EMA). Log significant deviations to an SD card.
 **Hardware**: ESP32 + rbAmp + SD card.
 **Use case**: automatic detection of large-load events (microwave, AC, kettle) turning on or off.
 

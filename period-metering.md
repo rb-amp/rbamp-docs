@@ -2,9 +2,9 @@
 
 For tariff energy accounting (Wh per 1 min / 15 min / 1 hour / day / month / year) rbAmp provides an **atomic period snapshot** mechanism: a single I2C command freezes the time-averaged power over a period, and the master multiplies it by its own wall-clock dt to get Wh.
 
-This is the **production-grade** way to extract energy data. The alternative — integrating RT `P_real` on the master side every measurement window (~100 ms on current firmware) — yields nearly the same result on BASIC (slightly lower accuracy due to sampling discretisation) and keeps the master continuously active.
+This is the **production-grade** way to extract energy data. The alternative — integrating RT `P_real` on the master side every measurement window (~100 ms, v1.2 and later) — yields nearly the same result on BASIC (slightly lower accuracy due to sampling discretisation) and keeps the master continuously active.
 
-**BASIC and STD periods.** BASIC keeps **one** period snapshot per channel: on the master's command the module freezes the average and peak power and the period length (next to the live 100 ms window, which is not a period), and the host integrates energy. STANDARD (STD) keeps the energy **on the module**: cumulative counters (import/export, active and reactive) that survive power loss, plus time-stamped **15-minute and hourly records** (the master sets the clock). The STD family contract also defines 8 independent snapshot banks; current firmware does not implement them, and the interval energy comes from differences of the counters. The rest of this chapter describes the BASIC period snapshot; STD is described in the [STD technical reference](std/reference/16_measurement_energy.md).
+**BASIC and STD periods.** BASIC keeps **one** period snapshot per channel: on the master's command the module freezes the average and peak power and the period length (next to the live 100 ms window, which is not a period), and the host integrates energy. STANDARD (STD) keeps the energy **on the module**: cumulative counters (import/export, active and reactive) that survive power loss, plus time-stamped **15-minute and hourly records** (the master sets the clock). STD modules whose `CAPABILITIES` bit 8 is set also have 8 independent snapshot banks; without it the interval energy comes from differences of the counters. The rest of this chapter describes the BASIC period snapshot; STD is described in the [STD technical reference](std/reference/16_measurement_energy.md).
 
 ## Why a period snapshot is needed
 
@@ -138,7 +138,7 @@ The first snapshot after boot captures whatever the accumulator collected from p
 > (ch1) / `0xC6` (ch2) in the same pass and multiply by the same `dt`: `e1_wh = avg_p1 * dt_s / 3600`.
 | `0xE0..0xE3` | `PERIOD_MAX_P_W` | float32 LE | optional | Peak P_real during the period (for demand tariffs) |
 | `0xEC..0xEF` | `PERIOD_LATCH_MS` | u32 LE | diagnostic only | Chip's view of dt between snapshots — can read short under load; use `PERIOD_COMMIT_COUNT` × the commit length for the module-side window length |
-| `0xBE..0xC1` | `PERIOD_COMMIT_COUNT` | u32 LE | window measure | Number of RT commits in the closed period. One commit = **0.1 s** on current firmware; 0.2 s on older images — `count × 0.1 s` (or `× 0.2 s`) is the module's own measure of the window length. See the clock-drift section for how to tell which applies |
+| `0xBE..0xC1` | `PERIOD_COMMIT_COUNT` | u32 LE | window measure | Number of RT commits in the closed period. One commit = **0.1 s** from v1.2; 0.2 s on older images — `count × 0.1 s` (or `× 0.2 s`) is the module's own measure of the window length. See the clock-drift section for how to tell which applies |
 
 ### Export accumulators
 
@@ -301,7 +301,7 @@ void loop() {
 
 If you own a BASIC-tier module and need bidirectional accounting, you have two options:
 
-1. **Master-side integration** — read RT `P_real` (`0xA6`) every measurement window (~100 ms on current firmware, 200 ms before v1.2) and integrate positive and negative samples separately on the master side. See Example 5 in [arduino-examples.md](arduino-examples.md). Accuracy is slightly lower (due to sampling discretisation), but works on any firmware.
+1. **Master-side integration** — read RT `P_real` (`0xA6`) every measurement window (~100 ms from v1.2; 200 ms before) and integrate positive and negative samples separately on the master side. See Example 5 in [arduino-examples.md](arduino-examples.md). Accuracy is slightly lower (due to sampling discretisation), but works on any firmware.
 
 > **In the client libraries** — the same task without register access:
 >
@@ -391,7 +391,7 @@ covers an undefined window — exactly like the first snapshot after boot. The m
 
 | Address | Name | Type | Description |
 |---:|---|---|---|
-| `0x46..0x49` | `UPTIME_S` | u32 LE | Module's own uptime counter (nominally seconds since boot). **Restart detector only** — on current firmware it can run noticeably slower than wall time under bus load; never use it as a clock or for time maths |
+| `0x46..0x49` | `UPTIME_S` | u32 LE | Module's own uptime counter (nominally seconds since boot). **Restart detector only** — on firmware up to 1.4.21 it runs slower than wall-clock time (measured 0.58–0.80×); never use it as a clock or for time maths |
 | `0x4A` | `RESET_CAUSE` | u8 | Reset reason flags: bit0 external pin, bit1 power-on/brown-out, bit2 software, bit3/bit4 watchdogs. For logging only |
 
 Check at every snapshot — the module restarted inside the period if either:
@@ -599,7 +599,7 @@ This drift **does not** affect Wh accuracy (Wh uses the master clock); `PERIOD_L
 
 When you want the **module's own measure of the closed window length**, use
 `PERIOD_COMMIT_COUNT` (register `0xBE`) times the commit length: it counts whole RT commits and does
-not read short under load the way `PERIOD_LATCH_MS` can. One commit is **0.1 s on current firmware**;
+not read short under load the way `PERIOD_LATCH_MS` can. One commit is **0.1 s from v1.2**;
 images older than v1.2 used 0.2 s. No version table is needed to tell them apart: the ratio
 `PERIOD_LATCH_MS / PERIOD_COMMIT_COUNT` comes out close to 100 or close to 200.
 

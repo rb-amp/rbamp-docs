@@ -139,8 +139,8 @@ Feature-detection bitmap. This is the canonical way to detect supported features
 | 2 | GC_GROUP_FILTER | `GROUP_ID` filter is active |
 | 3 | DIGEST | digest block (0x70..0x85) is exposed |
 | 4 | EVENTS | `EVENT_FLAGS` is supported |
-| 5 | UID_ARBITRATION | UID-based address arbitration (no public commands on current firmware) |
-| 6 | SEAL | reserved — not implemented on current firmware |
+| 5 | UID_ARBITRATION | UID-based address arbitration (no public commands) |
+| 6 | SEAL | reserved — not implemented |
 | 7 | TWO_PHASE_ADDR | two-phase commit address change |
 | 8 | **ZC_PHASE_OFFSET = voltage-HW** | the module has a U channel |
 | 9 | SAVE_USER_CONFIG | `CMD_SAVE_USER_CONFIG` is available |
@@ -392,7 +392,7 @@ See §6.1 for the sequence.
 
 | Addr | Name | Size | Type | Access | Persistence | Notes |
 |---|---|---|---|---|---|---|
-| `0x46` | `UPTIME_S` | 4 | u32 LE | r | ram | Module's own uptime counter (nominally seconds since boot) — **restart detector only**: on current firmware it can run noticeably slower than wall time under bus load, so never use it as a clock. Restart detection for a master: the value decreased, or is smaller than the time elapsed since the master's previous snapshot |
+| `0x46` | `UPTIME_S` | 4 | u32 LE | r | ram | Module's own uptime counter (nominally seconds since boot) — **restart detector only**: on firmware up to 1.4.21 it runs slower than wall-clock time (measured 0.58–0.80×), so never use it as a clock. Restart detection for a master: the value decreased, or is smaller than the time elapsed since the master's previous snapshot |
 | `0x4A` | `RESET_CAUSE` | 1 | u8 | r | ram | Reset reason flags (bit0=PIN, bit1=POR/BOR, bit2=SW, bit3=IWDG, bit4=WWDG, bit5=LPWR). For logging only — restart handling is the same whatever the cause |
 | `0x4B` | `I2C_ERR_COUNT` | 2 | u16 LE | r | ram | Bus errors (BERR+OVR) since boot, saturating |
 | `0x4D` | `I2C_REINIT_COUNT` | 1 | u8 | r | ram | I²C peripheral BUSY-recovery reinit count, saturating |
@@ -520,7 +520,7 @@ A period snapshot taken on `CMD_LATCH_PERIOD`. **Ragged layout** (historical leg
 
 | Addr | Name | Size | Type | Access | Persistence | Units | Notes |
 |---|---|---|---|---|---|---|---|
-| `0xBE` | `V03_PERIOD_COMMIT_CNT` | 4 | u32 LE | r | ram | – | RT commits in the closed period. One commit = 0.1 s on current firmware (0.2 s before v1.2) — `count ×` commit length is the module-side measure of the window length (see §7.4) |
+| `0xBE` | `V03_PERIOD_COMMIT_CNT` | 4 | u32 LE | r | ram | – | RT commits in the closed period. One commit = 0.1 s from v1.2 (0.2 s before) — `count ×` commit length is the module-side measure of the window length (see §7.4) |
 | `0xC2` | `V03_PERIOD_AVG_P_CH1` | 4 | float32 LE | r | ram | W | Snapshot avg P ch1 (UI2, UI3) |
 | `0xC6` | `V03_PERIOD_AVG_P_CH2` | 4 | float32 LE | r | ram | W | Snapshot avg P ch2 (UI3) |
 | `0xCA` | `V03_PERIOD_MS` | 4 | u32 LE | r | ram | ms | Current period duration |
@@ -725,7 +725,7 @@ The GC broadcast frame (`0x00` general-call address + 5-byte payload) is a **sep
 | Code | Name | Severity |
 |---|---|---|
 | `0x00` | OK | – |
-| `0xF9` | `CLONE` | reserved — **not raised on current firmware** |
+| `0xF9` | `CLONE` | reserved — **not raised** |
 | `0xFA` | `LUT_BAD` | error |
 | `0xFB` | `FLASH_PARAMS_BAD` | error (see §6.5 fresh-flash) |
 | `0xFC` | `NOT_READY` | error |
@@ -766,11 +766,11 @@ if event_flags & (1 << 3):    # ERROR bit
 
 #### ⚠ bit 3 async caveat
 
-A `write rejection` asserts `EVENT_FLAGS.bit3` **asynchronously**, within one measurement window (~100 ms on current firmware; 200 ms on images before v1.2) after the operation, **not** immediately. **Do not poll bit 3 right after a write** — either wait ≥ 200 ms (covers all images), or use **Pattern 1** (immediate REG_ERROR capture) for the outcome of a specific operation, and reserve bit 3 polling for long-running monitoring.
+A `write rejection` asserts `EVENT_FLAGS.bit3` **asynchronously**, within one measurement window (~100 ms from v1.2; 200 ms on images before v1.2) after the operation, **not** immediately. **Do not poll bit 3 right after a write** — either wait ≥ 200 ms (covers all images), or use **Pattern 1** (immediate REG_ERROR capture) for the outcome of a specific operation, and reserve bit 3 polling for long-running monitoring.
 
 #### Anti-clone sentinel
 
-`DEV_ERR_CLONE (0xF9)` is **reserved** — current firmware never raises it. The code is kept for forward compatibility.
+`DEV_ERR_CLONE (0xF9)` is **reserved** — it is never raised. The code is kept for forward compatibility.
 
 > **In the client libraries** — the same task without register access:
 >
@@ -1030,7 +1030,7 @@ Skew between modules: ~1 ms per module at 50 kHz. Over 16 modules relative to a 
 **Settle window after `CMD_LATCH_PERIOD`**:
 - Minimum **50 ms** before reading `V03_PERIOD_VALID (0x07)` or the period snapshot — this covers worst-case snapshot latency (1 mains period @ 50 Hz = 20 ms + RT commit + I²C peripheral settling).
 - Optionally the master can **poll `STATUS.bit0 (READY)`** instead of a fixed sleep: `READY=1` means the RT block is in a consistent state, so the period snapshot can be safely burst-read.
-- On a brand-new module (< ~100 ms after boot on current firmware; < 200 ms before v1.2) a snapshot may return `V03_PERIOD_VALID = 0` because less than 1 mains period has accumulated — see §6.0 cold-boot timeline.
+- On a brand-new module (< ~100 ms after boot from v1.2; < 200 ms before) a snapshot may return `V03_PERIOD_VALID = 0` because less than 1 mains period has accumulated — see §6.0 cold-boot timeline.
 
 #### Strategy 2 — General-Call broadcast snapshot (enable required)
 
@@ -1093,7 +1093,7 @@ read REG_ERROR (0x02):
          action: write 1<<3 → EVENT_FLAGS (W1C clear)
 
   0xF9  → CLONE (reserved)
-         action: not raised on current firmware. If ever observed, treat as
+         action: not raised. If ever observed, treat as
                  vendor-reserved and contact the supplier.
 
   0xFA  → LUT_BAD (calibration LUT corrupted)
@@ -1157,7 +1157,7 @@ read REG_ERROR (0x02):
 | `0x29` | `SET_CT_MODEL_CH1` | 5 ms | – | Bind staged `REG_CT_MODEL` to ch1 |
 | `0x2A` | `SET_CT_MODEL_CH2` | 5 ms | – | Bind staged `REG_CT_MODEL` to ch2 |
 | `0x30` | `COMMIT_ADDR` | 700 ms | – | Persist `I2C_ADDRESS` (see §6.1) |
-| `0x31` | `CLEAR_ERROR` | 0 | – | Clear `REG_ERROR` (transient classes only; `CLONE (0xF9)` is reserved, not raised on current firmware) |
+| `0x31` | `CLEAR_ERROR` | 0 | – | Clear `REG_ERROR` (transient classes only; `CLONE (0xF9)` is reserved, not raised) |
 | `0x32` | `SAVE_USER_CONFIG` | 700 ms | – | Persist the user_config group (production-OK) |
 
 > Opcodes outside the public range (factory / develop) are **not documented** in this reference. A consumer master does not send them in normal operation; an unsupported opcode → `REG_ERROR = ERR_PARAM (0xFE)`.
@@ -1252,7 +1252,7 @@ energy_wh[ch] += avg_p[ch] * dt_chip_s / 3600    # systematically under-reported
 
 The **module-side measure of the closed window** is `V03_PERIOD_COMMIT_CNT (0xBE)` times the commit
 length — it counts whole RT commits and is not affected by the timer starvation that makes
-`V03_PERIOD_LATCH_MS` read short. One commit = **0.1 s on current firmware** (since v1.2); older
+`V03_PERIOD_LATCH_MS` read short. One commit = **0.1 s from v1.2**; older
 images used 0.2 s. To tell which applies without a version table: the ratio
 `V03_PERIOD_LATCH_MS / V03_PERIOD_COMMIT_CNT` comes out close to 100 or close to 200. Use it for
 cross-checks; the master wall-clock stays authoritative for tariff accounting.
@@ -1515,7 +1515,7 @@ S 0xA0 W 0x02 Sr 0xA1 R [0x00] P
 # 1. Configure digest mask: I_RMS + U_RMS + P_REAL (bits 0+1+2 = 0x07)
 S 0xA0 W 0x29 0x07 P
 
-# 2. Wait one RT-commit cycle (~100 ms on current firmware; waiting 200 ms covers all images; or poll STATUS.bit0)
+# 2. Wait one RT-commit cycle (~100 ms from v1.2; waiting 200 ms covers all images; or poll STATUS.bit0)
 
 # 3. Burst-read the digest window (22 bytes)
 S 0xA0 W 0x70 Sr 0xA1 R [22 bytes] P

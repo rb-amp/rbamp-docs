@@ -126,7 +126,7 @@ This documentation describes the BASIC 8-bit register map (`0x00..0xCF`). STD mo
 
 - **I²C slave**: 50 kHz on ESP32 and ESP8266 hosts (ESP-IDF driver limitation), 100 kHz on other hosts; 400 kHz is not recommended.
 - **Address**: 7-bit `0x50` by default, reprovisionable to the `0x08..0x77` range via two-phase commit (see [initialization.md](initialization.md)).
-- **DATA_READY (DRDY)**: optional open-drain pin, ~10 µs LOW pulse every measurement window (~100 ms on current firmware; 200 ms before v1.2), marks the moment when RT registers are coherent.
+- **DATA_READY (DRDY)**: optional open-drain pin, ~10 µs LOW pulse every measurement window (~100 ms from v1.2; 200 ms before), marks the moment when RT registers are coherent.
 - **Atomic period snapshot**: command `0x27` freezes the per-period averaged power; *one write closes and opens* — no dropped or duplicated samples at the boundary.
 - **General-Call broadcast snapshot**: address `0x00` reserved for simultaneous snapshot on all modules sharing a bus. **Opt-in per module** via `FLEET_CONFIG.bit0` (default OFF). When OFF, GC frame NACKs at the bus level — masters detect this and fall back to per-module sequential snapshot (skew on 50 kHz bus is ~1 ms × N, ≪ 0.03% of 60 s period). See [period-metering.md](period-metering.md) for enable sequence and frame format.
 - **Master-side wall-clock**: energy is computed master-side as `avg_P × dt_master`; the chip-side period timestamp register (`0xEC`) is **diagnostic-only** (can undercount up to ~30% under load — by design). Eliminates per-module crystal drift in multi-module systems.

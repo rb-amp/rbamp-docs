@@ -175,7 +175,7 @@ void i2c_scan() {
 
 **Causes**:
 
-- ❌ **Snapshots too close together** — no RT window (~100 ms on current firmware; 200 ms before v1.2) completed between two snapshots. The accumulator is empty, the snapshot is discarded.
+- ❌ **Snapshots too close together** — no RT window (~100 ms from v1.2; 200 ms before) completed between two snapshots. The accumulator is empty, the snapshot is discarded.
 - ❌ **Race with an RT commit** — rare: the master wrote the command at the exact instant the firmware was committing the live accumulator. Possible on very fast masters.
 
 **Solution** — the retry pattern (see [period-metering.md → Basic cycle](period-metering.md)):
@@ -374,7 +374,7 @@ If any item is unchecked, expect strange readings. The most common causes of met
 | Code | Name | Meaning | Action |
 |:---:|---|---|---|
 | `0x00` | `ERR_OK` | Normal — last write succeeded | — |
-| `0xF9` | `ERR_CLONE` | Reserved — not raised on current firmware | If ever observed, contact the supplier. |
+| `0xF9` | `ERR_CLONE` | Reserved — not raised | If ever observed, contact the supplier. |
 | `0xFA` | `ERR_LUT_BAD` | factory calibration table CRC failed; the module runs on linear approximation | Not fatal. Measurements continue; accuracy may be reduced. Have the supplier recalibrate. |
 | `0xFB` | `ERR_FLASH_PARAMS_BAD` | Flash parameter block corrupted; defaults restored | Reconfigure address / `SENSOR_CLASS` / `CT_MODEL` and issue `CMD_SAVE_USER_CONFIG` (`0x32`). **Normal on a virgin module** (see chapter 11 §6.5) — do not abort first-time provisioning on `0xFB`. |
 | `0xFC` | `ERR_NOT_READY` | First RT window has not yet completed after boot | Wait 300 ms. |

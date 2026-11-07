@@ -32,7 +32,7 @@ After computing a window, the firmware **atomically** publishes the entire resul
 
 ### Window length is fixed
 
-The window is **hard-coded to 100 ms** on current firmware, independent of mains frequency. On images before v1.2 the window is 200 ms.
+The window is **hard-coded to 100 ms** from v1.2, independent of mains frequency. On images before v1.2 the window is 200 ms.
 
 At 50 Hz mains a 100 ms window covers exactly 5 cycles; at 60 Hz, 6 cycles (10 and 12 on the older 200 ms window). In both cases the integer number of mains cycles keeps RMS and P accurate.
 
@@ -62,7 +62,7 @@ DRDY is an open-drain output pulled up to 3.3 V on the master side. The firmware
 
 ### When DRDY is not needed
 
-- The master polls slower than the window rate (once per second or minute) — data is refreshed ten times a second on current firmware, so any read picks up fresh data.
+- The master polls slower than the window rate (once per second or minute) — data is refreshed ten times a second (v1.2 and later), so any read picks up fresh data.
 - A trivial polling loop — `read_rt()` can be called any time; you get the latest committed result.
 
 ---
@@ -253,7 +253,7 @@ void loop() {
 }
 ```
 
-This yields ~5 samples per second — every other window on current firmware (the module refreshes
+This yields ~5 samples per second — every other window (v1.2 and later) (the module refreshes
 every ~100 ms). Poll every 100 ms to catch each window; the 200 ms interval also works on images
 before v1.2.
 

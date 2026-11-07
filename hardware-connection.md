@@ -17,7 +17,7 @@ The module runs on 3.3 V logic and is tolerant to 5 V logic on the I2C lines. Al
 | `GND` | Ground | Common ground with master — **mandatory** |
 | `SDA` | I2C SDA | I2C data |
 | `SCL` | I2C SCL | I2C clock |
-| `DRDY` | Data-ready (optional) | Open-drain LOW pulse ~10 µs every measurement window (~100 ms on current firmware) |
+| `DRDY` | Data-ready (optional) | Open-drain LOW pulse ~10 µs every measurement window (~100 ms, v1.2 and later) |
 ![Pinout of the rbAmp low-voltage side: VCC, GND, SDA, SCL and the optional DRDY line.](images/hw-pinout.png)
 
 ---
@@ -241,7 +241,7 @@ The falling edge of DRDY guarantees that **all RT registers are coherent and fre
 
 ### Applicability
 
-- DRDY fires only on **RT updates** (every measurement window, ~100 ms on current firmware).
+- DRDY fires only on **RT updates** (every measurement window, ~100 ms from v1.2).
 - DRDY does **not** fire on period snapshots (period snapshots are updated by the snapshot command which the master triggers — so the master already knows when to read).
 - For slow-polling masters (every 1 s or 60 s), DRDY can be ignored.
 
